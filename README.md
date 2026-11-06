@@ -1,25 +1,52 @@
-# Overlook, pitch only
+# Overlook
 
-Business and product materials for Overlook: a Mac git client for parallel work where every lane (worktree) is runnable. Nothing is built; PRODUCT.md says what would have to be true before anything is.
+*Codename. The real name is not decided.*
 
-To refresh the numbers: `scripts/mine.sh ~/Dev/Repositories 90` and `scripts/prs.sh MobaroIT/mobaro 90 ~/Dev/Repositories/mobaro` (needs `gh auth login`).
+A Mac git client for parallel work. Every branch you or an agent is working on gets a **lane**: a git worktree on its own branch, plus the way to run it. Overlook shows all lanes measured against the team branch, starts and stops them on their own ports, and hands the same controls to any agent over a local MCP.
 
-| File | What |
+![The board: lanes panel with a Running section, the selected lane's header with Run, Test, URLs and shared-data badge, and the commit graph with authorship pills](planning/assets/board-dark.png)
+
+## The problem
+
+Worktrees are the right way to run several changes at once, and almost nobody uses them. Spinning one up means a second `pnpm install`, a port clash, a database the other checkout is already writing to, and a `.env` file that did not come along. So people work on one branch at a time, and agents that create their own worktrees leave them behind unrun and untested.
+
+Git clients show worktrees and stop. Agent runners run their own workspaces and stop. Nothing shows the whole picture and makes every lane runnable.
+
+## The idea
+
+**See.** One board per repository. The protected checkout first, never touched by Overlook, red the moment something lands on it. Every lane with three facts: readiness, how far behind the team branch, and who wrote the tip (human, assisted, agent). Running is a ring on the mark and a row with the port.
+
+**Run.** A file in the repo, `.overlook/lane.yaml`, says how a lane starts, tests and which services are shared. Overlook does not run your app. It calls your command (Aspire, docker compose, three shell scripts, `make dev`) with the lane's folder, a port offset and its env. Shared data is the visible default; migration drift against the shared database is the only thing that stops a Run.
+
+**Hand off.** `overlook mcp` serves seven verbs to any agent, IDE or script: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. The same names exist as a CLI. Overlook never runs an agent, has no opinion about the model, and keeps no code inside anyone's editor.
+
+```yaml
+# .overlook/lane.yaml, proposed by the doctor, checked in with the repo
+setup:  pnpm install
+run:    pnpm nx run aspire-apphost:start   # yours; Overlook calls it
+test:   pnpm nx affected -t test
+ports:
+  offset: 100                              # lane 1: 5101, lane 2: 5201
+services:
+  ravendb:  shared
+  postgres: shared                         # snapshot available
+```
+
+## What it will not do
+
+Commit, merge, rebase, push or resolve conflicts. Open a terminal into an agent. Interpret or replace the repo's own commands. Start anything in the protected checkout. Hide the fact that data is shared behind a dialog. Four writes in total: create a lane, remove a lane, write the manifest, start and stop processes. Everything else is read.
+
+## Status
+
+Nothing is built yet. This repository holds the planning work:
+
+| Where | What |
 |---|---|
-| [DESIGN.md](DESIGN.md) | Visual contract: Linear tokens in dark and light, Phosphor icons, tabs, palette, motion, brand |
-| [index.html](index.html) | Product pitch, 11 slides on a 16:9 stage that scales to the window. Arrow keys or scroll; File > Print saves a PDF; `?fixed=1` pins 1280x720 for screenshots |
-| [PRODUCT.md](PRODUCT.md) | The full version: the idea, vocabulary, must and must not, lane manifest, MCP and CLI, evidence, audit, pre-mortem, decision notes, appendices |
-| [examples/mobaro.lane.yaml](examples/mobaro.lane.yaml) | Worked lane manifest for the mobaro repo, as the doctor would propose it |
-| [scripts/mine.sh](scripts/mine.sh) | Git mining over every repo under a folder (agent trailers, direct pushes, behind at merge, worktrees, reverts) |
-| [scripts/prs.sh](scripts/prs.sh) | GitHub PR facts via gh (cycle time, merge method, force pushes) |
-| [mocks/board.html](mocks/board.html) | Board: lanes panel with Running section, full-height graph, selected lane header with the environment strip. Lanes are clickable; Run and Stop work. Params: `?scenario=bad` (agent commit on main, stale agent lane), `&lane=0..4`, `&remove=1` (guarded remove sheet on a safe lane), `&up=1` (Run sheet on a lane with migration drift), `&palette=sea`, `&theme=light` |
-| [mocks/setup.html](mocks/setup.html) | Lane setup (the doctor) as a page under Settings › Repositories: findings, proposed manifest, Write |
-| [mocks/settings.html](mocks/settings.html) | Settings as a page in the main window (⌘,, Esc returns). `?page=repositories`: team branch, lanes folder, lane setup and services per repository. `?page=agents`: local MCP, connected clients, what agents may write |
-| [mocks/create-lane.html](mocks/create-lane.html) | New lane from latest main |
-| [assets/](assets/) | App icon (SVG masters and 1024 PNG) and window screenshots used by the deck |
+| [planning/index.html](planning/index.html) | The pitch deck, 11 slides. Open it in a browser. |
+| [planning/PRODUCT.md](planning/PRODUCT.md) | The full product memo: idea, vocabulary, must and must not, manifest schema, MCP and CLI, evidence from real repos, competitor audit, pre-mortem, decision notes and the ask. |
+| [planning/DESIGN.md](planning/DESIGN.md) | The visual contract: tokens, icons, layout rules, motion, do and don't. |
+| [planning/mocks/](planning/mocks/) | Clickable HTML mocks of the board, lane setup, settings and the agents page. Work from disk, no build. |
+| [planning/examples/mobaro.lane.yaml](planning/examples/mobaro.lane.yaml) | A worked manifest for a real monorepo. |
+| [planning/scripts/](planning/scripts/) | The git and PR mining that produced the numbers in the memo. |
 
-Open `index.html` in a browser for the deck. The mocks work from disk; `⌘K` opens the palette. Themes follow the OS; add `?theme=light` or `?theme=dark` to force one.
-
-Positioning: not an addition to GitKraken (which shows worktrees) or Conductor (which runs its own workspaces). The graph and the lanes are the core; running is what makes lanes exist, and the local MCP hands it to any agent.
-
-Mock internals: `mocks/board.js` holds both scenarios and renders the panel, header, environment strip, remove sheet and run sheet; `mocks/graph.js` draws the graph from a commit array; `mocks/app.js` handles theme, palette, and the live sync readout; `mocks/icons.js` injects the Phosphor sprite from `mocks/icons.svg`.
+The next step, from the memo: make one real repository runnable in lanes with the manifest and the CLI first, then build the Mac app around it. Details and the kill criteria are in [planning/PRODUCT.md](planning/PRODUCT.md#decision-notes).
