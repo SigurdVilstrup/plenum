@@ -1,0 +1,766 @@
+<!doctype html>
+<!-- avoid-ai-design-ignore-file: C2, SD2 (Linear success/danger tokens for Yes/No cells, same roles as mocks/mock.css) -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Overlook: parallel work you can run</title>
+    <link rel="icon" href="assets/app-icon-16.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --canvas: #010102;
+        --surface: #0f1011;
+        --hairline: #23252a;
+        --hairline-strong: #34343a;
+        --ink: #f7f8f8;
+        --muted: #8a8f98;
+        --tertiary: #62666d;
+        --primary: #5e6ad2; /* avoid-ai-design-ignore: Linear primary */
+        --primary-hover: #828fff;
+        --success: #27a644;
+        --danger: #eb5757;
+        --warn: #f2994a;
+        --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+        --s: 1;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-snap-type: y mandatory;
+      }
+      body {
+        margin: 0;
+        font-family: var(--font);
+        background: var(--canvas);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--primary-hover);
+        text-decoration: none;
+      }
+      a:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+
+      /* Every slide is a fixed 1280x720 stage, scaled to fit the window. */
+      .slide {
+        height: var(--slide-h, 100vh);
+        scroll-snap-align: start;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      .stage {
+        width: 1280px;
+        height: 720px;
+        flex-shrink: 0;
+        transform: scale(var(--s));
+        transform-origin: center;
+        padding: 52px 64px 44px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .stage > .body {
+        flex: 1;
+        min-height: 0;
+      }
+      .kicker {
+        color: var(--tertiary);
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 56px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+      }
+      h2 {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        line-height: 1.15;
+        max-width: 38ch;
+      }
+      p,
+      li,
+      td,
+      figcaption {
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.45;
+      }
+      p {
+        margin: 0;
+        max-width: 52ch;
+      }
+      p + p {
+        margin-top: 12px;
+      }
+      strong {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.92em;
+      }
+      .src {
+        color: var(--tertiary);
+        font-size: 12px;
+        line-height: 1.4;
+        max-width: none;
+      }
+
+      img.shot {
+        display: block;
+        border-radius: 8px;
+        border: 1px solid var(--hairline-strong);
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+      }
+      figure.fill {
+        display: block;
+        height: 100%;
+      }
+      figure.fill img.shot {
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+      }
+      figure.hero img.shot {
+        border-right: 0;
+        border-radius: 8px 0 0 8px;
+        -webkit-mask-image: linear-gradient(to right, #000 78%, transparent 100%);
+        mask-image: linear-gradient(to right, #000 78%, transparent 100%);
+      }
+      figcaption {
+        font-size: 14px;
+        color: var(--tertiary);
+      }
+
+      .cols {
+        display: grid;
+        gap: 36px;
+        align-items: start;
+        min-height: 0;
+        height: 100%;
+      }
+      .cols > * {
+        min-height: 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .brand img {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+      }
+
+      ul.facts {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0;
+        align-content: start;
+      }
+      ul.facts li {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 16px;
+        padding: 11px 0;
+        border-top: 1px solid var(--hairline);
+        font-size: 16px;
+      }
+      ul.facts li:last-child {
+        border-bottom: 1px solid var(--hairline);
+      }
+      ul.facts li strong {
+        font-size: 16px;
+      }
+
+
+      /* Slide 3 callouts: facts beside the screenshot, a lead line to the spot each one describes. */
+      .callouts {
+        position: relative;
+        display: grid;
+        grid-template-columns: 190px 1fr 190px;
+        gap: 24px;
+        align-items: start;
+        height: 100%;
+      }
+      .callouts figure.fill {
+        justify-self: center;
+      }
+      ul.facts.side {
+        position: relative;
+        height: 100%;
+      }
+      ul.facts.side li {
+        position: absolute;
+        left: 0;
+        right: 0;
+        display: block;
+        padding: 0;
+        border: 0;
+        font-size: 15px;
+        line-height: 1.4;
+      }
+      ul.facts.side li strong {
+        display: block;
+        color: var(--primary-hover);
+        font-size: 15px;
+        margin-bottom: 3px;
+      }
+      ul.facts.side.left li {
+        text-align: right;
+      }
+      .callouts .arrows {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .callouts .arrows path.lead {
+        fill: none;
+        stroke: #828fff;
+        stroke-width: 1.5;
+        marker-end: url(#arrowhead);
+      }
+      .callouts .arrows circle {
+        fill: #828fff;
+      }
+
+      .big {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+      }
+      .big > div {
+        border-top: 1px solid var(--hairline);
+        padding-top: 14px;
+      }
+      .big b {
+        display: block;
+        font-size: 64px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .big > div > span {
+        display: block;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.4;
+      }
+      .punch {
+        font-size: 24px;
+        color: var(--ink);
+        max-width: 40ch;
+        line-height: 1.3;
+        letter-spacing: -0.01em;
+      }
+
+      .term {
+        background: var(--surface);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 8px;
+        padding: 20px 22px;
+        font-family: var(--mono);
+        font-size: 14.5px;
+        line-height: 1.6;
+        color: var(--muted);
+        overflow: hidden;
+        white-space: pre;
+        margin: 0;
+      }
+      .term .u {
+        color: var(--ink);
+      }
+      .term .a {
+        color: var(--primary-hover);
+      }
+      .term .t {
+        color: var(--tertiary);
+      }
+      .term .ok {
+        color: var(--success);
+      }
+      .term .url {
+        color: var(--ink);
+        text-decoration: underline;
+        text-decoration-color: var(--hairline-strong);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px 14px;
+        border-top: 1px solid var(--hairline);
+        vertical-align: top;
+        font-size: 16px;
+        line-height: 1.35;
+      }
+      th {
+        color: var(--tertiary);
+        font-weight: 500;
+        font-size: 13px;
+        border-top: 0;
+        padding-top: 0;
+      }
+      td:first-child {
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      td.ours {
+        color: var(--ink);
+        background: var(--surface);
+      }
+      .yes {
+        color: var(--success);
+      }
+      .no {
+        color: var(--danger);
+      }
+      .part {
+        color: var(--warn);
+      }
+
+      ol.steps {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: s;
+        display: grid;
+        gap: 0;
+        align-content: start;
+      }
+      ol.steps li {
+        counter-increment: s;
+        display: grid;
+        grid-template-columns: 40px 170px 1fr;
+        gap: 16px;
+        padding: 16px 0;
+        border-top: 1px solid var(--hairline);
+        font-size: 17px;
+      }
+      ol.steps li:last-child {
+        border-bottom: 1px solid var(--hairline);
+      }
+      ol.steps li::before {
+        content: counter(s);
+        color: var(--tertiary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      a.btn {
+        font-size: 14px;
+        font-weight: 500;
+        padding: 9px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--hairline);
+        background: var(--surface);
+        color: var(--ink);
+      }
+      a.btn.primary {
+        /* avoid-ai-design-ignore: C2 */
+        background: var(--primary);
+        border-color: transparent;
+        color: #fff;
+      }
+
+      .counter {
+        position: fixed;
+        right: 20px;
+        bottom: 16px;
+        color: var(--tertiary);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      @media print {
+        @page {
+          size: 1280px 720px;
+          margin: 0;
+        }
+        html {
+          scroll-snap-type: none;
+        }
+        :root {
+          --s: 1;
+        }
+        .slide {
+          height: 720px;
+          width: 1280px;
+          page-break-after: always;
+        }
+        .counter {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 1 title -->
+    <section class="slide" id="s1">
+      <div class="stage">
+        <div class="brand"><img src="assets/app-icon-1024.png" alt="" />Overlook</div>
+        <div class="cols body" style="grid-template-columns: 400px 1fr; align-items: center">
+          <div>
+            <h1>Parallel work you can run.</h1>
+            <p style="margin-top: 20px; font-size: 19px">A Mac git client where every worktree is a lane: measured against <span class="mono">main</span>, started on its own ports with your own commands, handed to any agent.</p>
+          </div>
+          <figure class="fill hero">
+            <img class="shot" src="assets/hero.png" alt="Overlook board: protected main, four lanes with two running, the selected lane header with Stop, Test, URL chips and a shared data badge, and the commit graph" />
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 problem -->
+    <section class="slide" id="s2">
+      <div class="stage">
+        <div>
+          <div class="kicker">The problem, measured on my own repositories</div>
+          <h2>Your agents work in one folder, because it is the only one that runs.</h2>
+        </div>
+        <div class="big">
+          <div><b>53%</b><span>of last month's commits in the team repo were made by an agent.</span></div>
+          <div><b>138</b><span>commits reached <span class="mono">main</span> with no pull request in 90 days.</span></div>
+          <div><b>2</b><span>worktrees on this machine, across sixteen repositories.</span></div>
+        </div>
+        <p class="punch">A second checkout of the main repo collides on seven ports, shares three databases, and needs a 1.4 GB install. Nobody wrote that down, so nobody makes a second checkout. A worktree you cannot run is a worktree nobody makes.</p>
+        <p class="src">scripts/mine.sh and scripts/prs.sh, 6 Nov 2026; mobaro/tools/aspire-apphost/apphost.mts. Full tables in PRODUCT.md.</p>
+      </div>
+    </section>
+
+    <!-- 3 see -->
+    <section class="slide" id="s3">
+      <div class="stage">
+        <div>
+          <div class="kicker">See</div>
+          <h2>A lane is a worktree plus the way to run it. Every one, measured against the team.</h2>
+        </div>
+        <div class="body callouts">
+          <ul class="facts side left">
+            <li data-target="0.185,0.125" data-side="left"><strong>Protected main</strong><span>Shown first, never touched. Red the moment something lands there.</span></li>
+            <li data-target="0.186,0.218" data-side="left"><strong>Behind</strong><span>How far each lane is behind <span class="mono">origin/main</span>. The loudest number.</span></li>
+            <li data-target="0.15,0.437" data-side="left"><strong>Running</strong><span>A ring on the mark, a row with the port, a dot in the graph.</span></li>
+          </ul>
+          <figure class="fill">
+            <img class="shot" src="assets/board-dark.png" alt="Full Overlook window: lanes panel with readiness marks and a Running section, selected lane header, and the full-height commit graph with authorship pills" />
+          </figure>
+          <ul class="facts side right">
+            <li data-target="0.86,0.273" data-side="right"><strong>Authorship</strong><span>Human, assisted or agent, read off the commit. Human gets no badge.</span></li>
+          </ul>
+          <svg class="arrows" aria-hidden="true">
+            <defs>
+              <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#828fff" />
+              </marker>
+            </defs>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 make it runnable -->
+    <section class="slide" id="s4">
+      <div class="stage">
+        <div>
+          <div class="kicker">Run</div>
+          <h2>One file. Your commands. Overlook just calls them.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 360px">
+          <figure class="fill">
+            <img class="shot" src="assets/setup-dark.png" alt="Settings, Repositories, Lane setup for Mobaro Web: six findings about the repo beside a proposed .overlook/lane.yaml with a port offset and three shared services, and a Write button" />
+          </figure>
+          <div>
+            <p><strong>Settings › Repositories › Lane setup.</strong> Overlook reads the repo and lists why a second checkout cannot start: ports, volumes, env files, the install.</p>
+            <p><strong>Then it proposes <span class="mono">.overlook/lane.yaml</span></strong>: setup, run, test, a port offset per lane, which services are shared. You press Write.</p>
+            <p><strong>It does not run your app. It calls your command.</strong> Aspire, docker compose, three shell scripts, <span class="mono">make dev</span>: whatever starts the stack today is what a lane starts.</p>
+            <p><strong>The file lives in the repo,</strong> so every teammate and every agent gets the same lanes, with or without Overlook open.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 run a lane -->
+    <section class="slide" id="s5">
+      <div class="stage">
+        <div>
+          <div class="kicker">Run</div>
+          <h2>Run, test, open. Each lane on its own ports.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 380px">
+          <figure class="fill">
+            <img class="shot" src="assets/run-lane.png" alt="Lanes panel with a Running section showing two lanes on ports 5101 and 5201, and the selected lane header with Stop, Test, web :5101, api :5155 and a shared data badge" />
+          </figure>
+          <div>
+            <p><strong>One click.</strong> Run starts the lane's stack with its port offset. <span class="mono">:5101</span> is lane 1, <span class="mono">:5201</span> is lane 2. The URLs sit on the lane.</p>
+            <p><strong>Always visible.</strong> Which lanes are up, on which ports, in the panel, the graph and the title bar. Stop from any of them.</p>
+            <p><strong>Test</strong> runs the lane's test command and keeps the last result next to it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 shared data -->
+    <section class="slide" id="s6">
+      <div class="stage">
+        <div>
+          <div class="kicker">Run</div>
+          <h2>Shared data by default, always visible. Drift is the only stop.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 520px 1fr">
+          <figure class="fill">
+            <img class="shot" src="assets/up-sheet.png" alt="Run sheet: this lane has 2 migrations the shared Postgres has not run; choices are run the migrations for every lane, start without them, or give this lane its own Postgres snapshot" />
+          </figure>
+          <div>
+            <p><strong>Why not isolate everything?</strong> Own copies of three databases per lane cost minutes and gigabytes each time. People stop making lanes. Sharing is what you already do when you switch branches in one checkout.</p>
+            <p><strong>So Overlook makes the hazard visible instead.</strong> A <span class="mono">shared data</span> badge on every lane. Before Run, it checks the lane's migrations against the shared database. If they differ, you get three plain choices and the cost of each.</p>
+            <p><strong>Per service.</strong> Postgres can be a snapshot while RavenDB stays shared. The choice is in the file, where the team sees it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 any agent -->
+    <section class="slide" id="s7">
+      <div class="stage">
+        <div>
+          <div class="kicker">Hand off</div>
+          <h2>Any agent, any IDE, any model. Same lanes, over a local MCP.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 360px">
+<pre class="term"><span class="t">claude ›</span> <span class="u">fix the CSV export streaming and show me it working</span>
+
+<span class="a">overlook.lane.create</span> { name: "export-csv" }
+  <span class="t">→</span> lane 2  .worktrees/export-csv  setup 41 s
+
+<span class="t">… edits apps/backend/Export/StreamWriter.cs, 3 files</span>
+
+<span class="a">overlook.lane.up</span> { lane: 2 }
+  <span class="t">→</span> drift: 0   shared: ravendb sqledge postgres
+  <span class="t">→</span> web <span class="url">http://localhost:5201</span>  api <span class="url">http://localhost:5255</span>
+
+<span class="a">overlook.lane.test</span> { lane: 2 }
+  <span class="t">→</span> <span class="ok">passed</span>  12 projects  2 m 04 s
+
+<span class="t">claude ›</span> Running on <span class="url">localhost:5201</span>. Tests pass.
+
+<span class="t">overlook ›</span> <span class="ok">●</span> feat/export-csv  running <span class="t">:5201</span>  Agent, Claude</pre>
+          <div>
+            <p><strong>Seven calls</strong>: doctor, create, up, down, test, status, remove. Served by <span class="mono">overlook mcp</span> over stdio, and the same names as a CLI.</p>
+            <p><strong>Claude Code, Cursor, Codex, a shell script</strong>: anything that speaks MCP or can run a CLI. Configure it once per machine; no Overlook code inside any of them, and no opinion about which model or workflow you use.</p>
+            <p><strong>Nothing is hidden.</strong> The lane the agent made shows on the board like any other: behind, authorship, running, shared data.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 agents settings -->
+    <section class="slide" id="s8">
+      <div class="stage">
+        <div>
+          <div class="kicker">Hand off</div>
+          <h2>Configured once, in Settings. Agents get four writes and nothing else.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 360px">
+          <figure class="fill">
+            <img class="shot" src="assets/settings-agents-dark.png" alt="Settings, Agents: the local MCP endpoint and CLI, connected clients Cursor and Claude Code with Codex not configured, and switches for what agents may do" />
+          </figure>
+          <div>
+            <p><strong>One endpoint, loopback only,</strong> and the same verbs as a CLI. Overlook sees which tools are wired up and what they last called.</p>
+            <p><strong>Add is two lines</strong> in the tool's own MCP config. No Overlook code inside Cursor, Claude Code or Codex, and no opinion about the model.</p>
+            <p><strong>Writes are the app's four:</strong> start and stop, create, remove, write the manifest. Remove and write ask by default. Reads are always open.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 why not existing tools -->
+    <section class="slide" id="s9">
+      <div class="stage">
+        <div>
+          <div class="kicker">Why not the tools you have</div>
+          <h2>Git clients show worktrees and stop. Agent runners run their own and stop.</h2>
+        </div>
+        <table class="body">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Graph, measured against main</th>
+              <th>Runs any worktree</th>
+              <th>Knows what data is shared</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>GitKraken 12.6</td><td><span class="part">Partial</span>. Graph yes; "ahead/behind" on agent cards, against what is undocumented</td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
+            <tr><td>Conductor 0.93</td><td><span class="no">No</span> graph</td><td><span class="part">Only its own</span> workspaces, with the agents it launches</td><td><span class="part">A switch</span> that stops the other workspace</td></tr>
+            <tr><td>Fork, Tower, lazygit, teebe</td><td><span class="part">Partial</span>. Behind upstream, not main</td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
+            <tr><td>Cursor, Claude Code</td><td><span class="no">No</span></td><td><span class="part">Setup scripts</span> only; no run, test or ports</td><td><span class="no">No</span></td></tr>
+            <tr><td class="ours">Overlook</td><td class="ours">Graph; behind <span class="mono">origin/main</span>, protected main, authorship</td><td class="ours">Any worktree, any agent, from a file in the repo</td><td class="ours">Per service, with a drift check before Run</td></tr>
+          </tbody>
+        </table>
+        <p class="src">Shipping versions and docs, fetched 6 Nov 2026. Sources and the full audit in PRODUCT.md.</p>
+      </div>
+    </section>
+
+    <!-- 10 polish -->
+    <section class="slide" id="s10">
+      <div class="stage">
+        <div>
+          <div class="kicker">Details</div>
+          <h2>Three things you notice in the first minute.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 1fr 1fr; gap: 28px">
+          <figure>
+            <img class="shot" src="assets/polish-main.png" style="width: 100%" alt="Lanes panel with the protected main row in red, 2 dirty, and the header: 2 files uncommitted, 1 commit unpushed, Agent tip, Claude" />
+            <figcaption><strong>Main goes red</strong> the moment the primary checkout has uncommitted work or an unpushed commit, and the header says what to do. <a href="mocks/board.html?scenario=bad&lane=0&theme=dark">Open it.</a></figcaption>
+          </figure>
+          <figure>
+            <img class="shot" src="assets/polish-graph.png" style="width: 100%" alt="Graph rows: an assisted tip on feat/search-filters, an agent tip on feat/export-csv, a human tip plain, and a dashed uncommitted row above the selected lane" />
+            <figcaption><strong>Tips are tinted by author.</strong> Human gets no badge, so the agent work stands out without shouting. <a href="mocks/board.html?theme=dark">Open it.</a></figcaption>
+          </figure>
+          <figure>
+            <img class="shot" src="assets/polish-running.png" style="width: 100%" alt="Lanes panel: two readiness marks ringed in green as running, the Running section with ports, and a graph pill with a green running dot" />
+            <figcaption><strong>Running is a ring, not a column.</strong> A lane row stays three facts. Ports live under Running. <a href="mocks/board.html?lane=2&theme=dark">Open it.</a></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 next -->
+    <section class="slide" id="s11">
+      <div class="stage">
+        <div>
+          <div class="kicker">Next</div>
+          <h2>Make mobaro runnable in lanes first. Then build the app around it.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 380px">
+          <ol class="steps">
+            <li><strong>Manifest</strong><span><span class="mono">.overlook/lane.yaml</span> for the real repo, by pull request. One evening.</span></li>
+            <li><strong>CLI and MCP</strong><span>One binary: doctor, create, up, down, test, status, remove, and <span class="mono">overlook mcp</span>. Three evenings.</span></li>
+            <li><strong>Four weeks</strong><span>The team uses it. Count lanes per repo, time to first URL, and whether an agent ever called it.</span></li>
+            <li><strong>Mac app</strong><span>The board on these slides, wrapping the same binary. Six weeks of evenings.</span></li>
+          </ol>
+          <div>
+            <p>Decision rules, the ask and the risks are in <a href="PRODUCT.md">PRODUCT.md</a>.</p>
+            <div class="links" style="margin-top: 18px">
+              <a class="btn primary" href="mocks/board.html?theme=dark">Open the board</a>
+              <a class="btn" href="mocks/setup.html?theme=dark">Lane setup</a>
+              <a class="btn" href="mocks/board.html?up=1&theme=dark">Run with drift</a>
+              <a class="btn" href="mocks/board.html?scenario=bad&lane=0&theme=dark">The bad day</a>
+              <a class="btn" href="mocks/board.html?lane=4&remove=1&theme=dark">Remove a lane</a>
+              <a class="btn" href="mocks/create-lane.html?theme=dark">New lane</a>
+              <a class="btn" href="mocks/settings.html?page=repositories&theme=dark">Settings: Repositories</a>
+              <a class="btn" href="mocks/settings.html?page=agents&theme=dark">Settings: Agents</a>
+              <a class="btn" href="examples/mobaro.lane.yaml">mobaro.lane.yaml</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="counter" aria-live="polite"><span id="n">1</span> / 11</div>
+
+    <script>
+      // Scale the 1280x720 stage to the window. ?fixed=1 pins slides to 720px at scale 1 for screenshots and PDF export.
+      const fixed = new URLSearchParams(location.search).has('fixed');
+      const fit = () => {
+        if (fixed) {
+          document.documentElement.style.setProperty('--slide-h', '720px');
+          document.documentElement.style.setProperty('--s', '1');
+          return;
+        }
+        document.documentElement.style.setProperty('--s', Math.min(innerWidth / 1280, innerHeight / 720));
+      };
+      fit();
+      addEventListener('resize', fit);
+
+      const slides = [...document.querySelectorAll('.slide')];
+      const n = document.getElementById('n');
+      const current = () => slides.findIndex((s) => s.getBoundingClientRect().top > -innerHeight / 2);
+      const go = (i) => slides[Math.max(0, Math.min(slides.length - 1, i))].scrollIntoView();
+      addEventListener('keydown', (e) => {
+        if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(current() + 1); }
+        if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(current() - 1); }
+      });
+      addEventListener('scroll', () => { n.textContent = current() + 1; }, { passive: true });
+    
+      // Slide 3: place each fact level with its target and draw a lead line to it.
+      (function callouts() {
+        const body = document.querySelector('.callouts');
+        if (!body) return;
+        const svg = body.querySelector('.arrows');
+        const img = body.querySelector('img.shot');
+        const draw = () => {
+          const b = body.getBoundingClientRect();
+          const s = b.width / body.offsetWidth || 1;
+          const im = img.getBoundingClientRect();
+          const imX = (im.left - b.left) / s, imY = (im.top - b.top) / s, imW = im.width / s, imH = im.height / s;
+          svg.setAttribute('viewBox', `0 0 ${body.offsetWidth} ${body.offsetHeight}`);
+          svg.querySelectorAll(':scope > path, :scope > circle').forEach((n) => n.remove());
+          const floor = { left: 0, right: 0 };
+          body.querySelectorAll('li[data-target]').forEach((li) => {
+            const [fx, fy] = li.dataset.target.split(',').map(Number);
+            const left = li.dataset.side === 'left';
+            const x1 = imX + imW * fx + (left ? -16 : 16), y1 = imY + imH * fy;
+            const top = Math.max(floor[li.dataset.side], y1 - 10);
+            li.style.top = `${top}px`;
+            floor[li.dataset.side] = top + li.offsetHeight + 22;
+            const r = li.getBoundingClientRect();
+            const x0 = ((left ? r.right : r.left) - b.left) / s + (left ? 10 : -10);
+            const y0 = (r.top - b.top) / s + 10;
+            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dot.setAttribute('cx', x0); dot.setAttribute('cy', y0); dot.setAttribute('r', 3);
+            const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const cx = (x0 + x1) / 2;
+            p.setAttribute('class', 'lead');
+            p.setAttribute('d', `M${x0} ${y0} C${cx} ${y0}, ${cx} ${y1}, ${x1} ${y1}`);
+            svg.append(dot, p);
+          });
+        };
+        if (img.complete) draw(); else img.addEventListener('load', draw);
+        addEventListener('resize', draw);
+      })();
+    </script>
+  </body>
+</html>

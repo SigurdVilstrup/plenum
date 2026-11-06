@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Overlook app icon. Squircle on the near-black canvas; the graph in one glyph:
+       a trunk, two lanes branching off it, and one lavender tip. No gradients, no glow.
+       The outer lane leaves the trunk lower than the inner one, so nothing crosses. -->
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="#0f1011" stroke="#34343a" stroke-width="8" />
+  <g fill="none" stroke="#8a8f98" stroke-width="40" stroke-linecap="round">
+    <!-- trunk -->
+    <path d="M336 232 V792" />
+    <!-- inner lane: leaves mid, runs up to the lavender tip -->
+    <path d="M336 600 C336 500 512 540 512 440 V372" />
+    <!-- outer lane: leaves low, runs up to a resting commit -->
+    <path d="M336 760 C336 640 688 700 688 580 V420" />
+  </g>
+  <circle cx="336" cy="232" r="30" fill="#8a8f98" />
+  <circle cx="336" cy="792" r="30" fill="#8a8f98" />
+  <circle cx="688" cy="400" r="30" fill="#8a8f98" />
+  <!-- the one lavender tip -->
+  <circle cx="512" cy="320" r="60" fill="#5e6ad2" />
+</svg>

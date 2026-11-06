@@ -1,0 +1,45 @@
+# Lane manifest for MobaroIT/mobaro, as the doctor would propose it on 6 Nov 2026.
+# Lives at .overlook/lane.yaml in the repo. This copy is an example; mobaro itself is untouched.
+# Values come from tools/aspire-apphost/apphost.mts, package.json and the Docker volumes on this machine.
+
+version: 1
+
+# Commands run inside the lane folder. Overlook does not interpret them; it sets the folder, the env and the
+# port offset, then calls them. Aspire here; docker compose, make, or three shell scripts work the same way.
+# {lane} is the lane number, {port.web} etc. resolve after offset.
+setup: pnpm install                          # links from the shared .pnpm-store, about 1.4 GB the first time
+run: pnpm nx run aspire-apphost:start        # Aspire AppHost starts web, app, api and RideOps
+test: pnpm nx affected -t test               # only what the lane changed, against origin/main
+
+env:
+  copy:
+    - tools/mobaro-bi/.env                   # untracked; a fresh worktree does not get these
+    - tools/mobaro-docs-mcp/mcp/.env
+  set:
+    ASPIRE_PORT_OFFSET: "{offset}"           # the AppHost reads this to shift every port it opens
+
+ports:
+  offset: 100                                # lane 1 adds 100, lane 2 adds 200, and so on
+  expose:                                    # shown as URL chips on the board
+    web: 5001                                # lane 1: 5101
+    app: 5002
+    api: 5055
+    rideops: 8100
+
+services:
+  ravendb:
+    mode: shared                             # one instance, :1338, volume local-db-environment_ravendb_data
+  sqledge:
+    mode: shared                             # :1433, volume local-db-environment_sqledge_data
+  postgres:
+    mode: shared                             # :5432, volume local-db-environment_postgres_data
+    snapshot: scripts/db-snapshot.sh         # makes `mode: snapshot` possible for this service, about 40 s
+
+data:
+  migrations: apps/backend/deployment/Migrations   # compared against the shared database before Run
+  snapshot: scripts/db-snapshot.sh                 # default snapshot source when a service switches to snapshot
+
+# Modes:
+#   shared    the lane uses the instance everyone uses. Default. Shown on every lane as "shared data".
+#   snapshot  the lane gets its own copy seeded from data.snapshot, on an offset port. Reset on remove.
+#   isolated  the lane gets its own empty instance on an offset port. For tests that must start clean.
