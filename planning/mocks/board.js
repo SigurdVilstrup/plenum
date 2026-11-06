@@ -197,7 +197,7 @@ function renderHeader(sc, selected) {
     l.readiness === 'safe'
       ? `<span class="fact ok">${icon('check-circle', 'sm')}<strong>merged</strong> into main as ${l.mergedAs}</span>`
       : l.behind > 0
-        ? `<span class="fact ${l.behind >= 5 ? 'bad' : 'warn'}">${icon('cloud-arrow-down', 'sm')}<strong>${l.behind} behind</strong> origin/main${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`
+        ? `<span class="fact ${l.behind >= 5 ? 'bad' : 'warn'}" title="${l.behind} commits on origin/main that this lane does not have">${icon('cloud-arrow-down', 'sm')}<strong>${l.behind} behind</strong> main${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`
         : `<span class="fact">${icon('cloud-arrow-down', 'sm')}<strong>up to date</strong>${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`;
   const dirty = l.dirty
     ? `<span class="fact warn">${icon('circle-dashed', 'sm')}<strong>${l.dirty} file${l.dirty > 1 ? 's' : ''}</strong> uncommitted</span>`
@@ -208,20 +208,30 @@ function renderHeader(sc, selected) {
     <div class="head-row">
       <div class="title">
         ${icon('tree-structure')}
-        <div><h1>${l.name}</h1><div class="path">${l.folder}</div></div>
+        <div><h1>${l.name}</h1><div class="path" title="from ${l.base}, ${l.age}">${l.folder}</div></div>
       </div>
       <div class="facts">
         ${behind}${dirty}
-        <span class="fact">${icon('git-fork', 'sm')}from <strong>${l.base}</strong> ${l.age}</span>
         ${pill}
       </div>
       <div class="actions">
-        ${remove}
+        ${remove}${gitActions(l)}
         <button class="iconbtn framed" type="button" title="Reveal in Finder" aria-label="Reveal in Finder">${icon('folder-simple')}</button>
         <button class="btn primary" type="button">${icon('arrow-square-out', 'sm')}Open in Cursor</button>
       </div>
     </div>
     ${renderEnvRow(sc, l)}`;
+}
+
+// Git first. The actions every client has, in the lane header, only the ones that apply right now.
+function gitActions(l) {
+  if (l.readiness === 'safe') return '';
+  const a = [];
+  if (l.dirty) a.push(`<button class="btn" type="button" title="Commit in this lane (⌘⏎)">${icon('git-commit', 'sm')}Commit</button>`);
+  if (l.behind) a.push(`<button class="btn" type="button" title="Rebase this lane onto origin/main. Conflicts open in the lane, file by file.">${icon('arrow-counter-clockwise', 'sm')}Rebase on main</button>`);
+  else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" title="Merge this lane into main (fast-forward or merge commit, your choice)">${icon('git-merge', 'sm')}Merge into main</button>`);
+  if (l.ahead) a.push(`<button class="btn" type="button" title="Push ${l.ahead} commit${l.ahead > 1 ? 's' : ''} to origin (⇧⌘P)">${icon('arrow-up', 'sm')}Push <span class="mono">${l.ahead}</span></button>`);
+  return a.join('');
 }
 
 // The environment strip: run, test, URLs, and what this lane shares. Shared data is a fact,

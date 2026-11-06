@@ -202,6 +202,19 @@
       }
 
 
+      .stack {
+        display: grid;
+        gap: 22px;
+        align-content: start;
+      }
+      .stack figure img.shot {
+        width: 100%;
+        height: auto;
+      }
+      .stack figure:last-child img.shot {
+        width: 460px;
+      }
+
       /* Slide 3 callouts: facts beside the screenshot, a lead line to the spot each one describes. */
       .callouts {
         position: relative;
@@ -443,8 +456,8 @@
         <div class="brand"><img src="assets/app-icon-1024.png" alt="" />Overlook</div>
         <div class="cols body" style="grid-template-columns: 400px 1fr; align-items: center">
           <div>
-            <h1>Parallel work you can run.</h1>
-            <p style="margin-top: 20px; font-size: 19px">A Mac git client where every worktree is a lane: measured against <span class="mono">main</span>, started on its own ports with your own commands, handed to any agent.</p>
+            <h1>A git client built for lanes.</h1>
+            <p style="margin-top: 20px; font-size: 19px">A Mac git client where every worktree is a lane: measured against <span class="mono">main</span>, with the normal verbs per lane. Then, phase two: each lane runs on its own ports and any agent can drive it.</p>
           </div>
           <figure class="fill hero">
             <img class="shot" src="assets/hero.png" alt="Overlook board: protected main, four lanes with two running, the selected lane header with Stop, Test, URL chips and a shared data badge, and the commit graph" />
@@ -475,7 +488,7 @@
       <div class="stage">
         <div>
           <div class="kicker">See</div>
-          <h2>A lane is a worktree plus the way to run it. Every one, measured against the team.</h2>
+          <h2>A lane is a worktree on its own branch. Every one, measured against the team.</h2>
         </div>
         <div class="body callouts">
           <ul class="facts side left">
@@ -500,11 +513,38 @@
       </div>
     </section>
 
-    <!-- 4 make it runnable -->
+    <!-- 4 git first -->
     <section class="slide" id="s4">
       <div class="stage">
         <div>
-          <div class="kicker">Run</div>
+          <div class="kicker">Work</div>
+          <h2>A real git client first. Commit, push, rebase, merge, resolve, from the board.</h2>
+        </div>
+        <div class="cols body" style="grid-template-columns: 1fr 360px">
+          <div class="stack">
+            <figure>
+              <img class="shot" src="assets/git-actions.png" alt="Two lane headers: feat/search-filters with Commit and Rebase on main; feat/export-csv with Merge into main and Push 4" />
+              <figcaption>The lane header offers only what applies right now: Commit when there is uncommitted work, Rebase on main when behind, Merge and Push when ahead.</figcaption>
+            </figure>
+            <figure>
+              <img class="shot" src="assets/palette-git.png" alt="Command palette filtered on main: New lane from main, Rebase selected lane onto main, Merge selected lane into main" />
+              <figcaption>Everything is also a palette command with a key. Conflicts open in the lane, file by file, and the graph shows the rebase as it happens.</figcaption>
+            </figure>
+          </div>
+          <div>
+            <p><strong>Phase one is this.</strong> A Mac git client you would use every day: the graph, lanes as worktrees, protected main, behind, authorship, and the normal verbs.</p>
+            <p><strong>Nothing clever about git itself.</strong> Overlook runs real git; the repo stays plain. What is different is that every verb is per lane and the board tells you what each lane needs before you ask.</p>
+            <p><strong>Running comes after.</strong> Lane setup, ports, shared data and the MCP are phase two. They land on the same board, in the strip under the header.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 make it runnable -->
+    <section class="slide" id="s5">
+      <div class="stage">
+        <div>
+          <div class="kicker">Phase two · Run</div>
           <h2>One file. Your commands. Overlook just calls them.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 1fr 360px">
@@ -521,11 +561,11 @@
       </div>
     </section>
 
-    <!-- 5 run a lane -->
-    <section class="slide" id="s5">
+    <!-- 6 run a lane -->
+    <section class="slide" id="s6">
       <div class="stage">
         <div>
-          <div class="kicker">Run</div>
+          <div class="kicker">Phase two · Run</div>
           <h2>Run, test, open. Each lane on its own ports.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 1fr 380px">
@@ -541,11 +581,11 @@
       </div>
     </section>
 
-    <!-- 6 shared data -->
-    <section class="slide" id="s6">
+    <!-- 7 shared data -->
+    <section class="slide" id="s7">
       <div class="stage">
         <div>
-          <div class="kicker">Run</div>
+          <div class="kicker">Phase two · Run</div>
           <h2>Shared data by default, always visible. Drift is the only stop.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 520px 1fr">
@@ -561,11 +601,11 @@
       </div>
     </section>
 
-    <!-- 7 any agent -->
-    <section class="slide" id="s7">
+    <!-- 8 any agent -->
+    <section class="slide" id="s8">
       <div class="stage">
         <div>
-          <div class="kicker">Hand off</div>
+          <div class="kicker">Phase two · Hand off</div>
           <h2>Any agent, any IDE, any model. Same lanes, over a local MCP.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 1fr 360px">
@@ -595,12 +635,12 @@
       </div>
     </section>
 
-    <!-- 8 agents settings -->
-    <section class="slide" id="s8">
+    <!-- 9 agents settings -->
+    <section class="slide" id="s9">
       <div class="stage">
         <div>
-          <div class="kicker">Hand off</div>
-          <h2>Configured once, in Settings. Agents get four writes and nothing else.</h2>
+          <div class="kicker">Phase two · Hand off</div>
+          <h2>Configured once, in Settings. Agents get lanes, not your keyboard.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 1fr 360px">
           <figure class="fill">
@@ -609,14 +649,14 @@
           <div>
             <p><strong>One endpoint, loopback only,</strong> and the same verbs as a CLI. Overlook sees which tools are wired up and what they last called.</p>
             <p><strong>Add is two lines</strong> in the tool's own MCP config. No Overlook code inside Cursor, Claude Code or Codex, and no opinion about the model.</p>
-            <p><strong>Writes are the app's four:</strong> start and stop, create, remove, write the manifest. Remove and write ask by default. Reads are always open.</p>
+            <p><strong>Lane verbs only:</strong> start and stop, test, create, remove, write the manifest. Remove and write ask by default. Commit, push and merge stay with whoever is in the lane; Overlook does not do those for an agent.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 9 why not existing tools -->
-    <section class="slide" id="s9">
+    <!-- 10 why not existing tools -->
+    <section class="slide" id="s10">
       <div class="stage">
         <div>
           <div class="kicker">Why not the tools you have</div>
@@ -643,8 +683,8 @@
       </div>
     </section>
 
-    <!-- 10 polish -->
-    <section class="slide" id="s10">
+    <!-- 11 polish -->
+    <section class="slide" id="s11">
       <div class="stage">
         <div>
           <div class="kicker">Details</div>
@@ -667,19 +707,19 @@
       </div>
     </section>
 
-    <!-- 11 next -->
-    <section class="slide" id="s11">
+    <!-- 12 next -->
+    <section class="slide" id="s12">
       <div class="stage">
         <div>
           <div class="kicker">Next</div>
-          <h2>Make mobaro runnable in lanes first. Then build the app around it.</h2>
+          <h2>Build the git client first. Make it run second.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 1fr 380px">
           <ol class="steps">
-            <li><strong>Manifest</strong><span><span class="mono">.overlook/lane.yaml</span> for the real repo, by pull request. One evening.</span></li>
-            <li><strong>CLI and MCP</strong><span>One binary: doctor, create, up, down, test, status, remove, and <span class="mono">overlook mcp</span>. Three evenings.</span></li>
-            <li><strong>Four weeks</strong><span>The team uses it. Count lanes per repo, time to first URL, and whether an agent ever called it.</span></li>
-            <li><strong>Mac app</strong><span>The board on these slides, wrapping the same binary. Six weeks of evenings.</span></li>
+            <li><strong>Phase one, the client</strong><span>Board, graph, lanes as worktrees, protected main, behind, authorship; commit, push, pull, rebase, merge, conflicts. A Mac app I use every day. Eight weeks of evenings.</span></li>
+            <li><strong>Dogfood</strong><span>The team repo for four weeks. Count lanes per person and whether anyone opens another client.</span></li>
+            <li><strong>Phase two, running</strong><span><span class="mono">.overlook/lane.yaml</span> for mobaro, then <span class="mono">overlook up / test / doctor</span> and the MCP. The strip under the header. The bigger job; it only starts once the client is in daily use.</span></li>
+            <li><strong>Shared data</strong><span>Drift detection, snapshot per service, the Run sheet. Last, because it is the hardest to get right.</span></li>
           </ol>
           <div>
             <p>Decision rules, the ask and the risks are in <a href="PRODUCT.md">PRODUCT.md</a>.</p>
@@ -699,7 +739,7 @@
       </div>
     </section>
 
-    <div class="counter" aria-live="polite"><span id="n">1</span> / 11</div>
+    <div class="counter" aria-live="polite"><span id="n">1</span> / 12</div>
 
     <script>
       // Scale the 1280x720 stage to the window. ?fixed=1 pins slides to 720px at scale 1 for screenshots and PDF export.

@@ -4,7 +4,7 @@ Written 6 November 2026. The deck in `index.html` is the pitch; this document is
 
 ## One line
 
-Overlook is a Mac git client for parallel work: a graph and a lane board that show where each worktree stands against the team, plus the thing no git client does, which is make every lane runnable and testable, with shared data as a fact you can see, through the board, a CLI, and a local MCP any agent can call.
+Overlook is a Mac git client built around lanes: a graph and a lane board that show where each worktree stands against the team, with every git verb per lane. Phase two adds the thing no git client does, which is make every lane runnable and testable, with shared data as a fact you can see, through the board, a CLI, and a local MCP any agent can call.
 
 ## The problem, short
 
@@ -12,13 +12,15 @@ Half the commits in the team repository are now agent-marked (53% in October). A
 
 ## The idea
 
-A lane is a runnable copy of the repo, not just a folder with a branch. Overlook keeps the git core and adds three things.
+Overlook is a git client first. Then it makes lanes runnable. In that order, because the second part is the bigger job and only pays off once the client is in daily use.
+
+**Work.** The verbs every client has, per lane: commit, push, pull, rebase onto main, merge into main, resolve conflicts. The lane header shows only the ones that apply right now (Commit when there is uncommitted work, Rebase on main when behind, Merge and Push when ahead); the palette has all of them with keys. Real git underneath, the repo stays plain. This is phase one and the whole of the first Mac app.
 
 **See.** Lanes panel, full-height graph, protected main, behind, authorship. The part that makes it a git client and not a sidecar. Not an addition to GitKraken: the graph and the lanes are the product, running is what makes lanes exist in the first place.
 
-**Run.** A doctor reads the repo and proposes a lane manifest, `.overlook/lane.yaml`, checked into the repo. Each lane gets a port offset. Run, Stop and Test sit in the lane header. Services are shared by default; the board says so on every lane, lists what is shared, and turns the lane amber when it carries migrations the shared database has not run. That drift is the one thing that gates Run.
+**Run (phase two).** A doctor reads the repo and proposes a lane manifest, `.overlook/lane.yaml`, checked into the repo. Each lane gets a port offset. Run, Stop and Test sit in the lane header. Services are shared by default; the board says so on every lane, lists what is shared, and turns the lane amber when it carries migrations the shared database has not run. That drift is the one thing that gates Run.
 
-**Hand off.** The same operations as a local MCP server and a CLI: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. Cursor, Claude Code and Codex get runnable lanes without Overlook building into any of them, and whatever they start shows up on the board as running.
+**Hand off (phase two).** The lane operations as a local MCP server and a CLI: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. Cursor, Claude Code and Codex get runnable lanes without Overlook building into any of them, and whatever they start shows up on the board as running.
 
 **What Overlook does not care about.** Which IDE, which agent, which model, which workflow, or how the stack starts. The manifest holds commands; Overlook sets the folder, the env and the port offset, then calls them. Running through an Aspire AppHost is the same to it as running three shell scripts for backend, frontend and worker, or `docker compose up`, or `make dev`. If the command can take a port from the environment, the lane is runnable. If it cannot, the doctor says so and that is the one change the repo needs. The same holds on the agent side: anything that speaks MCP or can run a CLI gets lanes, and Overlook has no opinion about what it does inside one.
 
@@ -48,11 +50,18 @@ Mocks: [`mocks/board.html`](mocks/board.html) (a normal day, two lanes running, 
 
 ## Must and must not
 
-Overlook must: show the three facts for every worktree in under ten seconds; create a lane from latest `main`; remove a lane only when it is safe, and say why when it is not; write `.overlook/lane.yaml` when the user accepts the doctor's proposal; start and stop a lane's `run` command with its port offset and env, and keep those processes alive as a supervisor while the app or CLI runs; run a lane's `test` command and keep the last result; refuse to start a lane with migration drift without the sheet; expose all of this on a local MCP and a CLI with the same names.
+Overlook must: show the three facts for every worktree in under ten seconds; create a lane from latest `main`; commit, push, pull, rebase and merge per lane, and walk a conflict file by file inside the lane; remove a lane only when it is safe, and say why when it is not. In phase two: write `.overlook/lane.yaml` when the user accepts the doctor's proposal; start and stop a lane's `run` command with its port offset and env, and keep those processes alive as a supervisor while the app or CLI runs; run a lane's `test` command and keep the last result; refuse to start a lane with migration drift without the sheet; expose the lane operations on a local MCP and a CLI with the same names.
 
-Overlook must not: commit, merge, rebase, push or resolve conflicts; open a terminal into an agent or run an agent; interpret, wrap or replace the repo's own start, test or setup commands; start anything in the protected checkout; hide the fact that data is shared behind a dialog or a setting; change a service to `snapshot` or `isolated` without writing it to the manifest where the whole team sees it; run anything that is not in the manifest.
+Overlook must not: commit, push, merge or rebase on behalf of an agent (agents get lane verbs over MCP, not git verbs; git stays with whoever is in the lane); open a terminal into an agent or run an agent; interpret, wrap or replace the repo's own start, test or setup commands; start anything in the protected checkout; hide the fact that data is shared behind a dialog or a setting; change a service to `snapshot` or `isolated` without writing it to the manifest where the whole team sees it; run anything that is not in the manifest.
 
-That is four writes (create lane, remove lane, write manifest, start and stop processes) and one standing process. Everything else is read.
+Git writes are the ones every client has. Beyond those, lanes add four (create lane, remove lane, write manifest, start and stop processes) and one standing process.
+
+## Sequence
+
+1. **Phase one, the client.** Board, graph, lanes as worktrees, protected main, behind, authorship, and the git verbs per lane. A Mac app used every day. Eight weeks of evenings.
+2. **Dogfood.** The team repo for four weeks. Count lanes per person and whether anyone opens another client.
+3. **Phase two, running.** The manifest for mobaro, then `overlook up / test / doctor` and the MCP. The strip under the lane header. Starts only once the client is in daily use.
+4. **Shared data.** Drift detection, snapshot per service, the Run sheet. Last, because it is the hardest to get right.
 
 ## Lane manifest
 
@@ -216,11 +225,11 @@ For the reader who is deciding. These do not appear in the deck.
 
 ### The ask
 
-Four evenings to write the mobaro manifest by hand and the CLI (`doctor`, `create`, `up`, `down`, `test`, `status`, `remove`) with an MCP wrapper. Four weeks of dogfooding on the team repo. Four hours of interviews. Infrastructure: none. The repository `~/Dev/Repositories/lanes` holds a one-day Electron spike (uncommitted, 5 to 6 November); it is not needed for the test and should not be touched until the test passes.
+Phase one: eight weeks of evenings for a native Mac app that is a real git client with the board on these slides, an Apple developer account (99 USD a year), a signed download and a Homebrew cask. No servers. Provider integration is read-only OAuth from the app. Then four weeks of dogfooding on the team repo and four hours of interviews.
 
-If the test passes: six weeks of evenings for a native Mac app that wraps the same CLI, an Apple developer account (99 USD a year), a signed download and a Homebrew cask. No servers. Provider integration is read-only OAuth from the app.
+Phase two, only after that: four evenings to write the mobaro manifest by hand and the CLI (`doctor`, `create`, `up`, `down`, `test`, `status`, `remove`) with an MCP wrapper, then the strip in the app. The repository `~/Dev/Repositories/lanes` holds a one-day Electron spike (uncommitted, 5 to 6 November); it is not the starting point.
 
-What the time buys is one answer: once a lane costs one command and starts on its own port, do people make more of them, and do their agents?
+What phase one buys is one answer: does a git client built around lanes get used every day. What phase two buys is the second: once a lane costs one command and starts on its own port, do people make more of them, and do their agents?
 
 ---
 

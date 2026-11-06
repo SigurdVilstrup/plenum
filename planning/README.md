@@ -1,13 +1,13 @@
 # Overlook, planning
 
-Business and product materials for Overlook: a Mac git client for parallel work where every lane (worktree) is runnable. Nothing is built; PRODUCT.md says what would have to be true before anything is.
+Business and product materials for Overlook: a Mac git client built around lanes (worktrees), with runnable lanes as phase two. Nothing is built; PRODUCT.md says what would have to be true before anything is.
 
 To refresh the numbers: `planning/scripts/mine.sh ~/Dev/Repositories 90` and `planning/scripts/prs.sh MobaroIT/mobaro 90 ~/Dev/Repositories/mobaro` (needs `gh auth login`).
 
 | File | What |
 |---|---|
 | [DESIGN.md](DESIGN.md) | Visual contract: Linear tokens in dark and light, Phosphor icons, tabs, palette, motion, brand |
-| [index.html](index.html) | Product pitch, 11 slides on a 16:9 stage that scales to the window. Arrow keys or scroll; File > Print saves a PDF; `?fixed=1` pins 1280x720 for screenshots |
+| [index.html](index.html) | Product pitch, 12 slides on a 16:9 stage that scales to the window. Arrow keys or scroll; File > Print saves a PDF; `?fixed=1` pins 1280x720 for screenshots |
 | [PRODUCT.md](PRODUCT.md) | The full version: the idea, vocabulary, must and must not, lane manifest, MCP and CLI, evidence, audit, pre-mortem, decision notes, appendices |
 | [examples/mobaro.lane.yaml](examples/mobaro.lane.yaml) | Worked lane manifest for the mobaro repo, as the doctor would propose it |
 | [scripts/mine.sh](scripts/mine.sh) | Git mining over every repo under a folder (agent trailers, direct pushes, behind at merge, worktrees, reverts) |
@@ -20,6 +20,6 @@ To refresh the numbers: `planning/scripts/mine.sh ~/Dev/Repositories 90` and `pl
 
 Open `index.html` in a browser for the deck. The mocks work from disk; `⌘K` opens the palette. Themes follow the OS; add `?theme=light` or `?theme=dark` to force one.
 
-Positioning: not an addition to GitKraken (which shows worktrees) or Conductor (which runs its own workspaces). The graph and the lanes are the core; running is what makes lanes exist, and the local MCP hands it to any agent.
+Positioning: not an addition to GitKraken (which shows worktrees) or Conductor (which runs its own workspaces). The graph, the lanes and the git verbs are the core and ship first; running lanes and the local MCP are phase two.
 
 Mock internals: `mocks/board.js` holds both scenarios and renders the panel, header, environment strip, remove sheet and run sheet; `mocks/graph.js` draws the graph from a commit array; `mocks/app.js` handles theme, palette, and the live sync readout; `mocks/icons.js` injects the Phosphor sprite from `mocks/icons.svg`.
