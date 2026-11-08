@@ -43,6 +43,7 @@ const TOOLS = [
       properties: {
         lane: { type: ['integer', 'string'], description: 'Lane index' },
         path: { type: 'string', description: 'Repo root (default: cwd)' },
+        force: { type: 'boolean', description: 'Skip drift gate (start anyway)' },
       },
       required: ['lane'],
     },
@@ -134,7 +135,11 @@ export async function callTool(name, args = {}) {
       }));
     }
     case 'lane.up':
-      return textResult(await up(repoPath(args.path), laneIndex(args.lane)));
+      return textResult(await up(
+        repoPath(args.path),
+        laneIndex(args.lane),
+        args.force ? { force: true } : {},
+      ));
     case 'lane.down':
       return textResult(await down(repoPath(args.path), laneIndex(args.lane)));
     case 'lane.test':

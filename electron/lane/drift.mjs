@@ -7,6 +7,17 @@ import path from 'node:path';
  * migrator introspection (mobaro: Aspire/EF adapter — not blocking v1).
  */
 
+/** Resolve `rel` under `base`; reject absolute paths and `..` escapes. */
+function resolveContained(base, rel, label) {
+  if (path.isAbsolute(rel)) throw new Error(`${label} path escapes lane: ${rel}`);
+  const root = path.resolve(base);
+  const resolved = path.resolve(base, rel);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error(`${label} path escapes lane: ${rel}`);
+  }
+  return resolved;
+}
+
 /** True when any service is shared (or services omitted → default shared). */
 export function usesSharedData(manifest) {
   const modes = Object.values(manifest?.services ?? {}).map((s) => s?.mode);
@@ -47,7 +58,7 @@ export async function listPendingMigrations({
   const rel = manifest?.data?.migrations;
   if (!rel) return [];
 
-  const dir = path.join(laneRoot, String(rel));
+  const dir = resolveContained(laneRoot, String(rel), 'data.migrations');
   let names;
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });

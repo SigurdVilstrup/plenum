@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { git } from './run.mjs';
 import { loadBoard } from './board.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from '../lane/manifest.mjs';
+import { down, getProc } from '../lane/supervisor.mjs';
 
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
@@ -121,6 +122,10 @@ export async function removeLane(root, laneIndex) {
     if (lane.dirty) reasons.push(`${lane.dirty} uncommitted file(s)`);
     if (lane.readiness === 'unmerged' || lane.readiness === 'working') reasons.push('branch not safely merged into the team branch');
     throw new Error(`Not safe to remove: ${reasons.join('; ') || 'lane is not marked safe'}.`);
+  }
+  // Auto-down if still running so worktree remove doesn't orphan processes/registry.
+  if (getProc(board.root, laneIndex)?.running) {
+    await down(board.root, laneIndex).catch(() => {});
   }
   await git(['worktree', 'remove', lane.path], board.root);
   return loadBoard(root);

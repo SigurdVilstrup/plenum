@@ -98,6 +98,21 @@ test('listPendingMigrations: missing migrations dir → []', async () => {
   }
 });
 
+test('listPendingMigrations: rejects path escape', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-drift-'));
+  try {
+    await assert.rejects(
+      () => listPendingMigrations({
+        laneRoot: root,
+        manifest: { data: { migrations: '../escape' } },
+      }),
+      /data\.migrations path escapes/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('listPendingMigrations: scans laneRoot, marker from markerRoot', async () => {
   const primary = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-drift-pri-'));
   const lane = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-drift-lane-'));

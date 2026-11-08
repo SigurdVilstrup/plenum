@@ -9,7 +9,7 @@ import { createLane, removeLane } from '../electron/git/ops.mjs';
 const USAGE = `Usage:
   overlook doctor [path]
   overlook status [path]
-  overlook up <lane>
+  overlook up <lane> [--force]
   overlook down <lane>
   overlook test <lane>
   overlook create <name>
@@ -17,21 +17,24 @@ const USAGE = `Usage:
   overlook mcp
 
 Options:
-  --json   print JSON
+  --json    print JSON
+  --force   skip drift gate on up
 `;
 
 /** @param {string[]} argv */
 export function parseArgs(argv) {
   const args = argv.slice(2);
   let json = false;
+  let force = false;
   const positional = [];
   for (const a of args) {
     if (a === '--json') json = true;
+    else if (a === '--force') force = true;
     else if (a === '--help' || a === '-h') positional.push('help');
     else positional.push(a);
   }
   const [cmd, ...rest] = positional;
-  return { cmd: cmd || null, rest, json };
+  return { cmd: cmd || null, rest, json, force };
 }
 
 function laneIndex(raw) {
@@ -87,7 +90,7 @@ function printHuman(cmd, data) {
 
 /** @param {string[]} argv */
 export async function main(argv = process.argv) {
-  const { cmd, rest, json } = parseArgs(argv);
+  const { cmd, rest, json, force } = parseArgs(argv);
   if (!cmd || cmd === 'help') {
     process.stdout.write(USAGE);
     if (!cmd) throw Object.assign(new Error('command required'), { exitCode: 2 });
@@ -118,7 +121,7 @@ export async function main(argv = process.argv) {
       break;
     }
     case 'up':
-      out = await up(repoPath(rest[1]), laneIndex(rest[0]));
+      out = await up(repoPath(rest[1]), laneIndex(rest[0]), force ? { force: true } : {});
       break;
     case 'down':
       out = await down(repoPath(rest[1]), laneIndex(rest[0]));

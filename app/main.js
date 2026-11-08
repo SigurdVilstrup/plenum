@@ -509,7 +509,7 @@ function runActionsHTML(l) {
   if (l.isPrimary) {
     return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Overlook. Run the stack from a lane.</span>${laneSetupLink()}`;
   }
-  if (l.readiness === 'safe') {
+  if (l.readiness === 'safe' && !l.running) {
     return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
   }
   if (!l.runnable) {

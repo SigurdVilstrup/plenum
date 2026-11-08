@@ -11,18 +11,21 @@ import * as supervisor from '../electron/lane/supervisor.mjs';
 
 const CLI = fileURLToPath(new URL('./overlook.mjs', import.meta.url));
 
-test('parseArgs extracts command, rest, and --json', () => {
+test('parseArgs extracts command, rest, --json, and --force', () => {
   assert.deepEqual(parseArgs(['node', 'overlook', 'doctor']), {
-    cmd: 'doctor', rest: [], json: false,
+    cmd: 'doctor', rest: [], json: false, force: false,
   });
   assert.deepEqual(parseArgs(['node', 'overlook', '--json', 'status', '/tmp/r']), {
-    cmd: 'status', rest: ['/tmp/r'], json: true,
+    cmd: 'status', rest: ['/tmp/r'], json: true, force: false,
   });
   assert.deepEqual(parseArgs(['node', 'overlook', 'up', '2', '--json']), {
-    cmd: 'up', rest: ['2'], json: true,
+    cmd: 'up', rest: ['2'], json: true, force: false,
+  });
+  assert.deepEqual(parseArgs(['node', 'overlook', 'up', '2', '--force']), {
+    cmd: 'up', rest: ['2'], json: false, force: true,
   });
   assert.deepEqual(parseArgs(['node', 'overlook', 'create', 'feat-x']), {
-    cmd: 'create', rest: ['feat-x'], json: false,
+    cmd: 'create', rest: ['feat-x'], json: false, force: false,
   });
 });
 

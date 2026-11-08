@@ -7,6 +7,7 @@ import os from 'node:os';
 import * as ops from './ops.mjs';
 import { loadBoard } from './board.mjs';
 import { git } from './run.mjs';
+import * as supervisor from '../lane/supervisor.mjs';
 
 function sh(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
@@ -243,4 +244,55 @@ test('env.copy rejects path escape', async () => {
     /env\.copy path escapes/,
   );
   assert.ok(!fs.existsSync(path.join(root, '.worktrees', 'esc')));
+});
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test('removeLane downs a running process before removing the worktree', async () => {
+  const { root } = await fixture();
+  writeManifest(
+    root,
+    [
+      'version: 1',
+      'run: node -e "setInterval(()=>{}, 1000)"',
+      'test: node -e "process.exit(0)"',
+      'ports:',
+      '  offset: 100',
+      '  expose:',
+      '    web: 5001',
+      '',
+    ].join('\n'),
+  );
+  await git(['add', '.overlook'], root);
+  await git(['commit', '-m', 'manifest'], root);
+  await git(['push'], root);
+
+  let board = await ops.createLane(root, { name: 'runrm', branch: 'feat/runrm' });
+  const lane = board.lanes.find((l) => l.name === 'feat/runrm');
+  assert.ok(lane);
+  fs.writeFileSync(path.join(lane.path, 'done.txt'), 'x');
+  board = await ops.commitLane(root, lane.index, 'done');
+  board = await ops.mergeLaneIntoMain(root, lane.index, { mode: 'ff' });
+  const merged = board.lanes.find((l) => l.name === 'feat/runrm');
+  assert.equal(merged.readiness, 'safe');
+
+  const status = await supervisor.up(root, merged.index);
+  assert.equal(status.running, true);
+  assert.ok(alive(status.pid));
+
+  try {
+    board = await ops.removeLane(root, merged.index);
+    assert.ok(!board.lanes.some((l) => l.name === 'feat/runrm'));
+    assert.equal(alive(status.pid), false);
+    assert.equal(supervisor.getProc(root, merged.index)?.running ?? false, false);
+  } finally {
+    try { await supervisor.down(root, merged.index); } catch { /* already down */ }
+  }
 });
