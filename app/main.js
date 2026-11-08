@@ -400,10 +400,12 @@ function paintPanel() {
   const rows = lanes.map((l) => {
     const enter = state.enteringLanes.has(l.index) ? ' enter' : '';
     const flash = state.flashMarks.has(l.index) ? ' flash' : '';
+    const run = l.running ? ' running' : '';
+    const runTitle = l.running ? ' Running.' : '';
     let mark;
-    if (l.readiness === 'working') mark = `<span class="mark working${flash}" title="Working: uncommitted changes."><i></i></span>`;
-    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}" title="Safe to remove: merged, tree clean.">${iconHTML('check-circle')}</span>`;
-    else mark = `<span class="mark unmerged${flash}" title="Not merged."><i></i></span>`;
+    if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working: uncommitted changes.${runTitle}"><i></i></span>`;
+    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove: merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
+    else mark = `<span class="mark unmerged${flash}${run}" title="Not merged.${runTitle}"><i></i></span>`;
     const meta = l.readiness === 'safe'
       ? `<span class="meta ok">merged</span>`
       : l.behind > 0
@@ -423,6 +425,23 @@ function paintPanel() {
     ${rows}
   </div>`;
 
+  const running = lanes.filter((l) => l.running);
+  if (running.length) {
+    const runningRows = running.map((l) => {
+      const port = l.ports ? Object.values(l.ports)[0] : null;
+      return `<button class="lane-row run-row ${l.index === selected ? 'selected' : ''}" type="button" data-lane="${l.index}">
+        <span class="mark live-ring"><i></i></span>
+        <span class="name">${esc(l.name)}</span>
+        <span class="meta mono">${port != null ? `:${esc(port)}` : ''}</span>
+        <span class="stop iconbtn" role="button" data-act="down" title="Stop lane" aria-label="Stop ${esc(l.name)}">${iconHTML('stop')}</span>
+      </button>`;
+    }).join('');
+    html += `<div class="section">
+      <div class="section-head"><span title="Lanes with their own copy of the stack running. Ports are offset per lane; data is shared unless the manifest says otherwise.">Running <span class="count">${running.length}</span></span></div>
+      ${runningRows}
+    </div>`;
+  }
+
   const branches = b.branches || [];
   const branchBody = branches.length
     ? branches.map((br) => `<div class="lane-row static"><span class="name">${esc(br.name)}</span></div>`).join('')
@@ -441,6 +460,13 @@ function paintPanel() {
     btn.addEventListener('click', () => {
       state.selectedLane = Number(btn.dataset.lane);
       paint();
+    });
+  });
+  el.panel.querySelectorAll('.run-row [data-act="down"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lane = laneByIndex(Number(btn.closest('[data-lane]')?.dataset.lane));
+      if (lane) handleAction('down', lane);
     });
   });
   el.panel.querySelector('[data-new-lane]')?.addEventListener('click', openCreateLane);
@@ -474,6 +500,33 @@ function gitActionsHTML(l) {
   return a.join('');
 }
 
+function runActionsHTML(l) {
+  if (l.isPrimary) {
+    return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Overlook. Run the stack from a lane.</span>`;
+  }
+  if (l.readiness === 'safe') {
+    return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
+  }
+  if (!l.runnable) {
+    return `<span class="env-note">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>`;
+  }
+  const runBtn = l.running
+    ? `<button class="btn" type="button" data-act="down" title="Stop lane">${iconHTML('stop', 'sm')}Stop</button>`
+    : `<button class="btn" type="button" data-act="up" title="Run lane">${iconHTML('play', 'sm')}Run</button>`;
+  const urls = Object.entries(l.urls || {}).map(([name, url]) => {
+    let port = '';
+    try { port = new URL(url).port; } catch { /* ignore */ }
+    return `<a class="chip url" href="${esc(url)}" title="${esc(url)}">${iconHTML('globe-simple', 'sm')}${esc(name)} <span class="mono">:${esc(port)}</span></a>`;
+  }).join('');
+  const badge = l.dataMode === 'shared'
+    ? `<span class="badge data" title="Databases shared across lanes. Switch a service to snapshot in .overlook/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
+    : '';
+  const tests = l.lastTest
+    ? `<span class="env-note">${iconHTML(l.lastTest.ok ? 'check-circle' : 'warning-circle', 'sm')}tests ${l.lastTest.ok ? 'passed' : 'failed'}</span>`
+    : '';
+  return `${runBtn}<button class="btn" type="button" data-act="test" title="Run tests">${iconHTML('flask', 'sm')}Test</button><span class="env-sep"></span>${urls}${urls && badge ? '<span class="env-sep"></span>' : ''}${badge}${tests}`;
+}
+
 function paintHeader() {
   const b = state.board;
   const l = laneByIndex(state.selectedLane) || b.lanes[0];
@@ -499,9 +552,7 @@ function paintHeader() {
         <button class="iconbtn framed primary" type="button" data-act="cursor" title="Open in Cursor" aria-label="Open in Cursor">${iconHTML('cursor')}</button>
       </div>
     </div>
-    <div class="env-row">
-      <span class="env-note">${iconHTML('shield-check', 'sm')}Team checkout — prefer lanes for feature work; Commit / Push / Pull work here too.</span>
-    </div>`;
+    <div class="env-row">${runActionsHTML(l)}</div>`;
   } else {
     const behind = l.readiness === 'safe'
       ? `<span class="fact ok">${iconHTML('check-circle', 'sm')}<strong>merged</strong> into ${esc(b.teamBranch)}</span>`
@@ -529,7 +580,7 @@ function paintHeader() {
         <button class="iconbtn framed primary" type="button" data-act="cursor" title="Open in Cursor" aria-label="Open in Cursor">${iconHTML('cursor')}</button>
       </div>
     </div>
-    <div class="env-row" aria-hidden="true"></div>`;
+    <div class="env-row">${runActionsHTML(l)}</div>`;
   }
   el.laneHead.innerHTML = html;
   el.laneHead.querySelectorAll('[data-act]').forEach((btn) => {
@@ -561,6 +612,15 @@ async function handleAction(act, lane) {
     }
     if (act === 'stashPop') {
       return runGit('lane.stashPop', lane.index, `Popped stash onto ${lane.name}`, 'stashPop');
+    }
+    if (act === 'up') {
+      return runGit('lane.up', lane.index, `Started ${lane.name}`, 'up');
+    }
+    if (act === 'down') {
+      return runGit('lane.down', lane.index, `Stopped ${lane.name}`, 'down');
+    }
+    if (act === 'test') {
+      return runGit('lane.test', lane.index, `Tests finished for ${lane.name}`, 'test');
     }
   } catch { /* toasted */ }
 }
@@ -1074,6 +1134,9 @@ function paletteCommands() {
     { id: 'rebase', label: 'Rebase on main', run: () => handleAction('rebase', lane), when: lane && !lane.isPrimary && lane.behind },
     { id: 'merge', label: 'Merge into main…', run: () => handleAction('merge', lane), when: lane && !lane.isPrimary && lane.ahead && !lane.dirty },
     { id: 'conflicts', label: 'Resolve conflicts…', run: () => handleAction('conflicts', lane), when: !!lane },
+    { id: 'up', label: 'Run lane', run: () => handleAction('up', lane), when: lane && !lane.isPrimary && lane.runnable && !lane.running },
+    { id: 'down', label: 'Stop lane', run: () => handleAction('down', lane), when: lane && lane.running },
+    { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && !lane.isPrimary && lane.runnable },
     { id: 'reveal', label: 'Reveal in Finder', run: () => handleAction('reveal', lane), when: !!lane },
     { id: 'cursor', label: 'Open in Cursor', run: () => handleAction('cursor', lane), when: !!lane },
     { id: 'refresh', label: 'Refresh board', run: refresh, when: !!state.board },
