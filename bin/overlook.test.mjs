@@ -1,12 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from './overlook.mjs';
 import * as supervisor from '../electron/lane/supervisor.mjs';
+
+const CLI = fileURLToPath(new URL('./overlook.mjs', import.meta.url));
 
 test('parseArgs extracts command, rest, and --json', () => {
   assert.deepEqual(parseArgs(['node', 'overlook', 'doctor']), {
@@ -35,6 +38,51 @@ function alive(pid) {
     return false;
   }
 }
+
+/** Regression: piped stdio must not keep the CLI event loop alive after `up`. */
+test('overlook up exits within 3s while run child stays alive', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-cli-up-'));
+  const wt = path.join(os.tmpdir(), `ovl-cli-up-wt-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  try {
+    sh(['init', '-b', 'main', root]);
+    sh(['config', 'user.email', 't@e.com'], root);
+    sh(['config', 'user.name', 'T'], root);
+    sh(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'x\n');
+    sh(['add', 'README'], root);
+    sh(['commit', '-m', 'init'], root);
+    sh(['worktree', 'add', '-b', 'feat/one', wt], root);
+    fs.mkdirSync(path.join(root, '.overlook'));
+    fs.writeFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      'version: 1\nrun: node -e "setInterval(()=>{}, 1000)"\ntest: node -e "process.exit(0)"\nports:\n  offset: 100\n  expose:\n    web: 5001\n',
+    );
+
+    const started = Date.now();
+    const result = spawnSync(process.execPath, [CLI, 'up', '1', '--json', root], {
+      encoding: 'utf8',
+      timeout: 3000,
+    });
+    assert.equal(result.error, undefined, result.stderr || String(result.error));
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.ok(Date.now() - started < 3000);
+    const out = JSON.parse(result.stdout);
+    assert.ok(out.pid);
+    assert.equal(out.running, true);
+    assert.ok(alive(out.pid));
+
+    const down = spawnSync(process.execPath, [CLI, 'down', '1', '--json', root], {
+      encoding: 'utf8',
+      timeout: 8000,
+    });
+    assert.equal(down.status, 0, down.stderr || down.stdout);
+    assert.equal(alive(out.pid), false);
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
 
 test('registry file roundtrip: up writes, getProc reads, down clears', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-reg-'));

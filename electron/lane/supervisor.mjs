@@ -246,6 +246,11 @@ export async function up(root, laneIndex) {
 
   children.set(key, local);
   setStored(top, laneIndex, { pid: child.pid, startedAt, urls });
+  // CLI must exit after up; unref child + pipes so they don't pin the event loop.
+  // Electron stays alive via app — pipes still deliver log data after unref.
+  child.unref();
+  child.stdout.unref();
+  child.stderr.unref();
   return snapshot({ root: top, laneIndex, pid: child.pid, startedAt, urls }, local, { running: true });
 }
 
