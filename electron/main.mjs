@@ -98,8 +98,8 @@ ipcMain.handle('repo.refresh', async () => {
 ipcMain.handle('repo.doctor', async () => {
   const root = activePath();
   if (!root) throw new Error('No repository open.');
-  const { findings, proposedYaml } = await doctor(root);
-  return { findings, proposedYaml };
+  const { findings, proposedYaml, canAccept } = await doctor(root);
+  return { findings, proposedYaml, canAccept };
 });
 ipcMain.handle('repo.acceptManifest', async (_e, yaml) => {
   const root = activePath();

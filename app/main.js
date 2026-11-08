@@ -723,10 +723,12 @@ async function openDoctorSheet() {
   if (!state.board) return;
   let findings = [];
   let proposedYaml = '';
+  let canAccept = false;
   try {
     const res = await invoke('repo.doctor');
     findings = res.findings || [];
     proposedYaml = res.proposedYaml || '';
+    canAccept = !!res.canAccept;
   } catch { /* toasted */ return; }
 
   const findingsHtml = findings.length
@@ -750,11 +752,12 @@ async function openDoctorSheet() {
       </div>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">${iconHTML('files', 'sm')}Accept</button>
+        <button class="btn primary" type="submit" ${canAccept ? '' : 'disabled title="Needs a run command"'}>${iconHTML('files', 'sm')}Accept</button>
       </div>
     </form>`);
   el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!canAccept) return;
     try {
       const board = await invoke('repo.acceptManifest', proposedYaml);
       closeSheet();
