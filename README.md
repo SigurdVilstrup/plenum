@@ -31,11 +31,24 @@ Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Doctor (Lane s
 
 | Script | What |
 | --- | --- |
-| `npm run dev` | Vite HMR + Electron |
+| `npm run dev` | Vite HMR + Electron (Dock uses Overlook icon) |
 | `npm test` | Board, lane supervisor, doctor, CLI, MCP |
 | `npm run smoke:init` | Fresh multi-worktree fixture with a local bare remote |
 | `npm start` | Production build + Electron |
+| `npm run pack` | Unsigned `Overlook.app` in `release/mac*` |
+| `npm run dist` | Same + `.dmg` |
+| `npm run icons` | Rebuild `build/icon.icns` from `planning/assets/app-icon-1024.png` |
 | `npm run overlook -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
+
+### Mac app
+
+```bash
+npm run pack          # → release/mac/Overlook.app (or mac-arm64)
+open release/mac*/Overlook.app
+# optional: drag into /Applications
+```
+
+Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Packaging is unsigned (`identity: null`) for local use; notarize later for distribution.
 
 ## Layout
 

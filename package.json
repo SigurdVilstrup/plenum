@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mac git client for parallel work — board, git verbs, and phase two runnable lanes",
+  "author": "Overlook",
   "main": "electron/main.mjs",
   "type": "module",
   "bin": {
@@ -15,10 +16,52 @@
     "start": "electron .",
     "overlook": "node ./bin/overlook.mjs",
     "test": "node --test electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs bin/*.test.mjs",
-    "smoke:init": "node scripts/smoke-init.mjs"
+    "smoke:init": "node scripts/smoke-init.mjs",
+    "icons": "node scripts/build-icons.mjs",
+    "pack": "npm run build && electron-builder --mac --dir",
+    "dist": "npm run build && electron-builder --mac"
+  },
+  "build": {
+    "appId": "app.overlook.desktop",
+    "productName": "Overlook",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "bin/**/*",
+      "build/icon.icns",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "build",
+        "filter": [
+          "icon.icns",
+          "icon.png"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg",
+        "dir"
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "title": "Overlook"
+    }
   },
   "devDependencies": {
     "electron": "^39.0.0",
+    "electron-builder": "^26.18.0",
     "vite": "^7.1.0"
   }
 }

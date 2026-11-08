@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -12,9 +12,24 @@ import { doctor, acceptManifest } from './lane/doctor.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 
+function appIcon() {
+  const candidates = [
+    path.join(rootDir, 'build', 'icon.icns'),
+    path.join(rootDir, 'build', 'icon.png'),
+    path.join(process.resourcesPath || '', 'build', 'icon.icns'),
+  ];
+  for (const p of candidates) {
+    if (!p || !fs.existsSync(p)) continue;
+    const img = nativeImage.createFromPath(p);
+    if (!img.isEmpty()) return img;
+  }
+  return null;
+}
+
 let win;
 
 function createWindow() {
+  const icon = appIcon();
   win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -23,6 +38,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: '#010102',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -40,6 +56,12 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin') {
+    app.setName('Overlook');
+    const icon = appIcon();
+    if (icon && app.dock) app.dock.setIcon(icon);
+  }
+
   const openPath = process.env.OVERLOOK_OPEN;
   if (openPath && fs.existsSync(openPath)) {
     try {
