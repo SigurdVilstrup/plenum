@@ -45,34 +45,51 @@ export async function createLane(root, { name, branch }) {
   const base = board.teamRef;
   await git(['worktree', 'add', '-b', branchName, folder, base], primary.path);
 
-  const manifest = await loadManifest(path.join(primary.path, '.overlook', 'lane.yaml'));
-  if (manifest) {
-    for (const rel of manifest.env.copy) {
-      const src = path.join(primary.path, rel);
-      const dest = path.join(folder, rel);
-      if (!fs.existsSync(src)) throw new Error(`env.copy source missing: ${rel}`);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.copyFileSync(src, dest);
-    }
-    if (manifest.setup) {
-      const after = await loadBoard(root);
-      const lane = after.lanes.find((l) => path.resolve(l.path) === path.resolve(folder));
-      const laneIndex = lane?.index ?? after.lanes.length - 1;
-      const ports = resolvePorts(manifest, laneIndex);
-      const offset = (manifest.ports?.offset ?? 0) * laneIndex;
-      const ctx = { offset, lane: laneIndex, port: ports, ports };
-      const env = {
-        ...process.env,
-        OVERLOOK_LANE: String(laneIndex),
-        OVERLOOK_OFFSET: String(offset),
-      };
-      for (const [k, v] of Object.entries(manifest.env.set ?? {})) {
-        env[k] = renderTemplate(String(v), ctx);
+  try {
+    const manifest = await loadManifest(path.join(primary.path, '.overlook', 'lane.yaml'));
+    if (manifest) {
+      for (const rel of manifest.env.copy) {
+        const src = resolveContained(primary.path, rel, 'primary');
+        const dest = resolveContained(folder, rel, 'lane');
+        if (!fs.existsSync(src)) throw new Error(`env.copy source missing: ${rel}`);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(src, dest);
       }
-      await runSetup(renderTemplate(String(manifest.setup), ctx), folder, env);
+      if (manifest.setup) {
+        const after = await loadBoard(root);
+        const lane = after.lanes.find((l) => path.resolve(l.path) === path.resolve(folder));
+        const laneIndex = lane?.index ?? after.lanes.length - 1;
+        const ports = resolvePorts(manifest, laneIndex);
+        const offset = (manifest.ports?.offset ?? 0) * laneIndex;
+        const ctx = { offset, lane: laneIndex, port: ports, ports };
+        const env = {
+          ...process.env,
+          OVERLOOK_LANE: String(laneIndex),
+          OVERLOOK_OFFSET: String(offset),
+        };
+        for (const [k, v] of Object.entries(manifest.env.set ?? {})) {
+          env[k] = renderTemplate(String(v), ctx);
+        }
+        await runSetup(renderTemplate(String(manifest.setup), ctx), folder, env);
+      }
     }
+  } catch (err) {
+    await git(['worktree', 'remove', '--force', folder], primary.path).catch(() => {});
+    await git(['branch', '-D', branchName], primary.path).catch(() => {});
+    throw err;
   }
   return loadBoard(root);
+}
+
+/** Resolve `rel` under `base`; reject absolute paths and `..` escapes. */
+function resolveContained(base, rel, label) {
+  if (path.isAbsolute(rel)) throw new Error(`env.copy path escapes ${label}: ${rel}`);
+  const root = path.resolve(base);
+  const resolved = path.resolve(base, rel);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error(`env.copy path escapes ${label}: ${rel}`);
+  }
+  return resolved;
 }
 
 function runSetup(command, cwd, env) {

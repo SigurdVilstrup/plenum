@@ -209,3 +209,38 @@ test('createLane throws setup stderr on non-zero exit', async () => {
     /boom-setup/,
   );
 });
+
+test('failed setup rolls back worktree so create can retry', async () => {
+  const { root } = await fixture();
+  writeManifest(
+    root,
+    ['version: 1', 'setup: node -e "process.exit(1)"', ''].join('\n'),
+  );
+  await assert.rejects(() => ops.createLane(root, { name: 'retry', branch: 'feat/retry' }));
+  assert.ok(!fs.existsSync(path.join(root, '.worktrees', 'retry')));
+  writeManifest(
+    root,
+    [
+      'version: 1',
+      'setup: node -e "require(\'fs\').writeFileSync(\'setup.ok\',\'1\')"',
+      '',
+    ].join('\n'),
+  );
+  const board = await ops.createLane(root, { name: 'retry', branch: 'feat/retry' });
+  const lane = board.lanes.find((l) => l.name === 'feat/retry');
+  assert.ok(lane);
+  assert.equal(fs.readFileSync(path.join(lane.path, 'setup.ok'), 'utf8'), '1');
+});
+
+test('env.copy rejects path escape', async () => {
+  const { root } = await fixture();
+  writeManifest(
+    root,
+    ['version: 1', 'env:', '  copy:', '    - ../escape', ''].join('\n'),
+  );
+  await assert.rejects(
+    () => ops.createLane(root, { name: 'esc', branch: 'feat/esc' }),
+    /env\.copy path escapes/,
+  );
+  assert.ok(!fs.existsSync(path.join(root, '.worktrees', 'esc')));
+});
