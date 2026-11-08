@@ -1,7 +1,9 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { git } from './run.mjs';
 import { loadBoard } from './board.mjs';
+import { loadManifest, resolvePorts, renderTemplate } from '../lane/manifest.mjs';
 
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
@@ -42,7 +44,54 @@ export async function createLane(root, { name, branch }) {
   }
   const base = board.teamRef;
   await git(['worktree', 'add', '-b', branchName, folder, base], primary.path);
+
+  const manifest = await loadManifest(path.join(primary.path, '.overlook', 'lane.yaml'));
+  if (manifest) {
+    for (const rel of manifest.env.copy) {
+      const src = path.join(primary.path, rel);
+      const dest = path.join(folder, rel);
+      if (!fs.existsSync(src)) throw new Error(`env.copy source missing: ${rel}`);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(src, dest);
+    }
+    if (manifest.setup) {
+      const after = await loadBoard(root);
+      const lane = after.lanes.find((l) => path.resolve(l.path) === path.resolve(folder));
+      const laneIndex = lane?.index ?? after.lanes.length - 1;
+      const ports = resolvePorts(manifest, laneIndex);
+      const offset = (manifest.ports?.offset ?? 0) * laneIndex;
+      const ctx = { offset, lane: laneIndex, port: ports, ports };
+      const env = {
+        ...process.env,
+        OVERLOOK_LANE: String(laneIndex),
+        OVERLOOK_OFFSET: String(offset),
+      };
+      for (const [k, v] of Object.entries(manifest.env.set ?? {})) {
+        env[k] = renderTemplate(String(v), ctx);
+      }
+      await runSetup(renderTemplate(String(manifest.setup), ctx), folder, env);
+    }
+  }
   return loadBoard(root);
+}
+
+function runSetup(command, cwd, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, {
+      shell: true,
+      cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`setup failed (exit ${code}): ${stderr.trim() || '(no stderr)'}`));
+    });
+  });
 }
 
 export async function removeLane(root, laneIndex) {

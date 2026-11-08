@@ -147,3 +147,65 @@ test('stash and pop uncommitted', async () => {
   board = await ops.stashPopLane(root, 0);
   assert.equal(board.lanes[0].dirty, 1);
 });
+
+function writeManifest(root, yaml) {
+  const dir = path.join(root, '.overlook');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'lane.yaml'), yaml);
+}
+
+test('createLane copies env and runs setup', async () => {
+  const { root } = await fixture();
+  fs.writeFileSync(path.join(root, '.env'), 'SECRET=1\n');
+  writeManifest(
+    root,
+    [
+      'version: 1',
+      'setup: node -e "require(\'fs\').writeFileSync(\'setup.ok\',\'1\')"',
+      'env:',
+      '  copy:',
+      '    - .env',
+      '',
+    ].join('\n'),
+  );
+  const board = await ops.createLane(root, { name: 'env', branch: 'feat/env' });
+  const lane = board.lanes.find((l) => l.name === 'feat/env');
+  assert.ok(lane);
+  assert.equal(fs.readFileSync(path.join(lane.path, '.env'), 'utf8'), 'SECRET=1\n');
+  assert.equal(fs.readFileSync(path.join(lane.path, 'setup.ok'), 'utf8'), '1');
+  assert.ok(!fs.existsSync(path.join(root, 'setup.ok')));
+});
+
+test('createLane throws when env.copy source missing', async () => {
+  const { root } = await fixture();
+  writeManifest(
+    root,
+    [
+      'version: 1',
+      'env:',
+      '  copy:',
+      '    - .env.missing',
+      '',
+    ].join('\n'),
+  );
+  await assert.rejects(
+    () => ops.createLane(root, { name: 'miss', branch: 'feat/miss' }),
+    /env\.copy.*\.env\.missing|missing.*\.env\.missing/i,
+  );
+});
+
+test('createLane throws setup stderr on non-zero exit', async () => {
+  const { root } = await fixture();
+  writeManifest(
+    root,
+    [
+      'version: 1',
+      'setup: node -e "console.error(\'boom-setup\'); process.exit(2)"',
+      '',
+    ].join('\n'),
+  );
+  await assert.rejects(
+    () => ops.createLane(root, { name: 'bad', branch: 'feat/bad' }),
+    /boom-setup/,
+  );
+});
