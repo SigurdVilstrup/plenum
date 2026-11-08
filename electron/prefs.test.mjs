@@ -31,3 +31,13 @@ test('setPrefs clamps zoom', () => {
   assert.equal(setPrefs({ zoom: 3 }, dir).zoom, 1.25);
   assert.equal(setPrefs({ zoom: 0.1 }, dir).zoom, 0.8);
 });
+
+test('setPrefs drops unknown keys, bad enums and relative paths', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  const p = setPrefs({ evil: 1, theme: 'neon', editor: 'zed', editorPath: 'rel/bin', cloneDefaultPath: '~/Dev', terminalPath: '' }, dir);
+  assert.equal('evil' in p, false);
+  assert.equal(p.theme, 'system');
+  assert.equal(p.editor, 'zed');
+  assert.equal(p.editorPath, '');
+  assert.equal(p.cloneDefaultPath, '~/Dev');
+});

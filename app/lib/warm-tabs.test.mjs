@@ -31,3 +31,10 @@ test('markFrozen clears timer and sets frozen', () => {
 test('WARM_MAX is 4', () => {
   assert.equal(WARM_MAX, 4);
 });
+
+test('evictOldest clears the evicted entry timer', () => {
+  const e = { leftAt: 1, timerId: setInterval(() => {}, 1e6), frozen: false };
+  evictOldest(new Map([['a', e], ['b', { leftAt: 2 }]]), 1);
+  assert.equal(e.timerId, null);
+  assert.equal(e.frozen, true);
+});

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import { loadBoard, loadCommitChanges, displayPath } from './git/board.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
@@ -14,6 +15,11 @@ import * as creds from './git/credentials.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
+
+/** `~` and `~/x` to the home dir; anything else unchanged. */
+function expandHome(p) {
+  return typeof p === 'string' && (p === '~' || p.startsWith('~/')) ? path.join(os.homedir(), p.slice(1)) : p;
+}
 
 function prefsDir() {
   return app.getPath('userData');
@@ -156,7 +162,7 @@ ipcMain.handle('os.pickFolder', async () => {
   const res = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],
     title: 'Open Repository',
-    defaultPath: [getPrefs(prefsDir()).cloneDefaultPath].find((p) => p && fs.existsSync(p)),
+    defaultPath: [expandHome(getPrefs(prefsDir()).cloneDefaultPath)].find((p) => p && fs.existsSync(p)),
   });
   if (res.canceled || !res.filePaths[0]) return null;
   return res.filePaths[0];
@@ -189,7 +195,7 @@ const EDITORS = {
 };
 
 function launch(cmd, args) {
-  spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+  spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
 /** Custom tool from Settings: a .app bundle or an executable that takes the folder as its argument. */
@@ -226,7 +232,7 @@ async function withRoot(fn, ...args) {
 
 ipcMain.handle('lane.create', (_e, payload) => withRoot((root, p) => {
   const prefs = getPrefs(prefsDir());
-  const lanesFolder = prefs.repoOverrides?.[root]?.lanesFolder || prefs.defaultLanesFolder;
+  const lanesFolder = expandHome(prefs.repoOverrides?.[root]?.lanesFolder || prefs.defaultLanesFolder);
   return ops.createLane(root, { ...p, lanesFolder });
 }, payload));
 async function accountsList() {
@@ -240,6 +246,9 @@ async function accountsList() {
 ipcMain.handle('accounts.setHttps', async (_e, { kind, host, username, token }) => {
   const h = creds.sanitizeHost(kind === 'github' ? 'github.com' : host);
   const user = String(username ?? '').trim();
+  if (!(await creds.credentialHelper()).length) {
+    throw new Error('No git credential helper configured. Run: git config --global credential.helper osxkeychain');
+  }
   await creds.approve({ host: h, username: user, password: token });
   const list = creds.upsertHost(getPrefs(prefsDir()).credentialHosts, { host: h, username: user, kind });
   setPrefs({ credentialHosts: list }, prefsDir());

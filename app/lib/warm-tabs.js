@@ -21,6 +21,7 @@ export function evictOldest(entries, max = WARM_MAX) {
       }
     }
     if (oldestId == null) break;
+    markFrozen(map.get(oldestId));
     map.delete(oldestId);
   }
   return map;

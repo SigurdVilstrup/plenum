@@ -98,9 +98,10 @@ function applyPrefs() {
   if (state.prefs.warmTabTtlMs) state.warmTtlMs = state.prefs.warmTabTtlMs;
 }
 
-async function setPref(partial) {
+async function setPref(partial, render = true) {
   state.prefs = await invoke('prefs.set', partial);
   applyPrefs();
+  if (!render) return;
   const top = el.settingsBody.scrollTop;
   renderSettings();
   el.settingsBody.scrollTop = top;
@@ -1379,7 +1380,7 @@ const SETTINGS_PAGES = {
     const shown = (local ? id.local : id?.global) || { name: '', email: '' };
     const fallback = local ? id.global : { name: '', email: '' };
     const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
-    const external = [['internal', 'Internal (coming soon)'], ['opendiff', 'FileMerge'], ['vscode', 'VS Code'], ['cursor', 'Cursor']];
+    const external = [['internal', 'Internal (coming soon)']]; // external tools are not wired up yet
     return `<h1>General</h1><p class="lede">Editor, terminal, folders and tab behavior. Saved on this Mac.</p>
       <div class="group-head">Open with</div>
       <div class="list">
@@ -1389,7 +1390,7 @@ const SETTINGS_PAGES = {
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette: Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'))}
         ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'An .app bundle or an executable', custom('terminalPath', '/Applications/Ghostty.app')) : ''}
       </div>
-      <div class="group-head">Diff and merge<small>Overlook has no diff or merge view of its own yet. Pick what opens outside.</small></div>
+      <div class="group-head">Diff and merge<small>Overlook has no diff or merge view yet. Choices land with it.</small></div>
       <div class="list">
         ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'))}
         ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'))}
@@ -1559,7 +1560,7 @@ function bindRepos(root) {
     const v = n.value.trim();
     if (v) ov[n.dataset.lanesRoot] = { ...ov[n.dataset.lanesRoot], lanesFolder: v };
     else delete ov[n.dataset.lanesRoot];
-    setPref({ repoOverrides: ov }).catch(() => {});
+    setPref({ repoOverrides: ov }, false).catch(() => {});
   }));
 }
 
@@ -1605,12 +1606,15 @@ function bindIdentity(root) {
 }
 
 function bindPrefs(root) {
-  const set = (key, v) => setPref({ [key]: v }).catch(() => {});
+  const set = (key, v, render) => setPref({ [key]: v }, render).catch(() => {});
   root.querySelectorAll('.option-row[data-pref]:not([data-pref=identityScope])').forEach((g) =>
     g.querySelectorAll('.option').forEach((b) => b.addEventListener('click', () =>
       set(g.dataset.pref, 'num' in g.dataset ? Number(b.dataset.v) : b.dataset.v))));
-  root.querySelectorAll('select[data-pref], input[data-pref]:not([type=checkbox])').forEach((n) =>
-    n.addEventListener('change', () => set(n.dataset.pref, 'num' in n.dataset ? Number(n.value) : n.value.trim())));
+  root.querySelectorAll('select[data-pref]').forEach((n) =>
+    n.addEventListener('change', () => set(n.dataset.pref, 'num' in n.dataset ? Number(n.value) : n.value)));
+  // Text fields save without re-rendering, so Tab to the next field keeps focus.
+  root.querySelectorAll('input[data-pref]:not([type=checkbox])').forEach((n) =>
+    n.addEventListener('change', () => set(n.dataset.pref, n.value.trim(), false)));
   root.querySelectorAll('.switch[data-pref]').forEach((n) =>
     n.addEventListener('click', () => set(n.dataset.pref, n.getAttribute('aria-checked') !== 'true')));
 }
@@ -1758,6 +1762,7 @@ async function openRepo() {
   if (!path) return;
   setLoading(true, 'Opening repository…', path);
   try {
+    state.settings.open = false;
     const res = await invoke('tabs.open', path);
     applyStore(res.store);
     applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
