@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { loadBoard, loadCommitChanges, displayPath } from './git/board.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
+import * as supervisor from './lane/supervisor.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -55,6 +56,10 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  supervisor.stopAll();
 });
 
 function activePath() {
@@ -157,4 +162,16 @@ ipcMain.handle('lane.conflictContinue', (_e, laneIndex, conflictRoot) => withRoo
 ipcMain.handle('lane.conflictAbort', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictAbort, laneIndex, conflictRoot));
 ipcMain.handle('lane.stash', (_e, laneIndex) => withRoot(ops.stashLane, laneIndex));
 ipcMain.handle('lane.stashPop', (_e, laneIndex) => withRoot(ops.stashPopLane, laneIndex));
+ipcMain.handle('lane.up', (_e, laneIndex) => withRoot(async (root, idx) => {
+  await supervisor.up(root, idx);
+  return loadBoard(root);
+}));
+ipcMain.handle('lane.down', (_e, laneIndex) => withRoot(async (root, idx) => {
+  await supervisor.down(root, idx);
+  return loadBoard(root);
+}));
+ipcMain.handle('lane.status', (_e, laneIndex) => withRoot((root, idx) => supervisor.getProc(root, idx)));
+ipcMain.handle('lane.test', () => {
+  throw new Error('not implemented');
+});
 ipcMain.handle('commit.changes', (_e, sha) => withRoot(loadCommitChanges, sha));

@@ -10,7 +10,7 @@
     "build": "vite build",
     "prestart": "vite build",
     "start": "electron .",
-    "test": "node --test electron/git/*.test.mjs",
+    "test": "node --test electron/git/*.test.mjs electron/lane/*.test.mjs",
     "smoke:init": "node scripts/smoke-init.mjs"
   },
   "devDependencies": {

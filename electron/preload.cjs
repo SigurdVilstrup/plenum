@@ -8,6 +8,7 @@ const ALLOWED = new Set([
   'lane.rebase', 'lane.merge', 'lane.conflicts',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
   'lane.stash', 'lane.stashPop',
+  'lane.up', 'lane.down', 'lane.test', 'lane.status',
   'commit.changes',
 ]);
 
