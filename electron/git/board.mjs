@@ -4,7 +4,7 @@ import os from 'node:os';
 import { git, gitOk } from './run.mjs';
 import { loadManifest } from '../lane/manifest.mjs';
 import { laneStatus } from '../lane/status.mjs';
-import { getProc } from '../lane/supervisor.mjs';
+import { getProc, getLastTest } from '../lane/supervisor.mjs';
 
 const AGENT_TOOLS = [
   ['claude', 'Claude'],
@@ -431,7 +431,7 @@ export async function loadBoard(repoPath) {
       authorName: tip?.name ?? '',
       head: tree.head,
       alert,
-      ...laneStatus(manifest, index, getProc(top, index)),
+      ...laneStatus(manifest, index, getProc(top, index), getLastTest(top, index)),
     });
   }
 

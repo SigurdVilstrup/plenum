@@ -19,7 +19,10 @@ function alive(pid) {
   }
 }
 
-async function fixture(run = 'node -e "setInterval(()=>{}, 1000)"') {
+async function fixture({
+  run = 'node -e "setInterval(()=>{}, 1000)"',
+  testCmd = 'node -e "process.exit(0)"',
+} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-sup-'));
   const wt = path.join(os.tmpdir(), `ovl-sup-wt-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   sh(['init', '-b', 'main', root]);
@@ -38,6 +41,7 @@ async function fixture(run = 'node -e "setInterval(()=>{}, 1000)"') {
     [
       'version: 1',
       `run: ${run}`,
+      `test: ${testCmd}`,
       'ports:',
       '  offset: 100',
       '  expose:',
@@ -78,7 +82,7 @@ test('refuses primary checkout', async () => {
 
 test('up templates {port.*} in run', async () => {
   const run = 'node -e "require(\'fs\').writeFileSync(\'port.txt\',\'{port.web}\'); setInterval(()=>{}, 1000)"';
-  const { root, wt } = await fixture(run);
+  const { root, wt } = await fixture({ run });
   try {
     await supervisor.up(root, 1);
     const portFile = path.join(wt, 'port.txt');
@@ -93,6 +97,47 @@ test('up templates {port.*} in run', async () => {
     assert.equal(written, '5101');
   } finally {
     try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('test stores lastTest.ok on exit 0', async () => {
+  const { root, wt } = await fixture({ testCmd: 'node -e "console.log(\'pass\'); process.exit(0)"' });
+  try {
+    const result = await supervisor.test(root, 1);
+    assert.equal(result.ok, true);
+    assert.equal(result.code, 0);
+    assert.ok(typeof result.at === 'number');
+    assert.ok(Array.isArray(result.log));
+    assert.ok(result.log.some((l) => l.includes('pass')));
+    assert.deepEqual(supervisor.getLastTest(root, 1), result);
+    assert.equal(supervisor.getProc(root, 1), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('test stores lastTest not ok on non-zero exit', async () => {
+  const { root, wt } = await fixture({ testCmd: 'node -e "console.error(\'boom\'); process.exit(2)"' });
+  try {
+    const result = await supervisor.test(root, 1);
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 2);
+    assert.ok(result.log.some((l) => l.includes('boom')));
+    assert.equal(supervisor.getLastTest(root, 1)?.ok, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('test refuses primary checkout', async () => {
+  const { root, wt } = await fixture();
+  try {
+    await assert.rejects(() => supervisor.test(root, 0), /protected/);
+  } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
   }

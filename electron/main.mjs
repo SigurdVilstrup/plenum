@@ -171,7 +171,8 @@ ipcMain.handle('lane.down', (_e, laneIndex) => withRoot(async (root, idx) => {
   return loadBoard(root);
 }));
 ipcMain.handle('lane.status', (_e, laneIndex) => withRoot((root, idx) => supervisor.getProc(root, idx)));
-ipcMain.handle('lane.test', () => {
-  throw new Error('not implemented');
-});
+ipcMain.handle('lane.test', (_e, laneIndex) => withRoot(async (root, idx) => {
+  await supervisor.test(root, idx);
+  return loadBoard(root);
+}));
 ipcMain.handle('commit.changes', (_e, sha) => withRoot(loadCommitChanges, sha));

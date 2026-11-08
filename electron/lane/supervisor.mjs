@@ -1,14 +1,21 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
 
 const LOG_LINES = 200;
+const TEST_LOG_LINES = 50;
+const TEST_TIMEOUT_MS = 10 * 60 * 1000;
 /** @type {Map<string, { root: string, laneIndex: number, pid: number, startedAt: number, urls: Record<string, string>, logs: { stdout: string[], stderr: string[] }, child: import('node:child_process').ChildProcess }>} */
 const procs = new Map();
+/** @type {Map<string, { ok: boolean, code: number|null, at: number, log: string[] }>} */
+const lastTests = new Map();
 
 function procKey(root, laneIndex) {
-  return `${path.resolve(root)}#${laneIndex}`;
+  let abs = path.resolve(root);
+  try { abs = fs.realpathSync(abs); } catch { /* keep resolved */ }
+  return `${abs}#${laneIndex}`;
 }
 
 function alive(pid) {
@@ -20,12 +27,12 @@ function alive(pid) {
   }
 }
 
-function pushLog(lines, chunk) {
+function pushLog(lines, chunk, max = LOG_LINES) {
   for (const line of String(chunk).split(/\r?\n/)) {
     if (!line && lines.length && lines.at(-1) === '') continue;
     lines.push(line);
   }
-  while (lines.length > LOG_LINES) lines.shift();
+  while (lines.length > max) lines.shift();
 }
 
 function snapshot(entry) {
@@ -54,6 +61,36 @@ export function getProc(root, laneIndex) {
   return snap;
 }
 
+/** Last one-shot test result for board / IPC. */
+export function getLastTest(root, laneIndex) {
+  return lastTests.get(procKey(root, laneIndex)) ?? null;
+}
+
+async function prepareLane(root, laneIndex) {
+  if (laneIndex === 0) throw new Error('protected: primary checkout cannot be run');
+
+  const { top, paths } = await resolveLanes(root);
+  const cwd = paths[laneIndex];
+  if (!cwd) throw new Error(`lane ${laneIndex} not found`);
+
+  const manifest = await loadManifest(path.join(paths[0], '.overlook', 'lane.yaml'));
+  const ports = resolvePorts(manifest ?? { ports: { offset: 0, expose: {} } }, laneIndex);
+  const offset = (manifest?.ports?.offset ?? 0) * laneIndex;
+  const urls = Object.fromEntries(
+    Object.entries(ports).map(([name, port]) => [name, `http://127.0.0.1:${port}`]),
+  );
+  const ctx = { offset, lane: laneIndex, port: ports, ports };
+  const env = {
+    ...process.env,
+    OVERLOOK_LANE: String(laneIndex),
+    OVERLOOK_OFFSET: String(offset),
+  };
+  for (const [k, v] of Object.entries(manifest?.env?.set ?? {})) {
+    env[k] = renderTemplate(String(v), ctx);
+  }
+  return { top, cwd, manifest, ports, offset, urls, ctx, env };
+}
+
 async function resolveLanes(root) {
   const abs = path.resolve(root);
   const top = path.resolve((await git(['rev-parse', '--show-toplevel'], abs)).trim());
@@ -79,32 +116,10 @@ function killGroup(pid, signal) {
  * @param {number} laneIndex
  */
 export async function up(root, laneIndex) {
-  if (laneIndex === 0) throw new Error('protected: primary checkout cannot be run');
-
-  const { top, paths } = await resolveLanes(root);
+  const { top, cwd, manifest, urls, ctx, env } = await prepareLane(root, laneIndex);
   const existing = getProc(top, laneIndex);
   if (existing?.running) return existing;
-
-  const cwd = paths[laneIndex];
-  if (!cwd) throw new Error(`lane ${laneIndex} not found`);
-
-  const manifest = await loadManifest(path.join(paths[0], '.overlook', 'lane.yaml'));
   if (!manifest?.run) throw new Error('lane manifest has no run command');
-
-  const ports = resolvePorts(manifest, laneIndex);
-  const offset = (manifest.ports?.offset ?? 0) * laneIndex;
-  const urls = Object.fromEntries(
-    Object.entries(ports).map(([name, port]) => [name, `http://127.0.0.1:${port}`]),
-  );
-  const ctx = { offset, lane: laneIndex, port: ports, ports };
-  const env = {
-    ...process.env,
-    OVERLOOK_LANE: String(laneIndex),
-    OVERLOOK_OFFSET: String(offset),
-  };
-  for (const [k, v] of Object.entries(manifest.env?.set ?? {})) {
-    env[k] = renderTemplate(String(v), ctx);
-  }
 
   const child = spawn(renderTemplate(String(manifest.run), ctx), {
     shell: true,
@@ -197,6 +212,68 @@ export async function down(root, laneIndex) {
 
   procs.delete(key);
   return { ...snapshot(entry), running: false, pid };
+}
+
+/**
+ * Run the lane's `test` command to completion. Does not touch the long-lived procs map.
+ * @param {string} root
+ * @param {number} laneIndex
+ * @param {{ timeoutMs?: number }} [opts]
+ */
+export async function test(root, laneIndex, { timeoutMs = TEST_TIMEOUT_MS } = {}) {
+  const { top, cwd, manifest, ctx, env } = await prepareLane(root, laneIndex);
+  if (!manifest?.test) throw new Error('lane manifest has no test command');
+
+  const child = spawn(renderTemplate(String(manifest.test), ctx), {
+    shell: true,
+    detached: true,
+    cwd,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  await new Promise((resolve, reject) => {
+    const onError = (err) => reject(err);
+    child.once('error', onError);
+    if (child.pid != null) {
+      child.off('error', onError);
+      resolve();
+      return;
+    }
+    child.once('spawn', () => {
+      child.off('error', onError);
+      if (child.pid == null) reject(new Error('spawn produced no pid'));
+      else resolve();
+    });
+  });
+
+  if (child.pid == null) throw new Error('spawn produced no pid');
+
+  const log = [];
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (d) => pushLog(log, d, TEST_LOG_LINES));
+  child.stderr.on('data', (d) => pushLog(log, d, TEST_LOG_LINES));
+
+  const code = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (exitCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(exitCode);
+    };
+    const timer = setTimeout(() => {
+      if (alive(child.pid)) killGroup(child.pid, 'SIGKILL');
+      finish(null);
+    }, timeoutMs);
+    child.once('exit', (exitCode) => finish(exitCode));
+    child.once('error', () => finish(null));
+  });
+
+  const result = { ok: code === 0, code, at: Date.now(), log: log.slice() };
+  lastTests.set(procKey(top, laneIndex), result);
+  return result;
 }
 
 /** Force-stop every supervised process (app quit). */

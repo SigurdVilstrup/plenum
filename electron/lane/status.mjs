@@ -1,15 +1,20 @@
 import { resolvePorts } from './manifest.mjs';
 
 /**
- * Pure UI fields for a board lane from manifest + index (+ optional process entry).
+ * Pure UI fields for a board lane from manifest + index (+ optional process / lastTest).
  * @param {object|null} manifest
  * @param {number} laneIndex
  * @param {object|null} [proc]
+ * @param {object|null} [lastTest]
  */
-export function laneStatus(manifest, laneIndex, proc = null) {
+export function laneStatus(manifest, laneIndex, proc = null, lastTest = null) {
   const runnable = Boolean(manifest) && laneIndex !== 0;
   if (!runnable) {
-    return { runnable: false, running: Boolean(proc?.running) };
+    return {
+      runnable: false,
+      running: Boolean(proc?.running),
+      ...(lastTest ? { lastTest } : {}),
+    };
   }
 
   const ports = resolvePorts(manifest, laneIndex);
@@ -29,5 +34,6 @@ export function laneStatus(manifest, laneIndex, proc = null) {
     urls,
     dataMode,
     running: Boolean(proc?.running),
+    ...(lastTest ? { lastTest } : {}),
   };
 }
