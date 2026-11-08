@@ -13,10 +13,10 @@ export function usesSharedData(manifest) {
   return modes.length === 0 || modes.some((m) => m === 'shared' || m == null);
 }
 
-/** Stub adapter: newline filenames in `.overlook/applied-migrations`. */
-export async function fileAdapter(root) {
+/** Stub adapter: newline filenames in `.overlook/applied-migrations` under markerRoot. */
+export async function fileAdapter(markerRoot) {
   try {
-    const text = await fs.readFile(path.join(root, '.overlook', 'applied-migrations'), 'utf8');
+    const text = await fs.readFile(path.join(markerRoot, '.overlook', 'applied-migrations'), 'utf8');
     return new Set(
       text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean),
     );
@@ -27,17 +27,27 @@ export async function fileAdapter(root) {
 }
 
 /**
- * Pending migration filenames: files in `data.migrations` not in the applied set.
- * @param {string} root
- * @param {object|null|undefined} manifest
- * @param {{ adapter?: (root: string, manifest: object) => Promise<Set<string>> }} [opts]
+ * Pending migration filenames: files in the lane's `data.migrations` not in the applied set.
+ * Scan `laneRoot` for migration files; read the shared applied marker from `markerRoot`
+ * (primary checkout). Defaults markerRoot → laneRoot for single-tree callers/tests.
+ * @param {{
+ *   laneRoot: string,
+ *   markerRoot?: string,
+ *   manifest: object|null|undefined,
+ *   adapter?: (markerRoot: string, manifest: object) => Promise<Set<string>>,
+ * }} opts
  * @returns {Promise<string[]>}
  */
-export async function listPendingMigrations(root, manifest, { adapter = fileAdapter } = {}) {
+export async function listPendingMigrations({
+  laneRoot,
+  markerRoot = laneRoot,
+  manifest,
+  adapter = fileAdapter,
+}) {
   const rel = manifest?.data?.migrations;
   if (!rel) return [];
 
-  const dir = path.join(root, String(rel));
+  const dir = path.join(laneRoot, String(rel));
   let names;
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -47,7 +57,7 @@ export async function listPendingMigrations(root, manifest, { adapter = fileAdap
     throw err;
   }
 
-  const applied = await adapter(root, manifest);
+  const applied = await adapter(markerRoot, manifest);
   return names.filter((n) => !applied.has(n));
 }
 

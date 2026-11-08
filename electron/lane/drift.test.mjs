@@ -27,8 +27,8 @@ test('usesSharedData: empty services or any shared → true', () => {
 test('listPendingMigrations: no migrations path → []', async () => {
   const root = tmpRoot();
   try {
-    assert.deepEqual(await listPendingMigrations(root, { data: {} }), []);
-    assert.deepEqual(await listPendingMigrations(root, {}), []);
+    assert.deepEqual(await listPendingMigrations({ laneRoot: root, manifest: { data: {} } }), []);
+    assert.deepEqual(await listPendingMigrations({ laneRoot: root, manifest: {} }), []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -37,7 +37,10 @@ test('listPendingMigrations: no migrations path → []', async () => {
 test('listPendingMigrations: missing applied file → all migration filenames', async () => {
   const root = tmpRoot(['20260101_a.sql', '20260102_b.sql']);
   try {
-    const pending = await listPendingMigrations(root, { data: { migrations: 'migrations' } });
+    const pending = await listPendingMigrations({
+      laneRoot: root,
+      manifest: { data: { migrations: 'migrations' } },
+    });
     assert.deepEqual(pending, ['20260101_a.sql', '20260102_b.sql']);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -47,7 +50,10 @@ test('listPendingMigrations: missing applied file → all migration filenames', 
 test('listPendingMigrations: subtracts applied set (name-only)', async () => {
   const root = tmpRoot(['20260101_a.sql', '20260102_b.sql', '20260103_c.sql'], '20260101_a.sql\n20260102_b.sql\n');
   try {
-    const pending = await listPendingMigrations(root, { data: { migrations: 'migrations' } });
+    const pending = await listPendingMigrations({
+      laneRoot: root,
+      manifest: { data: { migrations: 'migrations' } },
+    });
     assert.deepEqual(pending, ['20260103_c.sql']);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -57,7 +63,10 @@ test('listPendingMigrations: subtracts applied set (name-only)', async () => {
 test('listPendingMigrations: zero when all applied', async () => {
   const root = tmpRoot(['a.sql'], 'a.sql\n');
   try {
-    assert.deepEqual(await listPendingMigrations(root, { data: { migrations: 'migrations' } }), []);
+    assert.deepEqual(await listPendingMigrations({
+      laneRoot: root,
+      manifest: { data: { migrations: 'migrations' } },
+    }), []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -66,7 +75,9 @@ test('listPendingMigrations: zero when all applied', async () => {
 test('listPendingMigrations: pluggable adapter', async () => {
   const root = tmpRoot(['a.sql', 'b.sql']);
   try {
-    const pending = await listPendingMigrations(root, { data: { migrations: 'migrations' } }, {
+    const pending = await listPendingMigrations({
+      laneRoot: root,
+      manifest: { data: { migrations: 'migrations' } },
       adapter: async () => new Set(['a.sql']),
     });
     assert.deepEqual(pending, ['b.sql']);
@@ -78,8 +89,36 @@ test('listPendingMigrations: pluggable adapter', async () => {
 test('listPendingMigrations: missing migrations dir → []', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-drift-'));
   try {
-    assert.deepEqual(await listPendingMigrations(root, { data: { migrations: 'nope' } }), []);
+    assert.deepEqual(await listPendingMigrations({
+      laneRoot: root,
+      manifest: { data: { migrations: 'nope' } },
+    }), []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('listPendingMigrations: scans laneRoot, marker from markerRoot', async () => {
+  const primary = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-drift-pri-'));
+  const lane = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-drift-lane-'));
+  try {
+    fs.mkdirSync(path.join(primary, 'migrations'), { recursive: true });
+    fs.writeFileSync(path.join(primary, 'migrations', '20260101_a.sql'), '--\n');
+    fs.mkdirSync(path.join(primary, '.overlook'), { recursive: true });
+    fs.writeFileSync(path.join(primary, '.overlook', 'applied-migrations'), '20260101_a.sql\n');
+
+    fs.mkdirSync(path.join(lane, 'migrations'), { recursive: true });
+    fs.writeFileSync(path.join(lane, 'migrations', '20260101_a.sql'), '--\n');
+    fs.writeFileSync(path.join(lane, 'migrations', '20260104_branch.sql'), '--\n');
+
+    const pending = await listPendingMigrations({
+      laneRoot: lane,
+      markerRoot: primary,
+      manifest: { data: { migrations: 'migrations' } },
+    });
+    assert.deepEqual(pending, ['20260104_branch.sql']);
+  } finally {
+    fs.rmSync(primary, { recursive: true, force: true });
+    fs.rmSync(lane, { recursive: true, force: true });
   }
 });

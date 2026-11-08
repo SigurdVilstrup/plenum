@@ -203,7 +203,7 @@ test('test rejects overlapping run for same lane', async () => {
 test('up throws DRIFT when shared migrations pending', async () => {
   const { root, wt } = await fixture();
   try {
-    const mig = path.join(root, 'migrations');
+    const mig = path.join(wt, 'migrations');
     fs.mkdirSync(mig);
     fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
     fs.appendFileSync(
@@ -228,7 +228,7 @@ test('up throws DRIFT when shared migrations pending', async () => {
 test('up force: true skips drift gate', async () => {
   const { root, wt } = await fixture();
   try {
-    const mig = path.join(root, 'migrations');
+    const mig = path.join(wt, 'migrations');
     fs.mkdirSync(mig);
     fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
     fs.appendFileSync(
@@ -239,6 +239,30 @@ test('up force: true skips drift gate', async () => {
     assert.equal(status.running, true);
   } finally {
     try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('up DRIFT when migration exists only in lane worktree', async () => {
+  const { root, wt } = await fixture();
+  try {
+    fs.mkdirSync(path.join(root, 'migrations'));
+    fs.mkdirSync(path.join(wt, 'migrations'));
+    fs.writeFileSync(path.join(wt, 'migrations', '20260104_branch.sql'), '--\n');
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      ['data:', '  migrations: migrations', ''].join('\n'),
+    );
+    await assert.rejects(
+      () => supervisor.up(root, 1),
+      (err) => {
+        assert.equal(err.code, 'DRIFT');
+        assert.deepEqual(err.pending, ['20260104_branch.sql']);
+        return true;
+      },
+    );
+  } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
   }

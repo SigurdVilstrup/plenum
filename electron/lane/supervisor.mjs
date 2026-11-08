@@ -201,7 +201,11 @@ export async function up(root, laneIndex, { force = false } = {}) {
   if (!manifest?.run) throw new Error('lane manifest has no run command');
 
   if (!force && manifest.data?.migrations && usesSharedData(manifest)) {
-    const pending = await listPendingMigrations(top, manifest);
+    const pending = await listPendingMigrations({
+      laneRoot: cwd,
+      markerRoot: top,
+      manifest,
+    });
     if (pending.length) throw driftError(pending);
   }
 
