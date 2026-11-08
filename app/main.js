@@ -1478,7 +1478,30 @@ const SETTINGS_PAGES = {
         </div>
       </div>`;
   },
-  agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
+  agents: () => {
+    const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled></button>`;
+    const ask = (label) => `<select class="select" aria-label="${label}" disabled><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
+    return `<h1>Agents</h1>
+      <p class="lede">Later. Agents already reach lanes through <span class="mono">overlook mcp</span> over stdio and the <span class="mono">overlook</span> CLI. These controls are a preview: they are off, and agents are not limited by them yet.</p>
+      <div class="agents-stub">
+        <div class="group-head">Local MCP server</div>
+        <div class="list">
+          ${settingsRow('broadcast', 'Server', 'Stdio only for now', '<span class="mono">overlook mcp</span>', `<span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}`)}
+          ${settingsRow('terminal-window', 'CLI', 'Same verbs, same binary', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', '<span class="status"><i></i>0.1.0</span>')}
+        </div>
+        <div class="group-head">Connected clients<small>Overlook will read each tool's MCP config and write the two lines for you.</small></div>
+        <div class="list">
+          ${['Cursor', 'Claude Code', 'Codex'].map((n) => settingsRow('plugs-connected', n, '', 'Not detected yet', `<span class="status"><i></i>Later</span><button class="btn" type="button" disabled>Add</button>`)).join('')}
+        </div>
+        <div class="group-head">What agents may do<small>Reads are always allowed. Commit, push and merge stay with whoever is in the lane.</small></div>
+        <div class="list">
+          ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'))}
+          ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'))}
+          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'))}
+          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'))}
+        </div>
+      </div>`;
+  },
 };
 
 function openLaneSetup(root = state.board?.root) {

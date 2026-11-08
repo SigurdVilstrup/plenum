@@ -2135,3 +2135,11 @@ a.btn {
   flex: 1;
   min-width: 0;
 }
+
+.agents-stub .list {
+  opacity: 0.6;
+}
+
+.agents-stub :disabled {
+  cursor: not-allowed;
+}
