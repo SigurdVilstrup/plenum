@@ -52,6 +52,7 @@ const state = {
   changesCache: null,
   commitDraft: '',
   warmTabs: new Map(),
+  prefs: {},
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null },
 };
@@ -80,8 +81,24 @@ const el = {
 };
 
 function applyTheme() {
-  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const t = state.prefs.theme || 'system';
+  const dark = t === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : t === 'dark';
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+
+function applyPrefs() {
+  applyTheme();
+  document.documentElement.dataset.font = state.prefs.fontPack || 'system';
+  api.setZoom(state.prefs.zoom || 1);
+  if (state.prefs.warmTabTtlMs) state.warmTtlMs = state.prefs.warmTabTtlMs;
+}
+
+async function setPref(partial) {
+  state.prefs = await invoke('prefs.set', partial);
+  applyPrefs();
+  const top = el.settingsBody.scrollTop;
+  renderSettings();
+  el.settingsBody.scrollTop = top;
 }
 applyTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
@@ -1348,15 +1365,41 @@ const SETTINGS_NAV = [
   ['agents', 'robot', 'Agents'],
 ];
 
+const optionGroup = (key, options, cur, { num = false, label = key } = {}) =>
+  `<div class="option-row" role="group" aria-label="${esc(label)}" data-pref="${key}"${num ? ' data-num' : ''}>${options.map(([v, text]) =>
+    `<button class="option${String(v) === String(cur) ? ' on' : ''}" type="button" aria-pressed="${String(v) === String(cur)}" data-v="${esc(v)}">${text}</button>`).join('')}</div>`;
+
+const settingsRow = (ic, name, small, detail, control = '') =>
+  `<div class="list-row">${iconHTML(ic)}<div class="name">${name}${small ? `<small>${small}</small>` : ''}</div><div class="detail">${detail || ''}</div>${control}<span></span></div>`;
+
 const settingsPlaceholder = (title, lede) => `<h1>${title}</h1><p class="lede">${lede}</p>`;
 
 const SETTINGS_PAGES = {
   general: () => settingsPlaceholder('General', 'Editor, terminal, folders and tab behavior.'),
-  appearance: () => settingsPlaceholder('Appearance', 'Theme, zoom and fonts.'),
+  appearance: () => {
+    const p = state.prefs;
+    return `<h1>Appearance</h1><p class="lede">Theme, zoom and fonts. Saved on this Mac.</p>
+      <div class="list">
+        ${settingsRow('sun', 'Theme', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Theme' }))}
+        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }))}
+        ${settingsRow('list', 'Font', '', 'Inter, JetBrains Mono and IBM Plex use the copy installed on this Mac, else the system font', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }))}
+      </div>`;
+  },
   accounts: () => settingsPlaceholder('Accounts', 'Credentials for pushing and pulling over HTTPS.'),
   repositories: () => settingsPlaceholder('Repositories', 'Per repository: lanes folder and lane setup.'),
   agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
 };
+
+function bindPrefs(root) {
+  const set = (key, v) => setPref({ [key]: v }).catch(() => {});
+  root.querySelectorAll('.option-row[data-pref]').forEach((g) =>
+    g.querySelectorAll('.option').forEach((b) => b.addEventListener('click', () =>
+      set(g.dataset.pref, 'num' in g.dataset ? Number(b.dataset.v) : b.dataset.v))));
+  root.querySelectorAll('select[data-pref], input[data-pref]:not([type=checkbox])').forEach((n) =>
+    n.addEventListener('change', () => set(n.dataset.pref, 'num' in n.dataset ? Number(n.value) : n.value.trim())));
+  root.querySelectorAll('.switch[data-pref]').forEach((n) =>
+    n.addEventListener('click', () => set(n.dataset.pref, n.getAttribute('aria-checked') !== 'true')));
+}
 
 function openSettings(page = state.settings.page) {
   state.settings.open = true;
@@ -1377,6 +1420,7 @@ function renderSettings() {
   el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
     <div class="heading">Settings</div>${nav}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
+  bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
     b.addEventListener('click', () => openSettings(b.dataset.page)));
@@ -1551,8 +1595,8 @@ window.addEventListener('focus', () => { refresh(); });
 
 async function boot() {
   try {
-    const prefs = await invoke('prefs.get');
-    if (prefs?.warmTabTtlMs) state.warmTtlMs = prefs.warmTabTtlMs;
+    state.prefs = await invoke('prefs.get');
+    applyPrefs();
   } catch { /* defaults */ }
   const store = await invoke('tabs.list');
   applyStore(store);

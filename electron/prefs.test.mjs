@@ -25,3 +25,9 @@ test('setPrefs clamps warmTabTtlMs', () => {
   assert.equal(setPrefs({ warmTabTtlMs: 999_999 }, dir).warmTabTtlMs, 600_000);
   assert.equal(setPrefs({ warmTabTtlMs: 180_000 }, dir).warmTabTtlMs, 180_000);
 });
+
+test('setPrefs clamps zoom', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.equal(setPrefs({ zoom: 3 }, dir).zoom, 1.25);
+  assert.equal(setPrefs({ zoom: 0.1 }, dir).zoom, 0.8);
+});

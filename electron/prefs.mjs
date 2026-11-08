@@ -63,6 +63,7 @@ export function setPrefs(partial, userDataDir) {
   const cur = getPrefs(userDataDir);
   const next = { ...cur, ...(partial && typeof partial === 'object' ? partial : {}) };
   if ('warmTabTtlMs' in (partial || {})) next.warmTabTtlMs = clampTtl(partial.warmTabTtlMs);
+  if ('zoom' in (partial || {})) next.zoom = Math.min(1.25, Math.max(0.8, Number(partial.zoom) || 1));
   next.version = 1;
   write(next, userDataDir);
   return next;
