@@ -27,3 +27,31 @@ test('loadManifest unsupported version throws', async () => {
     fs.unlinkSync(file);
   }
 });
+
+test('loadManifest keeps services.*.snapshot and teardown', async () => {
+  const file = path.join(os.tmpdir(), `overlook-lane-snap-${Date.now()}.yaml`);
+  fs.writeFileSync(
+    file,
+    [
+      'version: 1',
+      'run: npm start',
+      'services:',
+      '  db:',
+      '    mode: snapshot',
+      '    snapshot: echo seed',
+      '    teardown: echo drop',
+      'data:',
+      '  snapshot: echo default-seed',
+      '',
+    ].join('\n'),
+  );
+  try {
+    const m = await loadManifest(file);
+    assert.equal(m.services.db.mode, 'snapshot');
+    assert.equal(m.services.db.snapshot, 'echo seed');
+    assert.equal(m.services.db.teardown, 'echo drop');
+    assert.equal(m.data.snapshot, 'echo default-seed');
+  } finally {
+    fs.unlinkSync(file);
+  }
+});

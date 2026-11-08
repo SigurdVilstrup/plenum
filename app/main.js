@@ -525,7 +525,9 @@ function runActionsHTML(l) {
   }).join('');
   const badge = l.dataMode === 'shared'
     ? `<span class="badge data" title="Databases shared across lanes. Switch a service to snapshot in .overlook/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
-    : '';
+    : l.dataMode === 'snapshot'
+      ? `<span class="badge data" title="This lane seeds its own copy via services.*.snapshot (or data.snapshot) before Run.">${iconHTML('database', 'sm')}snapshot data</span>`
+      : '';
   const tests = l.lastTest
     ? `<span class="env-note">${iconHTML(l.lastTest.ok ? 'check-circle' : 'warning-circle', 'sm')}tests ${l.lastTest.ok ? 'passed' : 'failed'}</span>`
     : '';
@@ -719,7 +721,7 @@ function openDriftSheet(lane, pending) {
         </label>
         <label class="list-row compact choice">
           <input type="radio" name="up" value="snapshot" />
-          <div class="name">Switch service to snapshot<small>Open Lane setup to set <span class="mono">mode: snapshot</span> in <span class="mono">.overlook/lane.yaml</span>. Full snapshot mode is not wired yet.</small></div>
+          <div class="name">Switch service to snapshot<small>Open Lane setup to set <span class="mono">mode: snapshot</span> plus a <span class="mono">snapshot:</span> command in <span class="mono">.overlook/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
         </label>
       </div>
       <div class="row-end">

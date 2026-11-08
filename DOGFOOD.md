@@ -1,5 +1,7 @@
 # Dogfood checklist (phase one)
 
+Snapshot mode (minimal): set `services.<name>.mode: snapshot` and a `snapshot:` command (or `data.snapshot`); Run seeds before `run`. Full walk in Task 13.
+
 Fixture:
 
 ```bash

@@ -187,6 +187,36 @@ function killGroup(pid, signal) {
   }
 }
 
+/** One-shot shell command; rejects with stderr on non-zero exit. */
+function runOnce(command, cwd, env, label) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, {
+      shell: true,
+      cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${label} failed (exit ${code}): ${stderr.trim() || '(no stderr)'}`));
+    });
+  });
+}
+
+/** For each snapshot service, run services.<name>.snapshot or data.snapshot once. */
+async function runSnapshots(manifest, cwd, ctx, env) {
+  for (const [name, svc] of Object.entries(manifest?.services ?? {})) {
+    if (svc?.mode !== 'snapshot') continue;
+    const cmd = svc.snapshot ?? manifest.data?.snapshot;
+    if (!cmd) throw new Error(`snapshot service "${name}" has no snapshot command`);
+    await runOnce(renderTemplate(String(cmd), ctx), cwd, env, `snapshot(${name})`);
+  }
+}
+
 /**
  * Start the lane's `run` command. Idempotent if already running.
  * Throws Error with `code: 'DRIFT'` and `pending` when shared migrations are unapplied.
@@ -208,6 +238,8 @@ export async function up(root, laneIndex, { force = false } = {}) {
     });
     if (pending.length) throw driftError(pending);
   }
+
+  await runSnapshots(manifest, cwd, ctx, env);
 
   const child = spawn(renderTemplate(String(manifest.run), ctx), {
     shell: true,

@@ -113,7 +113,11 @@ function normalizeServices(services) {
   const out = {};
   for (const [name, svc] of Object.entries(services)) {
     if (!svc || typeof svc !== 'object') continue;
-    out[name] = { mode: svc.mode };
+    out[name] = {
+      mode: svc.mode,
+      snapshot: svc.snapshot ?? undefined,
+      teardown: svc.teardown ?? undefined,
+    };
   }
   return out;
 }

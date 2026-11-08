@@ -22,10 +22,12 @@ export function laneStatus(manifest, laneIndex, proc = null, lastTest = null) {
     Object.entries(ports).map(([name, port]) => [name, `http://127.0.0.1:${port}`]),
   );
   const modes = Object.values(manifest.services ?? {}).map((s) => s?.mode);
-  // ponytail: v1 collapses to shared|isolated; multi-mode mix needs richer summary later
-  const dataMode = modes.length === 0 || modes.some((m) => m === 'shared' || m == null)
-    ? 'shared'
-    : 'isolated';
+  // ponytail: any snapshot wins the badge; mixed shared+snapshot needs a richer label later
+  const dataMode = modes.some((m) => m === 'snapshot')
+    ? 'snapshot'
+    : modes.length === 0 || modes.some((m) => m === 'shared' || m == null)
+      ? 'shared'
+      : 'isolated';
 
   return {
     runnable: true,

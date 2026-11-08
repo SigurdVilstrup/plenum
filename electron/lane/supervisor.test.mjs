@@ -267,3 +267,98 @@ test('up DRIFT when migration exists only in lane worktree', async () => {
     fs.rmSync(wt, { recursive: true, force: true });
   }
 });
+
+test('up runs services.*.snapshot before run when mode is snapshot', async () => {
+  const { root, wt } = await fixture();
+  try {
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      [
+        'services:',
+        '  db:',
+        '    mode: snapshot',
+        '    snapshot: node -e "require(\'fs\').writeFileSync(\'snap.ok\',\'1\')"',
+        '',
+      ].join('\n'),
+    );
+    const status = await supervisor.up(root, 1);
+    assert.equal(status.running, true);
+    assert.equal(fs.readFileSync(path.join(wt, 'snap.ok'), 'utf8'), '1');
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('up falls back to data.snapshot for snapshot services', async () => {
+  const { root, wt } = await fixture();
+  try {
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      [
+        'services:',
+        '  db:',
+        '    mode: snapshot',
+        'data:',
+        '  snapshot: node -e "require(\'fs\').writeFileSync(\'data-snap.ok\',\'1\')"',
+        '',
+      ].join('\n'),
+    );
+    await supervisor.up(root, 1);
+    assert.equal(fs.readFileSync(path.join(wt, 'data-snap.ok'), 'utf8'), '1');
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('up does not start run when snapshot command fails', async () => {
+  const { root, wt } = await fixture();
+  try {
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      [
+        'services:',
+        '  db:',
+        '    mode: snapshot',
+        '    snapshot: node -e "console.error(\'snap-boom\'); process.exit(2)"',
+        '',
+      ].join('\n'),
+    );
+    await assert.rejects(() => supervisor.up(root, 1), /snap-boom/);
+    assert.equal(supervisor.getProc(root, 1), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('up skips drift gate when all services are snapshot', async () => {
+  const { root, wt } = await fixture();
+  try {
+    const mig = path.join(wt, 'migrations');
+    fs.mkdirSync(mig);
+    fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      [
+        'services:',
+        '  db:',
+        '    mode: snapshot',
+        '    snapshot: node -e "require(\'fs\').writeFileSync(\'snap.ok\',\'1\')"',
+        'data:',
+        '  migrations: migrations',
+        '',
+      ].join('\n'),
+    );
+    const status = await supervisor.up(root, 1);
+    assert.equal(status.running, true);
+    assert.equal(fs.readFileSync(path.join(wt, 'snap.ok'), 'utf8'), '1');
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
