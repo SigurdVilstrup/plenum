@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
@@ -7,17 +9,47 @@ import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
 const LOG_LINES = 200;
 const TEST_LOG_LINES = 50;
 const TEST_TIMEOUT_MS = 10 * 60 * 1000;
-/** @type {Map<string, { root: string, laneIndex: number, pid: number, startedAt: number, urls: Record<string, string>, logs: { stdout: string[], stderr: string[] }, child: import('node:child_process').ChildProcess }>} */
-const procs = new Map();
+const RUN_DIR = path.join(os.homedir(), '.overlook', 'run');
+
+/** In-process child handles + logs (not shared across CLI/Electron). */
+/** @type {Map<string, { child: import('node:child_process').ChildProcess, logs: { stdout: string[], stderr: string[] }, pid: number, root: string, laneIndex: number }>} */
+const children = new Map();
 /** @type {Map<string, { ok: boolean, code: number|null, at: number, log: string[] }>} */
 const lastTests = new Map();
 /** @type {Map<string, Promise<{ ok: boolean, code: number|null, at: number, log: string[] }>>} */
 const inflightTests = new Map();
 
-function procKey(root, laneIndex) {
+function absRoot(root) {
   let abs = path.resolve(root);
   try { abs = fs.realpathSync(abs); } catch { /* keep resolved */ }
-  return `${abs}#${laneIndex}`;
+  return abs;
+}
+
+function procKey(root, laneIndex) {
+  return `${absRoot(root)}#${laneIndex}`;
+}
+
+/** Shared pid registry path for a repo root (CLI + Electron). */
+export function registryPathFor(root) {
+  const hash = crypto.createHash('sha256').update(absRoot(root)).digest('hex').slice(0, 16);
+  return path.join(RUN_DIR, `${hash}.json`);
+}
+
+function readReg(root) {
+  try {
+    const data = JSON.parse(fs.readFileSync(registryPathFor(root), 'utf8'));
+    if (data && data.lanes && typeof data.lanes === 'object') return data;
+  } catch { /* missing / corrupt */ }
+  return { root: absRoot(root), lanes: {} };
+}
+
+function writeReg(root, data) {
+  // ponytail: rename for atomicity; flock if concurrent writers collide
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+  const file = registryPathFor(root);
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ root: absRoot(root), lanes: data.lanes }, null, 0));
+  fs.renameSync(tmp, file);
 }
 
 function alive(pid) {
@@ -37,30 +69,72 @@ function pushLog(lines, chunk, max = LOG_LINES) {
   while (lines.length > max) lines.shift();
 }
 
-function snapshot(entry) {
-  if (!entry) return null;
-  const running = alive(entry.pid);
+function snapshot(stored, local, { running } = {}) {
+  if (!stored) return null;
+  const isRunning = running ?? alive(stored.pid);
   return {
-    root: entry.root,
-    laneIndex: entry.laneIndex,
-    pid: entry.pid,
-    startedAt: entry.startedAt,
-    urls: entry.urls,
-    running,
-    logs: { stdout: entry.logs.stdout.slice(), stderr: entry.logs.stderr.slice() },
+    root: stored.root,
+    laneIndex: stored.laneIndex,
+    pid: stored.pid,
+    startedAt: stored.startedAt,
+    urls: stored.urls ?? {},
+    running: isRunning,
+    logs: {
+      stdout: local?.logs?.stdout?.slice() ?? [],
+      stderr: local?.logs?.stderr?.slice() ?? [],
+    },
   };
 }
 
-/** Process lookup for board / IPC. */
+function getStored(root, laneIndex) {
+  const data = readReg(root);
+  const raw = data.lanes[String(laneIndex)];
+  if (!raw?.pid) return { data, stored: null };
+  return {
+    data,
+    stored: {
+      root: data.root ?? absRoot(root),
+      laneIndex: Number(laneIndex),
+      pid: raw.pid,
+      startedAt: raw.startedAt,
+      urls: raw.urls ?? {},
+    },
+  };
+}
+
+function setStored(root, laneIndex, entry) {
+  const data = readReg(root);
+  data.lanes[String(laneIndex)] = {
+    pid: entry.pid,
+    startedAt: entry.startedAt,
+    urls: entry.urls ?? {},
+  };
+  writeReg(root, data);
+}
+
+function clearStored(root, laneIndex) {
+  const data = readReg(root);
+  if (!(String(laneIndex) in data.lanes)) return;
+  delete data.lanes[String(laneIndex)];
+  writeReg(root, data);
+}
+
+/** Process lookup for board / IPC / CLI. File registry is source of truth. */
 export function getProc(root, laneIndex) {
-  const entry = procs.get(procKey(root, laneIndex));
-  if (!entry) return null;
-  const snap = snapshot(entry);
-  if (!snap.running) {
-    procs.delete(procKey(root, laneIndex));
-    return { ...snap, running: false };
+  const key = procKey(root, laneIndex);
+  const { data, stored } = getStored(root, laneIndex);
+  if (!stored) {
+    children.delete(key);
+    return null;
   }
-  return snap;
+  const local = children.get(key);
+  if (!alive(stored.pid)) {
+    delete data.lanes[String(laneIndex)];
+    writeReg(root, data);
+    children.delete(key);
+    return snapshot(stored, local, { running: false });
+  }
+  return snapshot(stored, local, { running: true });
 }
 
 /** Last one-shot test result for board / IPC. */
@@ -149,71 +223,95 @@ export async function up(root, laneIndex) {
   if (child.pid == null) throw new Error('spawn produced no pid');
 
   const key = procKey(top, laneIndex);
-  const entry = {
+  const startedAt = Date.now();
+  const local = {
+    child,
+    logs: { stdout: [], stderr: [] },
+    pid: child.pid,
     root: top,
     laneIndex,
-    pid: child.pid,
-    startedAt: Date.now(),
-    urls,
-    logs: { stdout: [], stderr: [] },
-    child,
   };
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (d) => pushLog(entry.logs.stdout, d));
-  child.stderr.on('data', (d) => pushLog(entry.logs.stderr, d));
+  child.stdout.on('data', (d) => pushLog(local.logs.stdout, d));
+  child.stderr.on('data', (d) => pushLog(local.logs.stderr, d));
   child.on('error', () => {
-    if (procs.get(key) === entry) procs.delete(key);
+    if (children.get(key) === local) children.delete(key);
+    clearStored(top, laneIndex);
   });
   child.on('exit', () => {
-    if (procs.get(key) === entry) procs.delete(key);
+    if (children.get(key) === local) children.delete(key);
+    clearStored(top, laneIndex);
   });
 
-  procs.set(key, entry);
-  return snapshot(entry);
+  children.set(key, local);
+  setStored(top, laneIndex, { pid: child.pid, startedAt, urls });
+  return snapshot({ root: top, laneIndex, pid: child.pid, startedAt, urls }, local, { running: true });
 }
 
 /**
  * Stop a running lane: SIGTERM, then SIGKILL after 5s.
+ * Works cross-process via pid in the shared registry file.
  * @param {string} root
  * @param {number} laneIndex
  */
 export async function down(root, laneIndex) {
   const { top } = await resolveLanes(root);
   const key = procKey(top, laneIndex);
-  const entry = procs.get(key);
-  if (!entry) return null;
+  const { stored } = getStored(top, laneIndex);
+  if (!stored) {
+    children.delete(key);
+    return null;
+  }
 
-  const { pid, child } = entry;
+  const local = children.get(key);
+  const { pid } = stored;
   if (!alive(pid)) {
-    procs.delete(key);
-    return snapshot({ ...entry, pid });
+    clearStored(top, laneIndex);
+    children.delete(key);
+    return snapshot(stored, local, { running: false });
   }
 
   killGroup(pid, 'SIGTERM');
 
   await new Promise((resolve) => {
-    if (child.exitCode != null || child.signalCode != null || child.killed || !alive(pid)) {
-      resolve();
-      return;
-    }
+    const child = local?.child;
+    const done = () => resolve();
     const t = setTimeout(() => {
       if (alive(pid)) killGroup(pid, 'SIGKILL');
-      resolve();
+      done();
     }, 5000);
-    child.once('exit', () => {
-      clearTimeout(t);
-      resolve();
-    });
-    // exit may have fired between the pre-check and once('exit')
-    if (child.exitCode != null || child.signalCode != null || child.killed || !alive(pid)) {
-      clearTimeout(t);
-      resolve();
+
+    if (child) {
+      if (child.exitCode != null || child.signalCode != null || child.killed || !alive(pid)) {
+        clearTimeout(t);
+        done();
+        return;
+      }
+      child.once('exit', () => {
+        clearTimeout(t);
+        done();
+      });
+      if (child.exitCode != null || child.signalCode != null || child.killed || !alive(pid)) {
+        clearTimeout(t);
+        done();
+      }
+      return;
     }
+
+    // Cross-process: no child handle — poll until dead or timeout fires
+    const iv = setInterval(() => {
+      if (!alive(pid)) {
+        clearInterval(iv);
+        clearTimeout(t);
+        done();
+      }
+    }, 50);
   });
 
-  procs.delete(key);
-  return { ...snapshot(entry), running: false, pid };
+  clearStored(top, laneIndex);
+  children.delete(key);
+  return snapshot(stored, local, { running: false });
 }
 
 /**
@@ -292,10 +390,11 @@ export async function test(root, laneIndex, { timeoutMs = TEST_TIMEOUT_MS } = {}
   }
 }
 
-/** Force-stop every supervised process (app quit). */
+/** Force-stop every process this runtime spawned (app quit). */
 export function stopAll() {
-  for (const entry of procs.values()) {
-    if (alive(entry.pid)) killGroup(entry.pid, 'SIGKILL');
+  for (const local of children.values()) {
+    if (alive(local.pid)) killGroup(local.pid, 'SIGKILL');
+    clearStored(local.root, local.laneIndex);
   }
-  procs.clear();
+  children.clear();
 }

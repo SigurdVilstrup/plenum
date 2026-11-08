@@ -5,12 +5,16 @@
   "description": "Mac git client for parallel work — phase one board and git verbs",
   "main": "electron/main.mjs",
   "type": "module",
+  "bin": {
+    "overlook": "./bin/overlook.mjs"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "vite build",
     "prestart": "vite build",
     "start": "electron .",
-    "test": "node --test electron/git/*.test.mjs electron/lane/*.test.mjs",
+    "overlook": "node ./bin/overlook.mjs",
+    "test": "node --test electron/git/*.test.mjs electron/lane/*.test.mjs bin/*.test.mjs",
     "smoke:init": "node scripts/smoke-init.mjs"
   },
   "devDependencies": {
