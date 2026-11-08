@@ -22,13 +22,14 @@ const icon = (name, cls = '') => {
   return `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${safe}"></use></svg>`;
 };
 
-const refPill = (r) => {
-  const cls = ['ref', r.primary && 'primary', r.remote && 'remote', r.tag && 'tag'].filter(Boolean).join(' ');
+const refPill = (r, running) => {
+  const cls = ['ref', r.primary && 'primary', r.remote && 'remote', r.tag && 'tag', running && 'running'].filter(Boolean).join(' ');
   const ic = r.tag ? 'git-commit' : r.primary ? 'shield-check' : r.worktree ? 'tree-structure' : 'git-branch';
-  return `<span class="${cls}">${icon(ic)}${esc(r.name)}</span>`;
+  const dot = running ? '<i class="run-dot" title="Running"></i>' : '';
+  return `<span class="${cls}">${icon(ic)}${esc(r.name)}${dot}</span>`;
 };
 
-export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null }) {
+export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set() }) {
   const rowsEl = root.querySelector('.rows');
   const scrollTop = rowsEl.scrollTop;
   const index = new Map(commits.map((c, i) => [c.id, i]));
@@ -97,7 +98,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
           <span></span><span></span><span></span>
         </div>`;
       }
-      const refs = (c.refs || []).map((r) => refPill(r)).join('');
+      const refs = (c.refs || []).map((r) => refPill(r, r.worktree && !r.primary && runningLanes.has(c.lane))).join('');
       const tip = tips.has(c.id);
       const kind = authorLabel[c.kind] ? c.kind : 'human';
       const pill = tip && kind !== 'human'

@@ -190,6 +190,7 @@ function paint() {
     commits: state.board.commits,
     selectedLane: state.selectedLane,
     selectedCommit,
+    runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
   });
   if (state.changes) paintChanges();
 }
