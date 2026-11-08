@@ -382,7 +382,10 @@ export async function loadBoard(repoPath) {
   const team = await teamBranch(top);
   const teamRef = await resolveTeamRef(team, top);
   const hasCommit = await gitOk(['rev-parse', '--verify', '--quiet', 'HEAD'], top);
-  const manifest = await loadManifest(path.join(trees[0].path, '.overlook', 'lane.yaml'));
+  let manifest = null;
+  try {
+    manifest = await loadManifest(path.join(trees[0].path, '.overlook', 'lane.yaml'));
+  } catch { /* bad lane.yaml → not runnable */ }
 
   const lanes = [];
   for (let index = 0; index < trees.length; index++) {
