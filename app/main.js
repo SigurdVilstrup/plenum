@@ -516,7 +516,7 @@ function runActionsHTML(l) {
   const urls = Object.entries(l.urls || {}).map(([name, url]) => {
     let port = '';
     try { port = new URL(url).port; } catch { /* ignore */ }
-    return `<a class="chip url" href="${esc(url)}" title="${esc(url)}">${iconHTML('globe-simple', 'sm')}${esc(name)} <span class="mono">:${esc(port)}</span></a>`;
+    return `<button class="chip url" type="button" data-act="openUrl" data-url="${esc(url)}" title="${esc(url)}">${iconHTML('globe-simple', 'sm')}${esc(name)} <span class="mono">:${esc(port)}</span></button>`;
   }).join('');
   const badge = l.dataMode === 'shared'
     ? `<span class="badge data" title="Databases shared across lanes. Switch a service to snapshot in .overlook/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
@@ -584,14 +584,18 @@ function paintHeader() {
   }
   el.laneHead.innerHTML = html;
   el.laneHead.querySelectorAll('[data-act]').forEach((btn) => {
-    btn.addEventListener('click', () => handleAction(btn.dataset.act, l));
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      handleAction(btn.dataset.act, l, btn.dataset.url);
+    });
   });
 }
 
-async function handleAction(act, lane) {
+async function handleAction(act, lane, url) {
   try {
     if (act === 'reveal') return invoke('os.reveal', lane.path);
     if (act === 'cursor') return invoke('os.openCursor', lane.path);
+    if (act === 'openUrl') return invoke('os.openExternal', url);
     if (act === 'commit') return openCommitSheet(lane);
     if (act === 'push') {
       return runGit('lane.push', lane.index, `Pushed ${lane.name} to origin`, 'push');
@@ -620,7 +624,20 @@ async function handleAction(act, lane) {
       return runGit('lane.down', lane.index, `Stopped ${lane.name}`, 'down');
     }
     if (act === 'test') {
-      return runGit('lane.test', lane.index, `Tests finished for ${lane.name}`, 'test');
+      if (state.busy) return;
+      state.busy = true;
+      setActionBusy('test', true);
+      try {
+        const board = await invoke('lane.test', lane.index);
+        state.flashMarks.add(lane.index);
+        applyBoard(board);
+        const ok = board?.lanes?.find((x) => x.index === lane.index)?.lastTest?.ok;
+        toast(ok ? `Tests passed for ${lane.name}` : `Tests failed for ${lane.name}`, ok ? 'ok' : 'bad');
+      } finally {
+        state.busy = false;
+        setActionBusy('test', false);
+      }
+      return;
     }
   } catch { /* toasted */ }
 }
@@ -1134,9 +1151,9 @@ function paletteCommands() {
     { id: 'rebase', label: 'Rebase on main', run: () => handleAction('rebase', lane), when: lane && !lane.isPrimary && lane.behind },
     { id: 'merge', label: 'Merge into main…', run: () => handleAction('merge', lane), when: lane && !lane.isPrimary && lane.ahead && !lane.dirty },
     { id: 'conflicts', label: 'Resolve conflicts…', run: () => handleAction('conflicts', lane), when: !!lane },
-    { id: 'up', label: 'Run lane', run: () => handleAction('up', lane), when: lane && !lane.isPrimary && lane.runnable && !lane.running },
+    { id: 'up', label: 'Run lane', run: () => handleAction('up', lane), when: lane && !lane.isPrimary && lane.runnable && !lane.running && lane.readiness !== 'safe' },
     { id: 'down', label: 'Stop lane', run: () => handleAction('down', lane), when: lane && lane.running },
-    { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && !lane.isPrimary && lane.runnable },
+    { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && !lane.isPrimary && lane.runnable && lane.readiness !== 'safe' },
     { id: 'reveal', label: 'Reveal in Finder', run: () => handleAction('reveal', lane), when: !!lane },
     { id: 'cursor', label: 'Open in Cursor', run: () => handleAction('cursor', lane), when: !!lane },
     { id: 'refresh', label: 'Refresh board', run: refresh, when: !!state.board },

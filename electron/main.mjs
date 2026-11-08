@@ -114,6 +114,15 @@ ipcMain.handle('os.reveal', (_e, target) => {
   shell.showItemInFolder(assertPath(target));
 });
 
+ipcMain.handle('os.openExternal', (_e, url) => {
+  let parsed;
+  try { parsed = new URL(String(url || '')); } catch { throw new Error('Invalid URL.'); }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Only http(s) URLs allowed.');
+  }
+  return shell.openExternal(parsed.href);
+});
+
 ipcMain.handle('os.openCursor', (_e, target) => {
   const abs = assertPath(target);
   const cli = ['/usr/local/bin/cursor', '/opt/homebrew/bin/cursor', path.join(process.env.HOME || '', '.local/bin/cursor')]
