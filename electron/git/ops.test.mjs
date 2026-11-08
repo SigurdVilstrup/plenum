@@ -257,7 +257,6 @@ function alive(pid) {
 
 test('removeLane downs a running process before removing the worktree', async () => {
   const { root } = await fixture();
-  // Supervisor reads manifest from primary disk — no commit/push needed.
   writeManifest(
     root,
     [
@@ -271,13 +270,17 @@ test('removeLane downs a running process before removing the worktree', async ()
       '',
     ].join('\n'),
   );
+  // Commit+push so primary stays clean (merge refuses dirty) and createLane's
+  // origin/main base includes the manifest (avoids diverge → ff failure).
+  await git(['add', '.overlook'], root);
+  await git(['commit', '-m', 'manifest'], root);
+  await git(['push'], root);
 
   let board = await ops.createLane(root, { name: 'runrm', branch: 'feat/runrm' });
   const lane = board.lanes.find((l) => l.name === 'feat/runrm');
   assert.ok(lane);
   fs.writeFileSync(path.join(lane.path, 'done.txt'), 'x');
   board = await ops.commitLane(root, lane.index, 'done');
-  // --no-ff avoids flaky ff-only failures when tips aren't strict ancestors.
   board = await ops.mergeLaneIntoMain(root, lane.index, { mode: 'merge' });
   const merged = board.lanes.find((l) => l.name === 'feat/runrm');
   assert.equal(merged.readiness, 'safe');
