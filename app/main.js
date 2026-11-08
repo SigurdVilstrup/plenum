@@ -53,6 +53,8 @@ const state = {
   commitDraft: '',
   warmTabs: new Map(),
   prefs: {},
+  identity: null,
+  identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null },
 };
@@ -588,6 +590,14 @@ function gitActionsHTML(l) {
   return a.join('');
 }
 
+const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed' }[state.prefs.editor] || 'editor');
+
+function editorBtnHTML() {
+  const n = editorName();
+  const ic = !state.prefs.editor || state.prefs.editor === 'cursor' ? 'cursor' : 'arrow-square-out';
+  return `<button class="iconbtn framed primary" type="button" data-act="editor" title="Open in ${n}" aria-label="Open in ${n}">${iconHTML(ic)}</button>`;
+}
+
 function laneSetupLink() {
   return `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup</button>`;
 }
@@ -643,7 +653,7 @@ function paintHeader() {
       <div class="actions">
         ${gitActionsHTML(l)}
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
-        <button class="iconbtn framed primary" type="button" data-act="cursor" title="Open in Cursor" aria-label="Open in Cursor">${iconHTML('cursor')}</button>
+        ${editorBtnHTML()}
       </div>
     </div>
     <div class="env-row">${runActionsHTML(l)}</div>`;
@@ -669,7 +679,7 @@ function paintHeader() {
       <div class="actions">
         ${remove}${gitActionsHTML(l)}
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
-        <button class="iconbtn framed primary" type="button" data-act="cursor" title="Open in Cursor" aria-label="Open in Cursor">${iconHTML('cursor')}</button>
+        ${editorBtnHTML()}
       </div>
     </div>
     <div class="env-row">${runActionsHTML(l)}</div>`;
@@ -686,7 +696,7 @@ function paintHeader() {
 async function handleAction(act, lane, url) {
   try {
     if (act === 'reveal') return invoke('os.reveal', lane.path);
-    if (act === 'cursor') return invoke('os.openCursor', lane.path);
+    if (act === 'editor') return invoke('os.openEditor', lane.path);
     if (act === 'openUrl') return invoke('os.openExternal', url);
     if (act === 'commit') return openCommitSheet(lane);
     if (act === 'push') {
@@ -932,6 +942,31 @@ function openQuickStartSheet() {
     </form>`);
 }
 
+const WARM_PRESETS = [[30000, '30 seconds'], [120000, '2 minutes'], [300000, '5 minutes'], [600000, '10 minutes']];
+
+function openWarmSheet() {
+  const cur = state.prefs.warmTabTtlMs || state.warmTtlMs;
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="warm-title">
+      <div class="eyebrow">${iconHTML('clock', 'sm')}Tabs</div>
+      <h1 id="warm-title">Tab warm time</h1>
+      <p>How long a tab you left keeps refreshing in the background. Coming back inside that time shows the board at once.</p>
+      <div class="list">
+        ${WARM_PRESETS.map(([ms, t]) => `<label class="list-row compact choice"><input type="radio" name="ttl" value="${ms}"${ms === cur ? ' checked' : ''} /><div class="name">${t}</div></label>`).join('')}
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Save</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ms = Number(el.sheetLayer.querySelector('input[name=ttl]:checked')?.value);
+    closeSheet();
+    try { await setPref({ warmTabTtlMs: ms }); } catch { /* toasted */ }
+  });
+}
+
 function openCreateLane() {
   const team = state.board.teamRef;
   openSheet(`
@@ -948,7 +983,7 @@ function openCreateLane() {
       </div>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">${iconHTML('arrow-square-out', 'sm')}Create and open in Cursor</button>
+        <button class="btn primary" type="submit">${iconHTML('arrow-square-out', 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
@@ -972,7 +1007,7 @@ function openCreateLane() {
       closeSheet();
       applyBoard(board, { selectLane: created?.index, enterLane: created?.index });
       toast(`Lane ${created?.name || name} created`, 'ok');
-      if (created) invoke('os.openCursor', created.path).catch(() => {});
+      if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
     } catch { /* toasted */ }
   });
   nameInput.focus();
@@ -1130,7 +1165,7 @@ function bindChangesTree(basePath) {
     });
   });
   el.changes.querySelectorAll('[data-file]').forEach((btn) => {
-    btn.addEventListener('click', () => invoke('os.openCursor', `${basePath}/${btn.dataset.file}`));
+    btn.addEventListener('click', () => invoke('os.openEditor', `${basePath}/${btn.dataset.file}`));
   });
 }
 
@@ -1320,7 +1355,7 @@ async function openConflictSheet(lane, snapshot) {
   modal.querySelectorAll('[data-open-file]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const file = btn.closest('[data-file]').dataset.file;
-      invoke('os.openCursor', `${work}/${file}`);
+      invoke('os.openEditor', `${work}/${file}`);
     });
   });
   modal.querySelectorAll('[data-stage-file]').forEach((btn) => {
@@ -1369,13 +1404,58 @@ const optionGroup = (key, options, cur, { num = false, label = key } = {}) =>
   `<div class="option-row" role="group" aria-label="${esc(label)}" data-pref="${key}"${num ? ' data-num' : ''}>${options.map(([v, text]) =>
     `<button class="option${String(v) === String(cur) ? ' on' : ''}" type="button" aria-pressed="${String(v) === String(cur)}" data-v="${esc(v)}">${text}</button>`).join('')}</div>`;
 
+const selectHTML = (key, options, cur, label) =>
+  `<select class="select" data-pref="${key}" aria-label="${esc(label)}">${options.map(([v, t]) =>
+    `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+
+const switchHTML = (key, on, label) =>
+  `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${!!on}" aria-label="${esc(label)}" data-pref="${key}"></button>`;
+
 const settingsRow = (ic, name, small, detail, control = '') =>
   `<div class="list-row">${iconHTML(ic)}<div class="name">${name}${small ? `<small>${small}</small>` : ''}</div><div class="detail">${detail || ''}</div>${control}<span></span></div>`;
 
 const settingsPlaceholder = (title, lede) => `<h1>${title}</h1><p class="lede">${lede}</p>`;
 
 const SETTINGS_PAGES = {
-  general: () => settingsPlaceholder('General', 'Editor, terminal, folders and tab behavior.'),
+  general: () => {
+    const p = state.prefs;
+    const id = state.identity;
+    const local = state.identityScope === 'local' && id?.local;
+    const shown = (local ? id.local : id?.global) || { name: '', email: '' };
+    const fallback = local ? id.global : { name: '', email: '' };
+    const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
+    const external = [['internal', 'Internal (coming soon)'], ['opendiff', 'FileMerge'], ['vscode', 'VS Code'], ['cursor', 'Cursor']];
+    return `<h1>General</h1><p class="lede">Editor, terminal, folders and tab behavior. Saved on this Mac.</p>
+      <div class="group-head">Open with</div>
+      <div class="list">
+        ${settingsRow('cursor', 'Editor', '', '', selectHTML('editor', [['cursor', 'Cursor'], ['vscode', 'VS Code'], ['zed', 'Zed'], ['custom', 'Other app…']], p.editor, 'Editor'))}
+        ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'An .app bundle or an executable', custom('editorPath', '/Applications/Zed.app')) : ''}
+        ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'After Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'))}
+        ${settingsRow('terminal-window', 'Terminal', '', 'Palette: Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'))}
+        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'An .app bundle or an executable', custom('terminalPath', '/Applications/Ghostty.app')) : ''}
+      </div>
+      <div class="group-head">Diff and merge<small>Overlook has no diff or merge view of its own yet. Pick what opens outside.</small></div>
+      <div class="list">
+        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'))}
+        ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'))}
+      </div>
+      <div class="group-head">Folders</div>
+      <div class="list">
+        ${settingsRow('folder-simple', 'Clone path', 'Where Open Repository starts', '', custom('cloneDefaultPath', '~/Dev'))}
+        ${settingsRow('tree-structure', 'Lanes folder', 'Per repository override under Repositories', 'Relative to the checkout, or absolute', custom('defaultLanesFolder', '.worktrees'))}
+      </div>
+      <div class="group-head">Tabs</div>
+      <div class="list">
+        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Open repositories come back on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'))}
+        ${settingsRow('clock', 'Tab warm time', '', 'A tab you left keeps refreshing, so coming back is instant', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }))}
+      </div>
+      <div class="group-head">Git identity<small>Written to git config, not to Overlook's prefs.</small></div>
+      <div class="list">
+        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repository for a per-repository identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }))}
+        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`)}
+        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`)}
+      </div>`;
+  },
   appearance: () => {
     const p = state.prefs;
     return `<h1>Appearance</h1><p class="lede">Theme, zoom and fonts. Saved on this Mac.</p>
@@ -1390,9 +1470,29 @@ const SETTINGS_PAGES = {
   agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
 };
 
+async function loadIdentity() {
+  try { state.identity = await invoke('git.identity.get'); } catch { return; }
+  if (state.settings.open && state.settings.page === 'general') renderSettings();
+}
+
+function bindIdentity(root) {
+  root.querySelectorAll('.option-row[data-pref=identityScope] .option').forEach((b) => b.addEventListener('click', () => {
+    state.identityScope = b.dataset.v;
+    renderSettings();
+  }));
+  root.querySelectorAll('[data-identity]').forEach((n) => n.addEventListener('change', async () => {
+    const v = (k) => root.querySelector(`[data-identity=${k}]`).value;
+    try {
+      state.identity = await invoke('git.identity.set', { scope: state.identityScope, name: v('name'), email: v('email') });
+      toast('Saved git identity', 'ok');
+    } catch { /* toasted */ }
+    renderSettings();
+  }));
+}
+
 function bindPrefs(root) {
   const set = (key, v) => setPref({ [key]: v }).catch(() => {});
-  root.querySelectorAll('.option-row[data-pref]').forEach((g) =>
+  root.querySelectorAll('.option-row[data-pref]:not([data-pref=identityScope])').forEach((g) =>
     g.querySelectorAll('.option').forEach((b) => b.addEventListener('click', () =>
       set(g.dataset.pref, 'num' in g.dataset ? Number(b.dataset.v) : b.dataset.v))));
   root.querySelectorAll('select[data-pref], input[data-pref]:not([type=checkbox])').forEach((n) =>
@@ -1406,6 +1506,7 @@ function openSettings(page = state.settings.page) {
   state.settings.page = page;
   paint();
   renderSettings();
+  if (page === 'general') loadIdentity();
 }
 
 function closeSettings() {
@@ -1420,6 +1521,7 @@ function renderSettings() {
   el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
     <div class="heading">Settings</div>${nav}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
+  if (page === 'general') bindIdentity(el.settingsBody);
   bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
@@ -1447,7 +1549,9 @@ function paletteCommands() {
     { id: 'down', label: 'Stop lane', run: () => handleAction('down', lane), when: lane && lane.running },
     { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && !lane.isPrimary && lane.runnable && lane.readiness !== 'safe' },
     { id: 'reveal', label: 'Reveal in Finder', run: () => handleAction('reveal', lane), when: !!lane },
-    { id: 'cursor', label: 'Open in Cursor', run: () => handleAction('cursor', lane), when: !!lane },
+    { id: 'editor', label: `Open in ${editorName()}`, run: () => handleAction('editor', lane), when: !!lane },
+    { id: 'terminal', label: 'Open in terminal', run: () => invoke('os.openTerminal', lane.path).catch(() => {}), when: !!lane },
+    { id: 'warm', label: 'Tab warm time…', run: openWarmSheet },
     { id: 'refresh', label: 'Refresh board', run: refresh, when: !!state.board },
   ];
   if (state.board) {

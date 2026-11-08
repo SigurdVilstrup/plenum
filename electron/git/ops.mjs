@@ -22,7 +22,8 @@ function assertFeatureName(name) {
   return feature;
 }
 
-export async function createLane(root, { name, branch }) {
+/** `lanesFolder`: relative to the primary checkout, or absolute. */
+export async function createLane(root, { name, branch, lanesFolder }) {
   const board = await loadBoard(root);
   const primary = board.lanes[0];
   const feature = assertFeatureName(name);
@@ -30,17 +31,19 @@ export async function createLane(root, { name, branch }) {
   if (!branchName || branchName.startsWith('-') || branchName.includes('..')) {
     throw new Error('Invalid branch name.');
   }
-  const folder = path.join(primary.path, '.worktrees', feature);
-  if (!folder.startsWith(path.join(primary.path, '.worktrees') + path.sep)) {
-    throw new Error('Invalid lane folder.');
-  }
+  const lanesDir = path.resolve(primary.path, String(lanesFolder || '').trim() || '.worktrees');
+  if (lanesDir === path.resolve(primary.path)) throw new Error('Lanes folder cannot be the checkout itself.');
+  const folder = path.join(lanesDir, feature);
+  if (!folder.startsWith(lanesDir + path.sep)) throw new Error('Invalid lane folder.');
   if (fs.existsSync(folder)) throw new Error(`Folder already exists: ${folder}`);
   fs.mkdirSync(path.dirname(folder), { recursive: true });
   const exclude = path.join(primary.path, '.git', 'info', 'exclude');
   fs.mkdirSync(path.dirname(exclude), { recursive: true });
-  const stamp = '.worktrees/';
+  const rel = path.relative(primary.path, lanesDir);
+  const stamp = `${rel}/`;
   const existing = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
-  if (!existing.split(/\r?\n/).includes(stamp)) {
+  // Only a folder inside the checkout needs hiding from `git status`.
+  if (!rel.startsWith('..') && !path.isAbsolute(rel) && !existing.split(/\r?\n/).includes(stamp)) {
     fs.writeFileSync(exclude, `${existing}${existing && !existing.endsWith('\n') ? '\n' : ''}${stamp}\n`);
   }
   const base = board.teamRef;

@@ -298,3 +298,15 @@ test('removeLane downs a running process before removing the worktree', async ()
     try { await supervisor.down(root, merged.index); } catch { /* already down */ }
   }
 });
+
+test('createLane honors lanesFolder inside and outside the checkout', async () => {
+  const { root } = await fixture();
+  let board = await ops.createLane(root, { name: 'in', lanesFolder: 'lanes-alt' });
+  const inside = board.lanes.find((l) => l.name === 'feat/in');
+  assert.equal(inside.path, fs.realpathSync(path.join(root, 'lanes-alt', 'in')));
+  assert.ok(fs.readFileSync(path.join(root, '.git', 'info', 'exclude'), 'utf8').split('\n').includes('lanes-alt/'));
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-lanes-'));
+  board = await ops.createLane(root, { name: 'out', lanesFolder: out });
+  assert.equal(board.lanes.find((l) => l.name === 'feat/out').path, fs.realpathSync(path.join(out, 'out')));
+  await assert.rejects(ops.createLane(root, { name: 'self', lanesFolder: '.' }), /itself/);
+});

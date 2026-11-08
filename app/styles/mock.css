@@ -2110,3 +2110,13 @@ a.btn {
 .list-row .detail .mono {
   color: var(--ink-muted);
 }
+
+.input {
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: var(--ink);
+  font-size: 12px;
+  min-width: 220px;
+}

@@ -9,6 +9,7 @@ import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
 import { doctor, acceptManifest } from './lane/doctor.mjs';
 import { getPrefs, setPrefs } from './prefs.mjs';
+import { getIdentity, setIdentity } from './git/identity.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -65,6 +66,10 @@ app.whenReady().then(async () => {
     app.setName('Overlook');
     const icon = appIcon();
     if (icon && app.dock) app.dock.setIcon(icon);
+  }
+
+  if (getPrefs(prefsDir()).reopenTabs === false) {
+    for (const t of tabs.listTabs().tabs) tabs.closeTab(t.id);
   }
 
   const openPath = process.env.OVERLOOK_OPEN;
@@ -142,6 +147,7 @@ ipcMain.handle('os.pickFolder', async () => {
   const res = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],
     title: 'Open Repository',
+    defaultPath: [getPrefs(prefsDir()).cloneDefaultPath].find((p) => p && fs.existsSync(p)),
   });
   if (res.canceled || !res.filePaths[0]) return null;
   return res.filePaths[0];
@@ -166,15 +172,39 @@ ipcMain.handle('os.openExternal', (_e, url) => {
   return shell.openExternal(parsed.href);
 });
 
-ipcMain.handle('os.openCursor', (_e, target) => {
+const home = process.env.HOME || '';
+const EDITORS = {
+  cursor: { cli: ['/usr/local/bin/cursor', '/opt/homebrew/bin/cursor', path.join(home, '.local/bin/cursor')], open: ['-b', 'com.todesktop.230313mzl4w4u92'] },
+  vscode: { cli: ['/usr/local/bin/code', '/opt/homebrew/bin/code'], open: ['-a', 'Visual Studio Code'] },
+  zed: { cli: ['/usr/local/bin/zed', '/opt/homebrew/bin/zed'], open: ['-a', 'Zed'] },
+};
+
+function launch(cmd, args) {
+  spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+}
+
+/** Custom tool from Settings: a .app bundle or an executable that takes the folder as its argument. */
+function openCustom(tool, abs) {
+  if (!tool || !path.isAbsolute(tool) || !fs.existsSync(tool)) throw new Error('Set a valid path in Settings > General.');
+  if (tool.endsWith('.app')) launch('open', ['-a', tool, abs]);
+  else launch(tool, [abs]);
+}
+
+ipcMain.handle('os.openEditor', (_e, target) => {
   const abs = assertPath(target);
-  const cli = ['/usr/local/bin/cursor', '/opt/homebrew/bin/cursor', path.join(process.env.HOME || '', '.local/bin/cursor')]
-    .find((p) => fs.existsSync(p));
-  if (cli) {
-    spawn(cli, ['-r', '--', abs], { detached: true, stdio: 'ignore' }).unref();
-  } else {
-    spawn('open', ['-b', 'com.todesktop.230313mzl4w4u92', abs], { detached: true, stdio: 'ignore' }).unref();
-  }
+  const { editor, editorPath } = getPrefs(prefsDir());
+  if (editor === 'custom') return openCustom(editorPath, abs);
+  const e = EDITORS[editor] || EDITORS.cursor;
+  const cli = e.cli.find((p) => fs.existsSync(p));
+  if (cli) launch(cli, ['-r', '--', abs]);
+  else launch('open', [...e.open, abs]);
+});
+
+ipcMain.handle('os.openTerminal', (_e, target) => {
+  const abs = assertPath(target);
+  const { terminal, terminalPath } = getPrefs(prefsDir());
+  if (terminal === 'custom') return openCustom(terminalPath, abs);
+  launch('open', ['-a', terminal === 'iterm' ? 'iTerm' : 'Terminal', abs]);
 });
 
 ipcMain.handle('os.displayPath', (_e, p) => displayPath(p));
@@ -185,7 +215,13 @@ async function withRoot(fn, ...args) {
   return fn(root, ...args);
 }
 
-ipcMain.handle('lane.create', (_e, payload) => withRoot(ops.createLane, payload));
+ipcMain.handle('lane.create', (_e, payload) => withRoot((root, p) => {
+  const prefs = getPrefs(prefsDir());
+  const lanesFolder = prefs.repoOverrides?.[root]?.lanesFolder || prefs.defaultLanesFolder;
+  return ops.createLane(root, { ...p, lanesFolder });
+}, payload));
+ipcMain.handle('git.identity.get', () => getIdentity(activePath()));
+ipcMain.handle('git.identity.set', (_e, payload) => setIdentity(activePath(), payload || {}));
 ipcMain.handle('lane.remove', (_e, laneIndex) => withRoot(ops.removeLane, laneIndex));
 ipcMain.handle('lane.commit', (_e, laneIndex, message) => withRoot(ops.commitLane, laneIndex, message));
 ipcMain.handle('lane.push', (_e, laneIndex) => withRoot(ops.pushLane, laneIndex));
