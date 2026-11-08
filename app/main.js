@@ -882,6 +882,24 @@ async function openDoctorSheet() {
   });
 }
 
+function openQuickStartSheet() {
+  const rows = [
+    ['git-branch', 'Overlook, not a normal client', 'Git underneath, plain repo. The board shows every worktree against the team at once, with the verbs per lane.'],
+    ['tree-structure', 'Lane', 'A git worktree on its own branch. Several features in progress, side by side.'],
+    ['shield-check', 'Protected main', 'The checkout on the team branch. Overlook watches it and never works in it.'],
+    ['cloud-arrow-down', 'Behind', 'Commits the team branch has that this lane does not.'],
+    ['sparkle', 'Authorship', 'Who wrote the newest commit, read from the author and agent trailers. Human gets no pill.'],
+    ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .overlook/lane.yaml. Without that file it still shows on the board.'],
+  ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="qs-title">
+      <div class="eyebrow">${iconHTML('tree-structure', 'sm')}Quick start</div>
+      <h1 id="qs-title">What are lanes?</h1>
+      <div class="list">${rows}</div>
+      <div class="row-end"><button class="btn primary" type="button" data-close>Done</button></div>
+    </form>`);
+}
+
 function openCreateLane() {
   const team = state.board.teamRef;
   openSheet(`
@@ -1311,6 +1329,7 @@ function paletteCommands() {
   const lane = laneByIndex(state.selectedLane);
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
+    { id: 'quickstart', label: 'Quick start · What are lanes?', run: openQuickStartSheet },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Doctor / Lane setup…', run: () => { closePalette(); openDoctorSheet(); }, when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
