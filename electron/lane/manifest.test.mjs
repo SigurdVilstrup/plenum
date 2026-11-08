@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { loadManifest, resolvePorts } from './manifest.mjs';
 
 test('loadManifest reads version, commands, ports', async () => {
@@ -9,4 +12,18 @@ test('loadManifest reads version, commands, ports', async () => {
   assert.equal(m.ports.offset, 100);
   const ports = resolvePorts(m, 1); // lane index 1 → offset 100
   assert.equal(ports.web, 5101);
+});
+
+test('loadManifest missing file returns null', async () => {
+  assert.equal(await loadManifest('fixtures/lane/does-not-exist.lane.yaml'), null);
+});
+
+test('loadManifest unsupported version throws', async () => {
+  const file = path.join(os.tmpdir(), `overlook-lane-${Date.now()}.yaml`);
+  fs.writeFileSync(file, 'version: 2\nrun: echo hi\n');
+  try {
+    await assert.rejects(() => loadManifest(file), /unsupported lane manifest version/);
+  } finally {
+    fs.unlinkSync(file);
+  }
 });

@@ -96,7 +96,9 @@ export async function loadManifest(filePath) {
     },
     ports: {
       offset: Number(raw.ports?.offset ?? 0),
-      expose: raw.ports?.expose && typeof raw.ports.expose === 'object' ? raw.ports.expose : {},
+      expose: raw.ports?.expose && typeof raw.ports.expose === 'object' && !Array.isArray(raw.ports.expose)
+        ? raw.ports.expose
+        : {},
     },
     services: normalizeServices(raw.services),
     data: {
