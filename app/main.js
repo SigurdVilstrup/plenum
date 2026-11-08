@@ -501,15 +501,19 @@ function gitActionsHTML(l) {
   return a.join('');
 }
 
+function laneSetupLink() {
+  return `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup</button>`;
+}
+
 function runActionsHTML(l) {
   if (l.isPrimary) {
-    return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Overlook. Run the stack from a lane.</span>`;
+    return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Overlook. Run the stack from a lane.</span>${laneSetupLink()}`;
   }
   if (l.readiness === 'safe') {
     return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
   }
   if (!l.runnable) {
-    return `<span class="env-note">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>`;
+    return `<span class="env-note">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>${laneSetupLink()}`;
   }
   const runBtn = l.running
     ? `<button class="btn" type="button" data-act="down" title="Stop lane">${iconHTML('stop', 'sm')}Stop</button>`
@@ -611,6 +615,7 @@ async function handleAction(act, lane, url) {
     }
     if (act === 'merge') return openMergeSheet(lane);
     if (act === 'remove') return openRemoveSheet(lane);
+    if (act === 'doctor') return openDoctorSheet();
     if (act === 'conflicts') return openConflictSheet(lane);
     if (act === 'stash') {
       return runGit('lane.stash', lane.index, `Stashed uncommitted changes on ${lane.name}`, 'stash');
@@ -713,6 +718,51 @@ function closeSheet() {
 el.sheetLayer.addEventListener('click', (e) => {
   if (e.target === el.sheetLayer) closeSheet();
 });
+
+async function openDoctorSheet() {
+  if (!state.board) return;
+  let findings = [];
+  let proposedYaml = '';
+  try {
+    const res = await invoke('repo.doctor');
+    findings = res.findings || [];
+    proposedYaml = res.proposedYaml || '';
+  } catch { /* toasted */ return; }
+
+  const findingsHtml = findings.length
+    ? findings.map((f) => `<div class="finding">${iconHTML('terminal-window', 'sm')}<div>${esc(f)}</div></div>`).join('')
+    : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious found in this repo.</div></div>`;
+
+  openSheet(`
+    <form class="modal doctor-sheet" role="dialog" aria-labelledby="doctor-title">
+      <div class="eyebrow">${iconHTML('gear-six', 'sm')}Lane setup</div>
+      <h1 id="doctor-title">Doctor proposal</h1>
+      <p>Why a second checkout cannot start today, and the <span class="mono">.overlook/lane.yaml</span> that fixes it. Nothing is written until you accept.</p>
+      <div class="setup cols">
+        <div>
+          <div class="col-head">Findings</div>
+          ${findingsHtml}
+        </div>
+        <div>
+          <div class="col-head">Proposed <span class="mono">.overlook/lane.yaml</span></div>
+          <pre class="doctor-yaml">${esc(proposedYaml)}</pre>
+        </div>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">${iconHTML('files', 'sm')}Accept</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const board = await invoke('repo.acceptManifest', proposedYaml);
+      closeSheet();
+      applyBoard(board);
+      toast('Wrote .overlook/lane.yaml', 'ok');
+    } catch { /* toasted */ }
+  });
+}
 
 function openCreateLane() {
   const team = state.board.teamRef;
@@ -1144,6 +1194,7 @@ function paletteCommands() {
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
+    { id: 'doctor', label: 'Doctor / Lane setup…', run: () => { closePalette(); openDoctorSheet(); }, when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
     { id: 'stash', label: 'Stash uncommitted', run: () => handleAction('stash', lane), when: lane && lane.dirty },
     { id: 'stashPop', label: 'Pop stash', run: () => handleAction('stashPop', lane), when: lane && state.board?.stashCount },

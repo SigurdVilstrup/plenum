@@ -344,6 +344,34 @@ input, textarea, [contenteditable="true"] {
   to { transform: translateY(0); opacity: 1; }
 }
 
+.window.app .modal.doctor-sheet {
+  width: min(860px, 100%);
+  max-width: 860px;
+}
+.window.app .modal.doctor-sheet .setup.cols {
+  margin: 12px 0 18px;
+}
+.window.app .modal.doctor-sheet .doctor-yaml {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+button.env-link {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
 .toast {
   position: absolute;
   left: 50%;

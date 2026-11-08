@@ -7,6 +7,7 @@ import { loadBoard, loadCommitChanges, displayPath } from './git/board.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
+import { doctor, acceptManifest } from './lane/doctor.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -93,6 +94,18 @@ ipcMain.handle('repo.refresh', async () => {
   const p = activePath();
   if (!p) return null;
   return loadBoard(p);
+});
+ipcMain.handle('repo.doctor', async () => {
+  const root = activePath();
+  if (!root) throw new Error('No repository open.');
+  const { findings, proposedYaml } = await doctor(root);
+  return { findings, proposedYaml };
+});
+ipcMain.handle('repo.acceptManifest', async (_e, yaml) => {
+  const root = activePath();
+  if (!root) throw new Error('No repository open.');
+  await acceptManifest(root, yaml);
+  return loadBoard(root);
 });
 
 ipcMain.handle('os.pickFolder', async () => {
