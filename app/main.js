@@ -194,6 +194,24 @@ function paint() {
   if (state.changes) paintChanges();
 }
 
+let tabDragId = null;
+let tabDidDrag = false;
+
+async function applyTabOrder(fromId, overId, after) {
+  if (!fromId || !overId || fromId === overId) return;
+  const tabs = [...state.store.tabs];
+  const from = tabs.findIndex((t) => t.id === fromId);
+  if (from < 0) return;
+  const [moved] = tabs.splice(from, 1);
+  let insert = tabs.findIndex((t) => t.id === overId);
+  if (insert < 0) return;
+  if (after) insert += 1;
+  tabs.splice(insert, 0, moved);
+  const store = await invoke('tabs.reorder', tabs.map((t) => t.id));
+  applyStore(store);
+  paintTabs();
+}
+
 function paintTabs() {
   const frag = document.createDocumentFragment();
   for (const t of state.store.tabs) {
@@ -201,13 +219,55 @@ function paintTabs() {
     btn.className = `tab${t.id === state.store.activeId ? ' active' : ''}`;
     btn.type = 'button';
     btn.dataset.id = t.id;
+    btn.draggable = true;
     if (t.id === state.store.activeId) btn.setAttribute('aria-current', 'page');
     btn.appendChild(icon(t.icon || 'folder-simple', 'sm'));
     btn.appendChild(document.createTextNode(` ${t.title}`));
-    btn.addEventListener('click', () => selectTab(t.id));
+    btn.addEventListener('click', () => {
+      if (tabDidDrag) { tabDidDrag = false; return; }
+      selectTab(t.id);
+    });
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openCtxMenu(e.clientX, e.clientY, t, btn);
+    });
+    btn.addEventListener('dragstart', (e) => {
+      tabDragId = t.id;
+      tabDidDrag = false;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', t.id);
+      btn.classList.add('dragging');
+    });
+    btn.addEventListener('dragend', () => {
+      tabDragId = null;
+      btn.classList.remove('dragging');
+      el.tabstrip.querySelectorAll('.tab.drop-before, .tab.drop-after').forEach((n) => {
+        n.classList.remove('drop-before', 'drop-after');
+      });
+    });
+    btn.addEventListener('dragover', (e) => {
+      if (!tabDragId || tabDragId === t.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const mid = btn.getBoundingClientRect().left + btn.offsetWidth / 2;
+      const after = e.clientX > mid;
+      btn.classList.toggle('drop-after', after);
+      btn.classList.toggle('drop-before', !after);
+      el.tabstrip.querySelectorAll('.tab').forEach((n) => {
+        if (n !== btn) n.classList.remove('drop-before', 'drop-after');
+      });
+    });
+    btn.addEventListener('dragleave', () => {
+      btn.classList.remove('drop-before', 'drop-after');
+    });
+    btn.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const fromId = tabDragId || e.dataTransfer.getData('text/plain');
+      const after = btn.classList.contains('drop-after');
+      btn.classList.remove('drop-before', 'drop-after');
+      if (!fromId || fromId === t.id) return;
+      tabDidDrag = true;
+      try { await applyTabOrder(fromId, t.id, after); } catch { /* toasted */ }
     });
     frag.appendChild(btn);
   }
