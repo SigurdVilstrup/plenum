@@ -14,6 +14,7 @@ const USAGE = `Usage:
   overlook test <lane>
   overlook create <name>
   overlook remove <lane>
+  overlook mcp
 
 Options:
   --json   print JSON
@@ -90,6 +91,12 @@ export async function main(argv = process.argv) {
   if (!cmd || cmd === 'help') {
     process.stdout.write(USAGE);
     if (!cmd) throw Object.assign(new Error('command required'), { exitCode: 2 });
+    return null;
+  }
+
+  if (cmd === 'mcp') {
+    const { startStdio } = await import('../electron/mcp/server.mjs');
+    startStdio();
     return null;
   }
 

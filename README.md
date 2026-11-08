@@ -24,7 +24,23 @@ Or open any repo from the empty state / ⌘K.
 ## Layout
 
 - `app/` — renderer (lifted from `planning/mocks`)
-- `electron/` — main process, git ops, tabs
+- `electron/` — main process, git ops, tabs, MCP
+- `bin/overlook.mjs` — CLI + `overlook mcp` (stdio)
 - `planning/` — product, design, mocks
 
-Phase two (Run / MCP) is out of scope.
+## MCP (Cursor)
+
+Point Cursor at the local stdio server (`repo.doctor`, `lane.create|up|down|test|status|remove`):
+
+```json
+{
+  "mcpServers": {
+    "overlook": {
+      "command": "node",
+      "args": ["/absolute/path/to/overlook/bin/overlook.mjs", "mcp"]
+    }
+  }
+}
+```
+
+Or if `overlook` is on your `PATH`: `"command": "overlook", "args": ["mcp"]`.
