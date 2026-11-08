@@ -1,5 +1,7 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
+import { authorshipPillHTML, authorIcon, authorLabel } from './authorship-pill.js';
+
 const ROW = 30;
 const COL_X0 = 14;
 const COL_W = 24;
@@ -10,8 +12,6 @@ const authorColor = {
   agent: 'var(--agent)',
   mixed: 'var(--assisted)',
 };
-const authorIcon = { human: 'user', assisted: 'sparkle', agent: 'robot', mixed: 'git-merge' };
-const authorLabel = { human: 'Human', assisted: 'Assisted', agent: 'Agent', mixed: 'Mixed' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -101,9 +101,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       const refs = (c.refs || []).map((r) => refPill(r, r.worktree && !r.primary && runningLanes.has(c.lane))).join('');
       const tip = tips.has(c.id);
       const kind = authorLabel[c.kind] ? c.kind : 'human';
-      const pill = tip && kind !== 'human'
-        ? `<span class="pill ${kind}">${icon(authorIcon[kind])}${authorLabel[kind]}${c.tool ? `, ${esc(c.tool)}` : ''}</span>`
-        : '';
+      const pill = tip ? authorshipPillHTML(kind, c.tool, icon) : '';
       const who = `${icon(authorIcon[kind], kind)}<span>${esc(c.author)}</span>${pill}`;
       const sha = esc(String(c.id || '').slice(0, 7));
       const on = selectedCommit === c.id ? ' active-commit' : '';

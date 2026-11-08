@@ -1,5 +1,6 @@
 import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
+import { authorshipPillHTML, authorIcon, authorLabel } from './lib/authorship-pill.js';
 
 const api = window.overlook;
 const icon = (n, c = '') => {
@@ -22,9 +23,6 @@ const TAB_ICONS = [
   'sparkle', 'robot', 'shield-check', 'files', 'flask', 'database',
   'gear-six', 'command',
 ];
-
-const authorIcon = { human: 'user', assisted: 'sparkle', agent: 'robot', mixed: 'git-merge' };
-const authorLabel = { human: 'Human', assisted: 'Assisted', agent: 'Agent', mixed: 'Mixed' };
 
 const pathCache = new Map();
 async function prettyPath(p) {
@@ -551,7 +549,7 @@ function paintHeader() {
           : `<span class="fact">${iconHTML('shield-check', 'sm')}<strong>${l.onTeamBranch ? 'on' : 'not on'}</strong> ${esc(b.teamBranch)}</span>
              <span class="fact">${iconHTML('circle-dashed', 'sm')}<strong>clean</strong></span>`}
         ${l.ahead ? `<span class="fact bad">${iconHTML('git-commit', 'sm')}<strong>${l.ahead}</strong> ahead of ${esc(b.teamRef)}</span>` : ''}
-        ${l.authorship && authorLabel[l.authorship] && l.authorship !== 'human' ? `<span class="pill ${esc(l.authorship)}">${iconHTML(authorIcon[l.authorship])}${authorLabel[l.authorship]}${l.tool ? `, ${esc(l.tool)}` : ''}</span>` : ''}
+        ${authorshipPillHTML(l.authorship, l.tool, iconHTML)}
       </div>
       <div class="actions">
         ${gitActionsHTML(l)}
@@ -569,9 +567,7 @@ function paintHeader() {
     const dirty = l.dirty
       ? `<span class="fact warn">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
       : '';
-    const pill = l.authorship && l.authorship !== 'human'
-      ? `<span class="pill ${esc(l.authorship)}">${iconHTML(authorIcon[l.authorship])}${authorLabel[l.authorship]}${l.tool ? `, ${esc(l.tool)}` : ''}</span>`
-      : '';
+    const pill = authorshipPillHTML(l.authorship, l.tool, iconHTML);
     const remove = l.readiness === 'safe'
       ? `<button class="btn ghost-danger" type="button" data-act="remove">${iconHTML('x', 'sm')}Remove lane</button>`
       : '';
