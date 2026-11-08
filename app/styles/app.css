@@ -210,6 +210,7 @@ input, textarea, [contenteditable="true"] {
 .loading-screen[hidden],
 .empty-screen[hidden],
 #panel[hidden],
+#settings[hidden],
 #main[hidden],
 #changes[hidden],
 .palette-layer[hidden],
@@ -507,4 +508,9 @@ button.env-link {
   }
   .spinner, .btn-spin { animation: spin 2s linear infinite !important; }
   .lane-row .mark { transition: none; }
+}
+
+#settings {
+  grid-column: 1 / -1;
+  min-height: 0;
 }

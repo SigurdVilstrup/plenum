@@ -53,6 +53,7 @@ const state = {
   commitDraft: '',
   warmTabs: new Map(),
   warmTtlMs: 120000,
+  settings: { open: false, page: 'general', setupRoot: null },
 };
 
 const el = {
@@ -65,6 +66,9 @@ const el = {
   panel: document.getElementById('panel'),
   main: document.getElementById('main'),
   changes: document.getElementById('changes'),
+  settings: document.getElementById('settings'),
+  settingsNav: document.getElementById('settings-nav'),
+  settingsBody: document.getElementById('settings-body'),
   body: document.getElementById('body'),
   laneHead: document.getElementById('lane-head'),
   graph: document.querySelector('.graph'),
@@ -101,7 +105,7 @@ function setLoading(on, title = 'Opening repository…', path = '') {
     el.loadingPath.textContent = path;
     el.empty.hidden = true;
     loadingTimer = setTimeout(() => {
-      if (!state.loading) return;
+      if (!state.loading || state.settings.open) return;
       el.loading.hidden = false;
       el.panel.hidden = true;
       el.main.hidden = true;
@@ -220,6 +224,12 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
 
 function paint() {
   paintTabs();
+  el.settings.hidden = !state.settings.open;
+  if (state.settings.open) {
+    // Settings owns the body; the board repaints on close.
+    for (const n of [el.empty, el.loading, el.panel, el.main, el.changes]) n.hidden = true;
+    return;
+  }
   const tab = activeTab();
   if (!tab || !state.board) {
     el.empty.hidden = false;
@@ -511,7 +521,12 @@ function paintPanel() {
     <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${branchBody}</div>
   </div>`;
 
+  html += `<div class="panel-foot">
+    <button class="lane-row" type="button" data-settings>${iconHTML('gear-six')}<span class="name">Settings</span><kbd>⌘,</kbd></button>
+  </div>`;
+
   el.panel.innerHTML = html;
+  el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
   el.panel.querySelectorAll('[data-lane]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.selectedLane = Number(btn.dataset.lane);
@@ -1324,12 +1339,56 @@ async function openConflictSheet(lane, snapshot) {
   });
 }
 
+/* Settings: a page in the same window, not a sheet */
+const SETTINGS_NAV = [
+  ['general', 'list', 'General'],
+  ['appearance', 'sun', 'Appearance'],
+  ['accounts', 'key', 'Accounts'],
+  ['repositories', 'folder-simple', 'Repositories'],
+  ['agents', 'robot', 'Agents'],
+];
+
+const settingsPlaceholder = (title, lede) => `<h1>${title}</h1><p class="lede">${lede}</p>`;
+
+const SETTINGS_PAGES = {
+  general: () => settingsPlaceholder('General', 'Editor, terminal, folders and tab behavior.'),
+  appearance: () => settingsPlaceholder('Appearance', 'Theme, zoom and fonts.'),
+  accounts: () => settingsPlaceholder('Accounts', 'Credentials for pushing and pulling over HTTPS.'),
+  repositories: () => settingsPlaceholder('Repositories', 'Per repository: lanes folder and lane setup.'),
+  agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
+};
+
+function openSettings(page = state.settings.page) {
+  state.settings.open = true;
+  state.settings.page = page;
+  paint();
+  renderSettings();
+}
+
+function closeSettings() {
+  state.settings.open = false;
+  paint();
+}
+
+function renderSettings() {
+  const { page } = state.settings;
+  const nav = SETTINGS_NAV.map(([id, ic, label]) =>
+    `<button class="navitem${id === page ? ' active' : ''}" type="button" data-page="${id}"${id === page ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
+  el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
+    <div class="heading">Settings</div>${nav}`;
+  el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
+  el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
+  el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
+    b.addEventListener('click', () => openSettings(b.dataset.page)));
+}
+
 /* Palette */
 function paletteCommands() {
   const lane = laneByIndex(state.selectedLane);
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
     { id: 'quickstart', label: 'Quick start · What are lanes?', run: openQuickStartSheet },
+    { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Doctor / Lane setup…', run: () => { closePalette(); openDoctorSheet(); }, when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
@@ -1409,9 +1468,14 @@ document.addEventListener('keydown', (e) => {
     if (el.paletteLayer.hidden) openPalette();
     else closePalette();
   }
+  if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+    e.preventDefault();
+    openSettings();
+  }
   if (e.key === 'Escape') {
     if (!el.paletteLayer.hidden) closePalette();
     else if (el.sheetLayer.classList.contains('open')) closeSheet();
+    else if (state.settings.open) closeSettings();
     else if (state.changes) { closeChanges(); paint(); }
   }
 });
@@ -1431,8 +1495,9 @@ async function openRepo() {
 }
 
 async function selectTab(id) {
-  if (id === state.store.activeId) return;
+  if (id === state.store.activeId) { if (state.settings.open) closeSettings(); return; }
   const prevId = state.store.activeId;
+  state.settings.open = false;
   snapshotWarm(prevId);
   state.store = { ...state.store, activeId: id };
   paintTabs();
