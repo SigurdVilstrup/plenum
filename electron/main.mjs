@@ -184,9 +184,14 @@ ipcMain.handle('lane.conflictContinue', (_e, laneIndex, conflictRoot) => withRoo
 ipcMain.handle('lane.conflictAbort', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictAbort, laneIndex, conflictRoot));
 ipcMain.handle('lane.stash', (_e, laneIndex) => withRoot(ops.stashLane, laneIndex));
 ipcMain.handle('lane.stashPop', (_e, laneIndex) => withRoot(ops.stashPopLane, laneIndex));
-ipcMain.handle('lane.up', (_e, laneIndex) => withRoot(async (root, idx) => {
-  await supervisor.up(root, idx);
-  return loadBoard(root);
+ipcMain.handle('lane.up', (_e, laneIndex, opts) => withRoot(async (root, idx) => {
+  try {
+    await supervisor.up(root, idx, opts);
+    return loadBoard(root);
+  } catch (e) {
+    if (e.code === 'DRIFT') return { drift: true, pending: e.pending ?? [] };
+    throw e;
+  }
 }));
 ipcMain.handle('lane.down', (_e, laneIndex) => withRoot(async (root, idx) => {
   await supervisor.down(root, idx);

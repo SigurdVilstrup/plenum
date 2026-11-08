@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
+import { driftError, listPendingMigrations, usesSharedData } from './drift.mjs';
 
 const LOG_LINES = 200;
 const TEST_LOG_LINES = 50;
@@ -188,14 +189,21 @@ function killGroup(pid, signal) {
 
 /**
  * Start the lane's `run` command. Idempotent if already running.
+ * Throws Error with `code: 'DRIFT'` and `pending` when shared migrations are unapplied.
  * @param {string} root
  * @param {number} laneIndex
+ * @param {{ force?: boolean }} [opts]  `force: true` skips the drift gate ("start anyway")
  */
-export async function up(root, laneIndex) {
+export async function up(root, laneIndex, { force = false } = {}) {
   const { top, cwd, manifest, urls, ctx, env } = await prepareLane(root, laneIndex);
   const existing = getProc(top, laneIndex);
   if (existing?.running) return existing;
   if (!manifest?.run) throw new Error('lane manifest has no run command');
+
+  if (!force && manifest.data?.migrations && usesSharedData(manifest)) {
+    const pending = await listPendingMigrations(top, manifest);
+    if (pending.length) throw driftError(pending);
+  }
 
   const child = spawn(renderTemplate(String(manifest.run), ctx), {
     shell: true,

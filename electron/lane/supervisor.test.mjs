@@ -199,3 +199,47 @@ test('test rejects overlapping run for same lane', async () => {
     fs.rmSync(wt, { recursive: true, force: true });
   }
 });
+
+test('up throws DRIFT when shared migrations pending', async () => {
+  const { root, wt } = await fixture();
+  try {
+    const mig = path.join(root, 'migrations');
+    fs.mkdirSync(mig);
+    fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      ['services:', '  db:', '    mode: shared', 'data:', '  migrations: migrations', ''].join('\n'),
+    );
+    await assert.rejects(
+      () => supervisor.up(root, 1),
+      (err) => {
+        assert.equal(err.code, 'DRIFT');
+        assert.deepEqual(err.pending, ['20260101_a.sql']);
+        return true;
+      },
+    );
+    assert.equal(supervisor.getProc(root, 1), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('up force: true skips drift gate', async () => {
+  const { root, wt } = await fixture();
+  try {
+    const mig = path.join(root, 'migrations');
+    fs.mkdirSync(mig);
+    fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
+    fs.appendFileSync(
+      path.join(root, '.overlook', 'lane.yaml'),
+      ['data:', '  migrations: migrations', ''].join('\n'),
+    );
+    const status = await supervisor.up(root, 1, { force: true });
+    assert.equal(status.running, true);
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});

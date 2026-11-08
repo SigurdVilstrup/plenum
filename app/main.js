@@ -624,7 +624,7 @@ async function handleAction(act, lane, url) {
       return runGit('lane.stashPop', lane.index, `Popped stash onto ${lane.name}`, 'stashPop');
     }
     if (act === 'up') {
-      return runGit('lane.up', lane.index, `Started ${lane.name}`, 'up');
+      return runUp(lane);
     }
     if (act === 'down') {
       return runGit('lane.down', lane.index, `Stopped ${lane.name}`, 'down');
@@ -677,6 +677,66 @@ async function runGit(channel, laneIndex, okMsg, act) {
     state.busy = false;
     if (act) setActionBusy(act, false);
   }
+}
+
+async function runUp(lane, { force = false } = {}) {
+  if (state.busy) return;
+  state.busy = true;
+  setActionBusy('up', true);
+  try {
+    const res = await invoke('lane.up', lane.index, force ? { force: true } : undefined);
+    if (res?.drift) {
+      openDriftSheet(lane, res.pending || []);
+      return;
+    }
+    state.flashMarks.add(lane.index);
+    applyBoard(res);
+    toast(`Started ${lane.name}`, 'ok');
+  } finally {
+    state.busy = false;
+    setActionBusy('up', false);
+  }
+}
+
+function openDriftSheet(lane, pending) {
+  const n = pending.length;
+  const list = pending.length
+    ? `<ul class="mono" style="margin:0;padding-left:1.2em">${pending.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`
+    : '';
+  const others = (state.board?.lanes || [])
+    .filter((x) => x.running && x.index !== lane.index)
+    .map((x) => x.name);
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="up-title">
+      <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Shared database</div>
+      <h1 id="up-title">Run ${esc(lane.name)}</h1>
+      <p>This lane has ${n} migration${n === 1 ? '' : 's'} the shared database has not run. Every lane uses that database${others.length ? `, including ${others.map(esc).join(' and ')}` : ''}.</p>
+      ${list}
+      <div class="list">
+        <label class="list-row compact choice">
+          <input type="radio" name="up" value="force" checked />
+          <div class="name">Start without them<small>The app starts; the code in this lane may not match the schema.</small></div>
+        </label>
+        <label class="list-row compact choice">
+          <input type="radio" name="up" value="snapshot" />
+          <div class="name">Switch service to snapshot<small>Open Lane setup to set <span class="mono">mode: snapshot</span> in <span class="mono">.overlook/lane.yaml</span>. Full snapshot mode is not wired yet.</small></div>
+        </label>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">${iconHTML('play', 'sm')}Continue</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const choice = el.sheetLayer.querySelector('input[name=up]:checked')?.value;
+    closeSheet();
+    if (choice === 'snapshot') {
+      openDoctorSheet();
+      return;
+    }
+    if (choice === 'force') await runUp(lane, { force: true });
+  });
 }
 
 async function runConflictable(channel, lane, extra, act, okMsg) {
