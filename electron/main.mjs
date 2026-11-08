@@ -131,14 +131,22 @@ ipcMain.handle('repo.refresh', async () => {
   if (!p) return null;
   return loadBoard(p);
 });
-ipcMain.handle('repo.doctor', async () => {
-  const root = activePath();
+/** Active tab, or another open tab's root (Settings > Repositories). Never an arbitrary path. */
+function tabRoot(root) {
+  if (!root) return activePath();
+  const abs = path.resolve(String(root));
+  if (!tabs.listTabs().tabs.some((t) => path.resolve(t.path) === abs)) throw new Error('Not an open repository.');
+  return abs;
+}
+
+ipcMain.handle('repo.doctor', async (_e, rootArg) => {
+  const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');
   const { findings, proposedYaml, canAccept } = await doctor(root);
   return { findings, proposedYaml, canAccept };
 });
-ipcMain.handle('repo.acceptManifest', async (_e, yaml) => {
-  const root = activePath();
+ipcMain.handle('repo.acceptManifest', async (_e, yaml, rootArg) => {
+  const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');
   await acceptManifest(root, yaml);
   return loadBoard(root);

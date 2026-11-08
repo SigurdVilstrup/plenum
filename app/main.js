@@ -56,6 +56,7 @@ const state = {
   identity: null,
   accounts: null,
   repoBoards: new Map(),
+  setup: null,
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null },
@@ -714,7 +715,7 @@ async function handleAction(act, lane, url) {
     }
     if (act === 'merge') return openMergeSheet(lane);
     if (act === 'remove') return openRemoveSheet(lane);
-    if (act === 'doctor') return openDoctorSheet();
+    if (act === 'doctor') return openLaneSetup();
     if (act === 'conflicts') return openConflictSheet(lane);
     if (act === 'stash') {
       return runGit('lane.stash', lane.index, `Stashed uncommitted changes on ${lane.name}`, 'stash');
@@ -831,7 +832,7 @@ function openDriftSheet(lane, pending) {
     const choice = el.sheetLayer.querySelector('input[name=up]:checked')?.value;
     closeSheet();
     if (choice === 'snapshot') {
-      openDoctorSheet();
+      openLaneSetup();
       return;
     }
     if (choice === 'force') await runUp(lane, { force: true });
@@ -877,54 +878,6 @@ function closeSheet() {
 el.sheetLayer.addEventListener('click', (e) => {
   if (e.target === el.sheetLayer) closeSheet();
 });
-
-async function openDoctorSheet() {
-  if (!state.board) return;
-  let findings = [];
-  let proposedYaml = '';
-  let canAccept = false;
-  try {
-    const res = await invoke('repo.doctor');
-    findings = res.findings || [];
-    proposedYaml = res.proposedYaml || '';
-    canAccept = !!res.canAccept;
-  } catch { /* toasted */ return; }
-
-  const findingsHtml = findings.length
-    ? findings.map((f) => `<div class="finding">${iconHTML('terminal-window', 'sm')}<div>${esc(f)}</div></div>`).join('')
-    : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious found in this repo.</div></div>`;
-
-  openSheet(`
-    <form class="modal doctor-sheet" role="dialog" aria-labelledby="doctor-title">
-      <div class="eyebrow">${iconHTML('gear-six', 'sm')}Lane setup</div>
-      <h1 id="doctor-title">Doctor proposal</h1>
-      <p>Why a second checkout cannot start today, and the <span class="mono">.overlook/lane.yaml</span> that fixes it. Nothing is written until you accept.</p>
-      <div class="setup cols">
-        <div>
-          <div class="col-head">Findings</div>
-          ${findingsHtml}
-        </div>
-        <div>
-          <div class="col-head">Proposed <span class="mono">.overlook/lane.yaml</span></div>
-          <pre class="doctor-yaml">${esc(proposedYaml)}</pre>
-        </div>
-      </div>
-      <div class="row-end">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit" ${canAccept ? '' : 'disabled title="Needs a run command"'}>${iconHTML('files', 'sm')}Accept</button>
-      </div>
-    </form>`);
-  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!canAccept) return;
-    try {
-      const board = await invoke('repo.acceptManifest', proposedYaml);
-      closeSheet();
-      applyBoard(board);
-      toast('Wrote .overlook/lane.yaml', 'ok');
-    } catch { /* toasted */ }
-  });
-}
 
 function openQuickStartSheet() {
   const rows = [
@@ -1503,9 +1456,65 @@ const SETTINGS_PAGES = {
         </div>`;
     }).join('');
   },
-  setup: () => settingsPlaceholder('Lane setup', 'Why a second checkout cannot start today.'),
+  setup: () => {
+    const s = state.setup;
+    const tab = state.store.tabs.find((t) => t.path === s?.root);
+    const findings = !s || s.loading
+      ? '<div class="finding">' + iconHTML('terminal-window', 'sm') + '<div>Reading the repo…</div></div>'
+      : s.findings.length
+        ? s.findings.map((f) => `<div class="finding">${iconHTML('terminal-window', 'sm')}<div>${esc(f)}</div></div>`).join('')
+        : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious found in this repo.</div></div>`;
+    return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repositories</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
+      <h1>Lane setup</h1>
+      <p class="lede">Why a second checkout cannot start today, and the <span class="mono">.overlook/lane.yaml</span> that fixes it. Nothing is written until you say so.</p>
+      <div class="cols">
+        <div><div class="col-head">What the repo does today</div>${findings}</div>
+        <div><div class="col-head">Proposed <span class="mono">.overlook/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
+      </div>
+      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Agents can run this too: <span class="mono">repo.doctor</span> over MCP, or <span class="mono">overlook doctor</span> in a shell.</span>
+        <div class="row-end">
+          <button class="btn" type="button" data-copy-doctor>Copy as <span class="mono">overlook doctor</span></button>
+          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command"'}>${iconHTML('files', 'sm')}Write <span class="mono">.overlook/lane.yaml</span></button>
+        </div>
+      </div>`;
+  },
   agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
 };
+
+function openLaneSetup(root = state.board?.root) {
+  state.settings.setupRoot = root;
+  openSettings('setup');
+}
+
+async function loadSetup(root) {
+  state.setup = { root, loading: true, findings: [], proposedYaml: '', canAccept: false };
+  renderSettings();
+  try {
+    const res = await invoke('repo.doctor', root);
+    if (state.setup?.root !== root) return;
+    state.setup = { root, loading: false, findings: res.findings || [], proposedYaml: res.proposedYaml || '', canAccept: !!res.canAccept };
+  } catch {
+    state.setup = { ...state.setup, loading: false };
+  }
+  if (state.settings.open && state.settings.page === 'setup') renderSettings();
+}
+
+function bindSetup(root) {
+  const s = state.setup;
+  root.querySelector('[data-crumb]')?.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); });
+  root.querySelector('[data-copy-doctor]')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(`overlook doctor '${String(s.root).replace(/'/g, `'\\''`)}'`).then(() => toast('Copied', 'ok'), () => {});
+  });
+  root.querySelector('[data-write]')?.addEventListener('click', async () => {
+    try {
+      const board = await invoke('repo.acceptManifest', s.proposedYaml, s.root);
+      state.repoBoards.delete(s.root);
+      if (board.root === state.board?.root) applyBoard(board);
+      toast('Wrote .overlook/lane.yaml', 'ok');
+      openSettings('repositories');
+    } catch { /* toasted */ }
+  });
+}
 
 async function loadRepos() {
   await Promise.all(state.store.tabs.map(async (t) => {
@@ -1520,8 +1529,7 @@ async function loadRepos() {
 
 function bindRepos(root) {
   root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => {
-    state.settings.setupRoot = b.dataset.setupRoot;
-    openSettings('setup');
+    openLaneSetup(b.dataset.setupRoot);
   }));
   root.querySelectorAll('[data-lanes-root]').forEach((n) => n.addEventListener('change', () => {
     const ov = { ...state.prefs.repoOverrides };
@@ -1592,6 +1600,7 @@ function openSettings(page = state.settings.page) {
   if (page === 'general') loadIdentity();
   if (page === 'accounts') loadAccounts();
   if (page === 'repositories') loadRepos();
+  if (page === 'setup') loadSetup(state.settings.setupRoot || state.board?.root);
 }
 
 function closeSettings() {
@@ -1606,10 +1615,12 @@ function renderSettings() {
     `<button class="navitem${id === lit ? ' active' : ''}" type="button" data-page="${id}"${id === lit ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
   el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
     <div class="heading">Settings</div>${nav}`;
+  el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   if (page === 'general') bindIdentity(el.settingsBody);
   if (page === 'accounts') bindAccounts(el.settingsBody);
   if (page === 'repositories') bindRepos(el.settingsBody);
+  if (page === 'setup') bindSetup(el.settingsBody);
   bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
@@ -1624,7 +1635,7 @@ function paletteCommands() {
     { id: 'quickstart', label: 'Quick start · What are lanes?', run: openQuickStartSheet },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
-    { id: 'doctor', label: 'Doctor / Lane setup…', run: () => { closePalette(); openDoctorSheet(); }, when: !!state.board },
+    { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
     { id: 'stash', label: 'Stash uncommitted', run: () => handleAction('stash', lane), when: lane && lane.dirty },
     { id: 'stashPop', label: 'Pop stash', run: () => handleAction('stashPop', lane), when: lane && state.board?.stashCount },
@@ -1711,7 +1722,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!el.paletteLayer.hidden) closePalette();
     else if (el.sheetLayer.classList.contains('open')) closeSheet();
-    else if (state.settings.open) closeSettings();
+    else if (state.settings.open) {
+      if (state.settings.page === 'setup') openSettings('repositories');
+      else closeSettings();
+    }
     else if (state.changes) { closeChanges(); paint(); }
   }
 });
