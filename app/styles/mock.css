@@ -433,12 +433,17 @@ a.iconbtn,
   text-align: left;
 }
 
-/* Body: lanes panel + graph */
+/* Body: lanes panel + graph (+ changes explorer) */
 .body {
   display: grid;
   grid-template-columns: 260px 1fr;
   flex: 1;
   min-height: 0;
+  background: var(--canvas);
+}
+
+.body.with-changes {
+  grid-template-columns: 260px 1fr 280px;
 }
 
 .panel {
@@ -447,6 +452,201 @@ a.iconbtn,
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.changes {
+  border-left: 1px solid var(--hairline);
+  background: var(--surface-1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.changes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 8px 12px;
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.changes-head .title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.changes-head .title small {
+  display: block;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  margin-top: 1px;
+}
+
+.changes-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 6px 10px;
+}
+
+.changes-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.changes-foot .commit-msg {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  color: var(--ink);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.changes-foot .commit-msg:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.changes-foot .foot-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.changes-foot .foot-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.changes-foot .hint {
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+  font-size: 11px;
+}
+
+.fx-folder,
+.fx-file {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  text-align: left;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.fx-folder {
+  color: var(--ink-subtle);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fx-folder:hover {
+  background: var(--surface-2);
+}
+
+.fx-folder .caret {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: transform 120ms ease;
+}
+
+.fx-folder.collapsed .caret {
+  transform: rotate(-90deg);
+}
+
+.fx-file {
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.fx-file:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.fx-file .name,
+.fx-folder .name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.fx-file .stat {
+  flex-shrink: 0;
+  display: inline-flex;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fx-file .stat .add { color: var(--success); }
+.fx-file .stat .del { color: var(--danger); }
+
+.fx-file .mark {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  width: 12px;
+  text-align: center;
+  color: var(--warning);
+}
+
+.fx-file .mark.new { color: var(--success); }
+.fx-file .mark.deleted { color: var(--danger); }
+.fx-file .mark.renamed { color: var(--assisted); }
+
+.fx-folder .icon,
+.fx-file .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.fx-empty {
+  padding: 16px 12px;
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
+.row.clickable,
+.row.wip {
+  cursor: pointer;
+}
+
+.row.active-commit {
+  background: var(--surface-2);
 }
 
 .section {
@@ -996,6 +1196,17 @@ a.navitem.back {
 
 .row.wip {
   color: var(--warning);
+  cursor: pointer;
+}
+
+.row.wip:hover,
+.row.wip.selected-lane:hover {
+  background: var(--surface-2);
+}
+
+.row.wip:focus-visible {
+  outline: 2px solid var(--warning);
+  outline-offset: -2px;
 }
 
 .row.wip .msg .text {

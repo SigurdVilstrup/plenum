@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import os from 'node:os';
 import { git, gitOk } from './run.mjs';
 
@@ -102,9 +103,84 @@ async function countRange(range, cwd) {
   }
 }
 
-function countLines(text) {
-  if (!text?.trim()) return 0;
-  return text.trim().split(/\n/).length;
+/** Parse `git status --porcelain` into path + XY code. */
+export function parseDirty(text) {
+  if (!text) return [];
+  return text.split(/\n/).flatMap((line) => {
+    const m = /^(..)\s(.*)$/.exec(line);
+    if (!m) return [];
+    let file = m[2];
+    if (file.includes(' -> ')) file = file.slice(file.lastIndexOf(' -> ') + 4);
+    if (file.startsWith('"') && file.endsWith('"')) file = file.slice(1, -1);
+    return file ? [{ path: file, code: m[1] }] : [];
+  });
+}
+
+export function parseNumstat(text) {
+  const out = new Map();
+  if (!text?.trim()) return out;
+  for (const line of text.split(/\n/).filter(Boolean)) {
+    const [a, d, ...rest] = line.split('\t');
+    if (!rest.length) continue;
+    let file = rest.join('\t');
+    if (file.includes(' => ')) {
+      const right = file.split(' => ').pop();
+      file = right.replace(/^[^{]*\{/, '').replace(/\}[^}]*$/, '');
+    }
+    const added = a === '-' ? 0 : Number(a) || 0;
+    const deleted = d === '-' ? 0 : Number(d) || 0;
+    out.set(file, { added, deleted });
+  }
+  return out;
+}
+
+async function enrichDirtyFiles(cwd, files) {
+  if (!files.length) return files;
+  let stats = new Map();
+  try {
+    stats = parseNumstat(await git(['diff', '--numstat', 'HEAD'], cwd));
+  } catch { /* empty or no HEAD */ }
+  return files.map((f) => {
+    let s = stats.get(f.path);
+    if (!s && f.code === '??') {
+      try {
+        const raw = fs.readFileSync(path.join(cwd, f.path), 'utf8');
+        s = { added: raw.length ? raw.split(/\n/).length : 0, deleted: 0 };
+      } catch {
+        s = { added: 0, deleted: 0 };
+      }
+    }
+    return { ...f, added: s?.added ?? 0, deleted: s?.deleted ?? 0 };
+  });
+}
+
+/** Files changed in a commit, with +/- counts. */
+export async function loadCommitChanges(repoPath, sha) {
+  const cwd = path.resolve(repoPath);
+  const id = String(sha || '').trim();
+  if (!/^[0-9a-f]{7,40}$/i.test(id)) throw new Error('Invalid commit.');
+  const metaRaw = (await git(['log', '-1', '--format=%H%x1f%h%x1f%s%x1f%an', id], cwd)).trim();
+  const [full, short, subject, author] = metaRaw.split('\x1f');
+  let statusMap = new Map();
+  try {
+    const ns = await git(['diff-tree', '--no-commit-id', '--name-status', '-r', '-m', '--root', full], cwd);
+    for (const line of ns.split(/\n/).filter(Boolean)) {
+      const [code, ...paths] = line.split('\t');
+      let file = paths[paths.length - 1] || '';
+      statusMap.set(file, code.startsWith('R') || code.startsWith('C') ? code[0] : code);
+    }
+  } catch { /* empty */ }
+  let stats = new Map();
+  try {
+    stats = parseNumstat(await git(['diff-tree', '--no-commit-id', '--numstat', '-r', '-m', '--root', full], cwd));
+  } catch { /* empty */ }
+  const paths = new Set([...statusMap.keys(), ...stats.keys()]);
+  const files = [...paths].filter(Boolean).sort().map((file) => {
+    const code = statusMap.get(file) || 'M';
+    const s = stats.get(file) || { added: 0, deleted: 0 };
+    return { path: file, code, added: s.added, deleted: s.deleted };
+  });
+  return { sha: full, short, subject, author, files };
 }
 
 /** ponytail: cherry misses rewritten squash; upgrade is host PR API.
@@ -176,23 +252,33 @@ function folderLabel(treePath, primary, branch) {
 
 function pills(decoration, team, primaryBranch, laneBranches) {
   if (!decoration?.trim()) return [];
-  return decoration.split(',').map((raw) => {
+  const parsed = [];
+  for (const raw of decoration.split(',')) {
     let name = raw.trim();
     let tag = false;
+    if (!name || name === 'HEAD' || name.endsWith('/HEAD')) continue;
     if (name.startsWith('HEAD -> ')) name = name.slice(8);
+    if (name === 'HEAD' || name.endsWith('/HEAD')) continue;
     if (name.startsWith('tag: ')) {
       tag = true;
       name = name.slice(5);
     }
     const remote = name.startsWith('origin/');
     const local = !remote && !tag;
-    return {
+    parsed.push({
       name,
       primary: local && (name === team || name === primaryBranch),
       remote,
       tag,
       worktree: local && laneBranches.has(name) && name !== primaryBranch,
-    };
+    });
+  }
+  // If local `main` is here, skip `origin/main` — same tip, one label is enough.
+  const locals = new Set(parsed.filter((r) => !r.remote && !r.tag).map((r) => r.name));
+  return parsed.filter((r) => {
+    if (!r.remote) return true;
+    const short = r.name.replace(/^origin\//, '');
+    return !locals.has(short);
   });
 }
 
@@ -263,7 +349,7 @@ async function history(cwd, lanes, team, teamRef) {
       const wip = {
         id: `wip-${lane.index}`,
         lane: lane.index,
-        subject: `${lane.dirty} file${lane.dirty === 1 ? '' : 's'} changed`,
+        subject: `${lane.dirty} uncommitted`,
         author: '',
         kind: 'human',
         tool: null,
@@ -300,10 +386,11 @@ export async function loadBoard(repoPath) {
     const tree = trees[index];
     const branch = tree.branch;
     const onTeam = branch === team;
-    let dirty = 0;
+    let dirtyFiles = [];
     try {
-      dirty = countLines(await git(['status', '--porcelain'], tree.path));
+      dirtyFiles = await enrichDirtyFiles(tree.path, parseDirty(await git(['status', '--porcelain'], tree.path)));
     } catch { /* empty */ }
+    const dirty = dirtyFiles.length;
     const behind = hasCommit && tree.head ? await countRange(`HEAD..${teamRef}`, tree.path) : 0;
     const ahead = hasCommit && tree.head ? await countRange(`${teamRef}..HEAD`, tree.path) : 0;
     const tip = tree.head ? await tipInfo(tree.path) : null;
@@ -329,6 +416,7 @@ export async function loadBoard(repoPath) {
       behind,
       ahead,
       dirty,
+      dirtyFiles,
       onTeamBranch: onTeam,
       readiness,
       authorship: tip?.kind ?? 'human',
@@ -353,12 +441,18 @@ export async function loadBoard(repoPath) {
 
   const commits = hasCommit ? await history(top, lanes, team, teamRef) : [];
 
+  let stashCount = 0;
+  try {
+    stashCount = (await git(['stash', 'list'], top)).split(/\n/).filter(Boolean).length;
+  } catch { /* empty */ }
+
   return {
     repoName: path.basename(trees[0].path),
     root: trees[0].path,
     teamBranch: team,
     teamRef,
     readAt: Date.now(),
+    stashCount,
     lanes,
     branches,
     commits,

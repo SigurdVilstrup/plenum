@@ -47,6 +47,11 @@ const state = {
   busy: false,
   conflictRoot: null,
   branchesOpen: false,
+  changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
+  collapsedDirs: new Set(),
+  changesPaintKey: '',
+  changesCache: null,
+  commitDraft: '',
 };
 
 const el = {
@@ -58,6 +63,8 @@ const el = {
   openRepo: document.getElementById('open-repo'),
   panel: document.getElementById('panel'),
   main: document.getElementById('main'),
+  changes: document.getElementById('changes'),
+  body: document.getElementById('body'),
   laneHead: document.getElementById('lane-head'),
   graph: document.querySelector('.graph'),
   paletteLayer: document.getElementById('palette-layer'),
@@ -161,9 +168,10 @@ function paint() {
   paintTabs();
   const tab = activeTab();
   if (!tab || !state.board) {
-      el.empty.hidden = false;
+    el.empty.hidden = false;
     el.panel.hidden = true;
     el.main.hidden = true;
+    closeChanges();
     if (!state.loading) el.loading.hidden = true;
     return;
   }
@@ -173,7 +181,17 @@ function paint() {
   el.main.hidden = false;
   paintPanel();
   paintHeader();
-  renderGraph(el.graph, { commits: state.board.commits, selectedLane: state.selectedLane });
+  const selectedCommit = state.changes?.kind === 'commit'
+    ? state.changes.sha
+    : state.changes?.kind === 'wip'
+      ? `wip-${state.changes.laneIndex}`
+      : null;
+  renderGraph(el.graph, {
+    commits: state.board.commits,
+    selectedLane: state.selectedLane,
+    selectedCommit,
+  });
+  if (state.changes) paintChanges();
 }
 
 function paintTabs() {
@@ -187,18 +205,9 @@ function paintTabs() {
     btn.appendChild(icon(t.icon || 'folder-simple', 'sm'));
     btn.appendChild(document.createTextNode(` ${t.title}`));
     btn.addEventListener('click', () => selectTab(t.id));
-    btn.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      openRename(t, btn);
-    });
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      openCtxMenu(e.clientX, e.clientY, t);
-    });
-    const iconHit = btn.querySelector('svg');
-    iconHit?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openIconPicker(t, btn);
+      openCtxMenu(e.clientX, e.clientY, t, btn);
     });
     frag.appendChild(btn);
   }
@@ -212,12 +221,19 @@ function paintTabs() {
   el.tabstrip.replaceChildren(frag);
 }
 
-function openCtxMenu(x, y, tab) {
+function openCtxMenu(x, y, tab, anchor) {
   document.querySelector('.ctx-menu')?.remove();
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
+  const rename = document.createElement('button');
+  rename.type = 'button';
+  rename.textContent = 'Rename…';
+  rename.addEventListener('click', () => {
+    menu.remove();
+    openRename(tab, anchor);
+  });
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'danger';
@@ -228,7 +244,7 @@ function openCtxMenu(x, y, tab) {
     applyStore(res.store);
     applyBoard(res.board);
   });
-  menu.appendChild(close);
+  menu.append(rename, close);
   document.body.appendChild(menu);
   const off = (ev) => {
     if (!menu.contains(ev.target)) {
@@ -241,9 +257,26 @@ function openCtxMenu(x, y, tab) {
 
 function openRename(tab, anchor) {
   document.querySelector('.rename-pop')?.remove();
-  document.querySelector('.icon-grid')?.remove();
   const pop = document.createElement('div');
   pop.className = 'rename-pop';
+  let chosen = tab.icon || 'folder-simple';
+  const grid = document.createElement('div');
+  grid.className = 'icon-grid inline';
+  const paintIcons = () => {
+    grid.replaceChildren();
+    for (const name of TAB_ICONS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      if (name === chosen) b.classList.add('on');
+      b.appendChild(icon(name, 'sm'));
+      b.addEventListener('click', () => {
+        chosen = name;
+        paintIcons();
+      });
+      grid.appendChild(b);
+    }
+  };
+  paintIcons();
   const input = document.createElement('input');
   input.value = tab.title;
   input.setAttribute('aria-label', 'Rename tab');
@@ -253,7 +286,10 @@ function openRename(tab, anchor) {
   save.setAttribute('aria-label', 'Save');
   save.appendChild(icon('check-circle'));
   const doSave = async () => {
-    const store = await invoke('tabs.rename', tab.id, input.value);
+    let store = await invoke('tabs.rename', tab.id, input.value);
+    if (chosen !== (tab.icon || 'folder-simple')) {
+      store = await invoke('tabs.setIcon', tab.id, chosen);
+    }
     applyStore(store);
     pop.remove();
     paintTabs();
@@ -263,7 +299,10 @@ function openRename(tab, anchor) {
     if (e.key === 'Enter') { e.preventDefault(); doSave(); }
     if (e.key === 'Escape') pop.remove();
   });
-  pop.append(input, save);
+  const row = document.createElement('div');
+  row.className = 'rename-row';
+  row.append(input, save);
+  pop.append(grid, row);
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
   pop.style.position = 'fixed';
@@ -275,39 +314,6 @@ function openRename(tab, anchor) {
   const off = (ev) => {
     if (!pop.contains(ev.target)) {
       pop.remove();
-      document.removeEventListener('mousedown', off);
-    }
-  };
-  setTimeout(() => document.addEventListener('mousedown', off), 0);
-}
-
-function openIconPicker(tab, anchor) {
-  document.querySelector('.icon-grid')?.remove();
-  document.querySelector('.rename-pop')?.remove();
-  const grid = document.createElement('div');
-  grid.className = 'icon-grid';
-  for (const name of TAB_ICONS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    if (name === tab.icon) b.classList.add('on');
-    b.appendChild(icon(name, 'sm'));
-    b.addEventListener('click', async () => {
-      const store = await invoke('tabs.setIcon', tab.id, name);
-      applyStore(store);
-      grid.remove();
-      paintTabs();
-    });
-    grid.appendChild(b);
-  }
-  document.body.appendChild(grid);
-  const r = anchor.getBoundingClientRect();
-  grid.style.position = 'fixed';
-  grid.style.left = `${r.left}px`;
-  grid.style.top = `${r.bottom + 6}px`;
-  grid.style.zIndex = '40';
-  const off = (ev) => {
-    if (!grid.contains(ev.target)) {
-      grid.remove();
       document.removeEventListener('mousedown', off);
     }
   };
@@ -327,7 +333,7 @@ function paintPanel() {
     <button class="lane-row ${selected === 0 ? 'selected' : ''}" type="button" data-lane="0">
       <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
       <span class="name">${esc(primary.name)}</span>
-      <span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} dirty` : 'clean'}</span>
+      <span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>
     </button>
   </div>`;
 
@@ -386,15 +392,21 @@ function paintPanel() {
 
 function gitActionsHTML(l) {
   const a = [];
+  const stashes = state.board?.stashCount || 0;
   if (state.conflictRoot) a.push(`<button class="btn" type="button" data-act="conflicts" title="Resume conflict walk">${iconHTML('warning-circle', 'sm')}Resolve conflicts</button>`);
   if (l.isPrimary) {
     if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit on ${esc(l.name)}">${iconHTML('git-commit', 'sm')}Commit</button>`);
+    if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
+    if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
     if (l.ahead) a.push(`<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.ahead}</span></button>`);
     a.push(`<button class="btn" type="button" data-act="pull" title="Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
     return a.join('');
   }
-  if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
+  if (l.readiness === 'safe' && !state.conflictRoot && !stashes) return a.join('');
   if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit in this lane">${iconHTML('git-commit', 'sm')}Commit</button>`);
+  if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
+  if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
+  if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
   if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase this lane onto ${esc(state.board.teamRef)}">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase on main</button>`);
   else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
   if (l.ahead) a.push(`<button class="btn" type="button" data-act="push" title="Push (force-with-lease after rebase)">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.ahead}</span></button>`);
@@ -415,16 +427,16 @@ function paintHeader() {
       </div>
       <div class="facts">
         ${dirty
-          ? `<span class="fact bad">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty} file${l.dirty === 1 ? '' : 's'}</strong> uncommitted</span>`
+          ? `<span class="fact bad">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
           : `<span class="fact">${iconHTML('shield-check', 'sm')}<strong>${l.onTeamBranch ? 'on' : 'not on'}</strong> ${esc(b.teamBranch)}</span>
-             <span class="fact">${iconHTML('circle-dashed', 'sm')}<strong>clean</strong> tree</span>`}
+             <span class="fact">${iconHTML('circle-dashed', 'sm')}<strong>clean</strong></span>`}
         ${l.ahead ? `<span class="fact bad">${iconHTML('git-commit', 'sm')}<strong>${l.ahead}</strong> ahead of ${esc(b.teamRef)}</span>` : ''}
         ${l.authorship && authorLabel[l.authorship] && l.authorship !== 'human' ? `<span class="pill ${esc(l.authorship)}">${iconHTML(authorIcon[l.authorship])}${authorLabel[l.authorship]}${l.tool ? `, ${esc(l.tool)}` : ''}</span>` : ''}
       </div>
       <div class="actions">
         ${gitActionsHTML(l)}
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
-        <button class="btn primary" type="button" data-act="cursor">${iconHTML('arrow-square-out', 'sm')}Open in Cursor</button>
+        <button class="iconbtn framed primary" type="button" data-act="cursor" title="Open in Cursor" aria-label="Open in Cursor">${iconHTML('cursor')}</button>
       </div>
     </div>
     <div class="env-row">
@@ -437,7 +449,7 @@ function paintHeader() {
         ? `<span class="fact ${l.behind >= 5 ? 'bad' : 'warn'}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${l.behind} behind</strong> ${esc(b.teamBranch)}${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`
         : `<span class="fact">${iconHTML('cloud-arrow-down', 'sm')}<strong>up to date</strong>${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`;
     const dirty = l.dirty
-      ? `<span class="fact warn">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty} file${l.dirty === 1 ? '' : 's'}</strong> uncommitted</span>`
+      ? `<span class="fact warn">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
       : '';
     const pill = l.authorship && l.authorship !== 'human'
       ? `<span class="pill ${esc(l.authorship)}">${iconHTML(authorIcon[l.authorship])}${authorLabel[l.authorship]}${l.tool ? `, ${esc(l.tool)}` : ''}</span>`
@@ -454,7 +466,7 @@ function paintHeader() {
       <div class="actions">
         ${remove}${gitActionsHTML(l)}
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
-        <button class="btn primary" type="button" data-act="cursor">${iconHTML('arrow-square-out', 'sm')}Open in Cursor</button>
+        <button class="iconbtn framed primary" type="button" data-act="cursor" title="Open in Cursor" aria-label="Open in Cursor">${iconHTML('cursor')}</button>
       </div>
     </div>
     <div class="env-row" aria-hidden="true"></div>`;
@@ -484,6 +496,12 @@ async function handleAction(act, lane) {
     if (act === 'merge') return openMergeSheet(lane);
     if (act === 'remove') return openRemoveSheet(lane);
     if (act === 'conflicts') return openConflictSheet(lane);
+    if (act === 'stash') {
+      return runGit('lane.stash', lane.index, `Stashed uncommitted changes on ${lane.name}`, 'stash');
+    }
+    if (act === 'stashPop') {
+      return runGit('lane.stashPop', lane.index, `Popped stash onto ${lane.name}`, 'stashPop');
+    }
   } catch { /* toasted */ }
 }
 
@@ -642,6 +660,219 @@ function openRemoveSheet(lane) {
   });
 }
 
+function dirtyKind(code) {
+  const c = String(code || '');
+  if (c === '??') return 'new';
+  if (c.includes('D')) return 'deleted';
+  if (c.includes('R') || c.includes('C')) return 'renamed';
+  if (c.includes('A')) return 'added';
+  return 'modified';
+}
+
+function dirtyMark(code) {
+  const kind = dirtyKind(code);
+  return { new: 'U', deleted: 'D', renamed: 'R', added: 'A', modified: 'M' }[kind] || 'M';
+}
+
+function nestDirty(files) {
+  const root = { dirs: new Map(), files: [] };
+  for (const f of files) {
+    const parts = String(f.path).split('/').filter(Boolean);
+    if (!parts.length) continue;
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!node.dirs.has(parts[i])) node.dirs.set(parts[i], { dirs: new Map(), files: [] });
+      node = node.dirs.get(parts[i]);
+    }
+    node.files.push({ ...f, name: parts[parts.length - 1] });
+  }
+  return root;
+}
+
+function formatStat(f) {
+  const a = Number(f.added) || 0;
+  const d = Number(f.deleted) || 0;
+  if (!a && !d) return '';
+  return `<span class="stat">${a ? `<span class="add">+${a}</span>` : ''}${d ? `<span class="del">−${d}</span>` : ''}</span>`;
+}
+
+function renderDirtyTree(node, depth = 0, prefix = '') {
+  const pad = `padding-left:${6 + depth * 12}px`;
+  let html = '';
+  for (const [name, child] of [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const key = prefix ? `${prefix}/${name}` : name;
+    const collapsed = state.collapsedDirs.has(key);
+    html += `<button class="fx-folder${collapsed ? ' collapsed' : ''}" type="button" style="${pad}" data-dir="${esc(key)}">
+      ${iconHTML('caret-down', 'sm caret')}${iconHTML('folder-simple', 'sm')}<span class="name">${esc(name)}</span>
+    </button>`;
+    if (!collapsed) html += renderDirtyTree(child, depth + 1, key);
+  }
+  for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) {
+    const kind = dirtyKind(f.code);
+    html += `<button class="fx-file" type="button" style="${pad}" data-file="${esc(f.path)}" title="${esc(f.path)}">
+      ${iconHTML('files', 'sm')}<span class="name">${esc(f.name)}</span>${formatStat(f)}<span class="mark ${kind}">${dirtyMark(f.code)}</span>
+    </button>`;
+  }
+  return html;
+}
+
+function changesKey(view) {
+  if (!view) return '';
+  const fold = [...state.collapsedDirs].join(',');
+  if (view.kind === 'wip') {
+    const lane = laneByIndex(view.laneIndex);
+    const files = lane?.dirtyFiles || [];
+    return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}`;
+  }
+  return `c:${view.sha}:${fold}`;
+}
+
+function closeChanges() {
+  state.changes = null;
+  state.changesPaintKey = '';
+  state.changesCache = null;
+  el.changes.hidden = true;
+  el.changes.innerHTML = '';
+  el.body.classList.remove('with-changes');
+}
+
+function bindCommitChord(textarea, onCommit) {
+  textarea.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      onCommit();
+    }
+  });
+}
+
+async function commitLaneMessage(lane, message) {
+  const msg = String(message || '').trim();
+  if (!msg) {
+    toast('Commit message required', 'bad');
+    return false;
+  }
+  const board = await invoke('lane.commit', lane.index, msg);
+  state.flashMarks.add(lane.index);
+  state.commitDraft = '';
+  if (state.changes?.kind === 'wip') closeChanges();
+  applyBoard(board);
+  toast(`Committed on ${lane.name}`, 'ok');
+  return true;
+}
+
+function bindChangesTree(basePath) {
+  el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => {
+    closeChanges();
+    paint();
+  });
+  el.changes.querySelectorAll('[data-dir]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.dir;
+      if (state.collapsedDirs.has(key)) state.collapsedDirs.delete(key);
+      else state.collapsedDirs.add(key);
+      paintChanges();
+    });
+  });
+  el.changes.querySelectorAll('[data-file]').forEach((btn) => {
+    btn.addEventListener('click', () => invoke('os.openCursor', `${basePath}/${btn.dataset.file}`));
+  });
+}
+
+async function paintChanges() {
+  const view = state.changes;
+  if (!view) {
+    closeChanges();
+    return;
+  }
+  const key = changesKey(view);
+  if (key && key === state.changesPaintKey && !el.changes.hidden) return;
+  state.changesPaintKey = key;
+  el.changes.hidden = false;
+  el.body.classList.add('with-changes');
+
+  if (view.kind === 'wip') {
+    const lane = laneByIndex(view.laneIndex);
+    if (!lane?.dirty) {
+      closeChanges();
+      return;
+    }
+    const files = lane.dirtyFiles || [];
+    const tree = nestDirty(files);
+    el.changes.innerHTML = `
+      <div class="changes-head">
+        <div class="title">Uncommitted<small>${esc(lane.name)} · ${files.length}</small></div>
+        <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
+      </div>
+      <div class="changes-tree" role="tree">
+        ${files.length ? renderDirtyTree(tree) : '<div class="fx-empty">No uncommitted files</div>'}
+      </div>
+      <div class="changes-foot">
+        ${files.length ? `
+          <textarea class="commit-msg" name="message" rows="2" placeholder="Commit message" aria-label="Commit message"></textarea>
+          <div class="foot-actions">
+            <button class="btn" type="button" data-stash>${iconHTML('stack', 'sm')}Stash</button>
+            <button class="btn primary" type="button" data-commit>${iconHTML('git-commit', 'sm')}Commit</button>
+            <span class="hint">⌘⏎</span>
+          </div>` : ''}
+      </div>`;
+    bindChangesTree(lane.path);
+    const ta = el.changes.querySelector('.commit-msg');
+    const doCommit = async () => {
+      try { await commitLaneMessage(lane, ta?.value); } catch { /* toasted */ }
+    };
+    el.changes.querySelector('[data-commit]')?.addEventListener('click', doCommit);
+    el.changes.querySelector('[data-stash]')?.addEventListener('click', () => handleAction('stash', lane));
+    if (ta) {
+      ta.value = state.commitDraft;
+      ta.addEventListener('input', () => { state.commitDraft = ta.value; });
+      bindCommitChord(ta, doCommit);
+    }
+    return;
+  }
+
+  if (view.kind === 'commit') {
+    const token = view.sha;
+    const renderCommit = (data) => {
+      const files = data.files || [];
+      const tree = nestDirty(files);
+      const rootPath = state.board?.root || '';
+      el.changes.innerHTML = `
+        <div class="changes-head">
+          <div class="title">${esc(data.subject || 'Commit')}<small>${esc(data.short)} · ${files.length} · ${esc(data.author || '')}</small></div>
+          <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
+        </div>
+        <div class="changes-tree" role="tree">
+          ${files.length ? renderDirtyTree(tree) : '<div class="fx-empty">No file changes</div>'}
+        </div>`;
+      bindChangesTree(rootPath);
+    };
+    if (state.changesCache?.sha === token) {
+      renderCommit(state.changesCache.data);
+      return;
+    }
+    el.changes.innerHTML = `
+      <div class="changes-head">
+        <div class="title">Commit<small>Loading…</small></div>
+        <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
+      </div>
+      <div class="changes-tree"><div class="fx-empty">Loading changes…</div></div>`;
+    el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => { closeChanges(); paint(); });
+    try {
+      const data = await invoke('commit.changes', token);
+      if (state.changes?.kind !== 'commit' || state.changes.sha !== token) return;
+      state.changesCache = { sha: token, data };
+      // Key may match before render finished; force tree paint after load.
+      state.changesPaintKey = '';
+      renderCommit(data);
+      state.changesPaintKey = changesKey(state.changes);
+    } catch {
+      if (state.changes?.kind === 'commit' && state.changes.sha === token) {
+        el.changes.querySelector('.changes-tree').innerHTML = '<div class="fx-empty">Could not load changes</div>';
+      }
+    }
+  }
+}
+
 function openCommitSheet(lane) {
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="commit-title">
@@ -650,22 +881,20 @@ function openCommitSheet(lane) {
       <p>${lane.dirty} uncommitted file${lane.dirty === 1 ? '' : 's'} will be staged and committed${lane.isPrimary ? '' : ' in this lane'}.</p>
       <label class="field">Message<textarea name="message" rows="3" required autofocus placeholder="Describe the change"></textarea></label>
       <div class="row-end">
+        <span class="hint-text">⌘⏎</span>
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn primary" type="submit">${iconHTML('git-commit', 'sm')}Commit</button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
   const ta = form.querySelector('textarea');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const submit = async () => {
     try {
-      const board = await invoke('lane.commit', lane.index, ta.value);
-      closeSheet();
-      state.flashMarks.add(lane.index);
-      applyBoard(board);
-      toast(`Committed on ${lane.name}`, 'ok');
+      if (await commitLaneMessage(lane, ta.value)) closeSheet();
     } catch { /* toasted */ }
-  });
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+  bindCommitChord(ta, submit);
   ta.focus();
 }
 
@@ -778,6 +1007,8 @@ function paletteCommands() {
     { id: 'open', label: 'Open Repository…', run: openRepo },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
+    { id: 'stash', label: 'Stash uncommitted', run: () => handleAction('stash', lane), when: lane && lane.dirty },
+    { id: 'stashPop', label: 'Pop stash', run: () => handleAction('stashPop', lane), when: lane && state.board?.stashCount },
     { id: 'push', label: `Push ${lane?.name || ''} to origin`.trim(), run: () => handleAction('push', lane), when: lane && lane.ahead },
     { id: 'pull', label: `Pull ${lane?.name || ''} (ff-only)`.trim(), run: () => handleAction('pull', lane), when: !!lane },
     { id: 'rebase', label: 'Rebase on main', run: () => handleAction('rebase', lane), when: lane && !lane.isPrimary && lane.behind },
@@ -852,6 +1083,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!el.paletteLayer.hidden) closePalette();
     else if (el.sheetLayer.classList.contains('open')) closeSheet();
+    else if (state.changes) { closeChanges(); paint(); }
   }
 });
 
@@ -913,6 +1145,33 @@ async function boot() {
     paint();
   }
 }
+
+el.graph.addEventListener('click', (e) => {
+  const wip = e.target.closest('[data-wip-lane]');
+  if (wip && el.graph.contains(wip)) {
+    const lane = laneByIndex(Number(wip.dataset.wipLane));
+    if (!lane) return;
+    const closing = state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index;
+    state.selectedLane = lane.index;
+    state.changes = closing ? null : { kind: 'wip', laneIndex: lane.index };
+    paint();
+    return;
+  }
+  const commit = e.target.closest('[data-commit]');
+  if (commit && el.graph.contains(commit)) {
+    const sha = commit.dataset.commit;
+    const closing = state.changes?.kind === 'commit' && state.changes.sha === sha;
+    state.changes = closing ? null : { kind: 'commit', sha };
+    paint();
+  }
+});
+el.graph.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const row = e.target.closest('[data-wip-lane], [data-commit]');
+  if (!row || !el.graph.contains(row)) return;
+  e.preventDefault();
+  row.click();
+});
 
 el.openRepo.addEventListener('click', openRepo);
 boot();

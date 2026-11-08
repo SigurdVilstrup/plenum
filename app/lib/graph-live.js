@@ -28,7 +28,7 @@ const refPill = (r) => {
   return `<span class="${cls}">${icon(ic)}${esc(r.name)}</span>`;
 };
 
-export function renderGraph(root, { commits, selectedLane = 0 }) {
+export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null }) {
   const rowsEl = root.querySelector('.rows');
   const scrollTop = rowsEl.scrollTop;
   const index = new Map(commits.map((c, i) => [c.id, i]));
@@ -90,7 +90,8 @@ export function renderGraph(root, { commits, selectedLane = 0 }) {
     .map((c) => {
       const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
       if (c.isWIP) {
-        return `<div class="row wip${c.danger ? ' danger' : ''}${sel}" role="row">
+        const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
+        return `<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}" role="button" tabindex="0" data-wip-lane="${c.lane}" title="Show uncommitted changes">
           <span></span>
           <span class="msg">${icon(c.danger ? 'warning-circle' : 'circle-dashed', 'sm')}<span class="text">${esc(c.subject)}</span></span>
           <span></span><span></span><span></span>
@@ -104,7 +105,8 @@ export function renderGraph(root, { commits, selectedLane = 0 }) {
         : '';
       const who = `${icon(authorIcon[kind], kind)}<span>${esc(c.author)}</span>${pill}`;
       const sha = esc(String(c.id || '').slice(0, 7));
-      return `<div class="row${sel}" role="row">
+      const on = selectedCommit === c.id ? ' active-commit' : '';
+      return `<div class="row clickable${sel}${on}" role="button" tabindex="0" data-commit="${esc(c.id)}" title="Show commit changes">
         <span></span>
         <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
         <span class="who">${who}</span>

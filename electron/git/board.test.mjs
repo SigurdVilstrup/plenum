@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadBoard, classifyAuthorship } from './board.mjs';
+import { loadBoard, classifyAuthorship, parseDirty, parseNumstat, loadCommitChanges } from './board.mjs';
 
 function git(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
@@ -14,6 +14,22 @@ test('classify assisted trailer', () => {
   const a = classifyAuthorship('Sigurd', 's@x.com', 'Co-authored-by: Claude <c@x.com>');
   assert.equal(a.kind, 'assisted');
   assert.equal(a.tool, 'Claude');
+});
+
+test('parseDirty: paths and renames', () => {
+  const files = parseDirty([' M notes.txt', '?? new.md', 'R  old.txt -> renamed.txt'].join('\n'));
+  assert.deepEqual(files, [
+    { path: 'notes.txt', code: ' M' },
+    { path: 'new.md', code: '??' },
+    { path: 'renamed.txt', code: 'R ' },
+  ]);
+});
+
+test('parseNumstat', () => {
+  const m = parseNumstat('12\t3\tsrc/a.js\n-\t-\tbin/x\n1\t0\told => new\n');
+  assert.deepEqual(m.get('src/a.js'), { added: 12, deleted: 3 });
+  assert.deepEqual(m.get('bin/x'), { added: 0, deleted: 0 });
+  assert.deepEqual(m.get('new'), { added: 1, deleted: 0 });
 });
 
 test('loadBoard: worktree ahead dirty assisted', async () => {
@@ -38,7 +54,12 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
     assert.equal(lane.behind, 0);
     assert.equal(lane.ahead, 1);
     assert.equal(lane.dirty, 1);
+    assert.equal(lane.dirtyFiles.length, 1);
+    assert.equal(lane.dirtyFiles[0].path, 'notes.txt');
+    assert.ok(lane.dirtyFiles[0].added >= 1);
     assert.equal(lane.readiness, 'working');
+    const tip = await loadCommitChanges(root, board.lanes[0].head);
+    assert.ok(tip.files.some((f) => f.path === 'README'));
     assert.equal(lane.authorship, 'assisted');
     assert.equal(lane.tool, 'Claude');
     assert.equal(board.lanes[0].readiness, 'protected');

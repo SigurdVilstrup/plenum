@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { loadBoard, displayPath } from './git/board.mjs';
+import { loadBoard, loadCommitChanges, displayPath } from './git/board.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
 
@@ -154,3 +154,6 @@ ipcMain.handle('lane.conflicts', (_e, laneIndex, conflictRoot) => withRoot(ops.c
 ipcMain.handle('lane.conflictStage', (_e, laneIndex, file, conflictRoot) => withRoot(ops.conflictStage, laneIndex, file, conflictRoot));
 ipcMain.handle('lane.conflictContinue', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictContinue, laneIndex, conflictRoot));
 ipcMain.handle('lane.conflictAbort', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictAbort, laneIndex, conflictRoot));
+ipcMain.handle('lane.stash', (_e, laneIndex) => withRoot(ops.stashLane, laneIndex));
+ipcMain.handle('lane.stashPop', (_e, laneIndex) => withRoot(ops.stashPopLane, laneIndex));
+ipcMain.handle('commit.changes', (_e, sha) => withRoot(loadCommitChanges, sha));

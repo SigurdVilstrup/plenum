@@ -135,3 +135,15 @@ test('primary commit push pull', async () => {
   assert.equal(board.lanes[0].behind, 0);
   fs.rmSync(other, { recursive: true, force: true });
 });
+
+test('stash and pop uncommitted', async () => {
+  const { root } = await fixture();
+  fs.writeFileSync(path.join(root, 'stashed.txt'), 'hold');
+  let board = await loadBoard(root);
+  assert.equal(board.lanes[0].dirty, 1);
+  board = await ops.stashLane(root, 0);
+  assert.equal(board.lanes[0].dirty, 0);
+  assert.ok(board.stashCount >= 1);
+  board = await ops.stashPopLane(root, 0);
+  assert.equal(board.lanes[0].dirty, 1);
+});

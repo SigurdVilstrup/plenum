@@ -7,6 +7,8 @@ const ALLOWED = new Set([
   'lane.create', 'lane.remove', 'lane.commit', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.conflicts',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
+  'lane.stash', 'lane.stashPop',
+  'commit.changes',
 ]);
 
 contextBridge.exposeInMainWorld('overlook', {

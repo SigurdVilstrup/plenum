@@ -231,3 +231,19 @@ export async function conflictAbort(root, laneIndex, conflictRoot) {
   else throw new Error('No rebase or merge in progress.');
   return loadBoard(root);
 }
+
+export async function stashLane(root, laneIndex) {
+  const board = await loadBoard(root);
+  const lane = laneOrPrimary(board, laneIndex);
+  if (!lane.dirty) throw new Error('Nothing to stash.');
+  await git(['stash', 'push', '-u', '-m', `overlook: ${lane.name}`], lane.path);
+  return loadBoard(root);
+}
+
+export async function stashPopLane(root, laneIndex) {
+  const board = await loadBoard(root);
+  const lane = laneOrPrimary(board, laneIndex);
+  if (!board.stashCount) throw new Error('No stash to pop.');
+  await git(['stash', 'pop'], lane.path);
+  return loadBoard(root);
+}
