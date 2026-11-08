@@ -112,7 +112,6 @@ function normalizeServices(services) {
   for (const [name, svc] of Object.entries(services)) {
     if (!svc || typeof svc !== 'object') continue;
     out[name] = { mode: svc.mode };
-    if (svc.snapshot != null) out[name].snapshot = svc.snapshot;
   }
   return out;
 }
