@@ -2,6 +2,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { git, gitOk } from './run.mjs';
+import { loadManifest } from '../lane/manifest.mjs';
+import { laneStatus } from '../lane/status.mjs';
 
 const AGENT_TOOLS = [
   ['claude', 'Claude'],
@@ -380,6 +382,7 @@ export async function loadBoard(repoPath) {
   const team = await teamBranch(top);
   const teamRef = await resolveTeamRef(team, top);
   const hasCommit = await gitOk(['rev-parse', '--verify', '--quiet', 'HEAD'], top);
+  const manifest = await loadManifest(path.join(trees[0].path, '.overlook', 'lane.yaml'));
 
   const lanes = [];
   for (let index = 0; index < trees.length; index++) {
@@ -424,6 +427,7 @@ export async function loadBoard(repoPath) {
       authorName: tip?.name ?? '',
       head: tree.head,
       alert,
+      ...laneStatus(manifest, index),
     });
   }
 

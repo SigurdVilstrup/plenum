@@ -64,6 +64,47 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
     assert.equal(lane.tool, 'Claude');
     assert.equal(board.lanes[0].readiness, 'protected');
     assert.ok(board.commits.some((c) => c.isWIP && c.lane === 1));
+    assert.equal(lane.runnable, false);
+    assert.equal(board.lanes[0].runnable, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
+  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'Tester'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'hello');
+    git(['add', 'README'], root);
+    git(['commit', '-m', 'init'], root);
+    git(['worktree', 'add', '-b', 'feat/one', wt], root);
+
+    const overlook = path.join(root, '.overlook');
+    fs.mkdirSync(overlook);
+    fs.copyFileSync(
+      path.join(process.cwd(), 'fixtures/lane/minimal.lane.yaml'),
+      path.join(overlook, 'lane.yaml'),
+    );
+
+    const board = await loadBoard(root);
+    assert.equal(board.lanes.length, 2);
+
+    const primary = board.lanes[0];
+    assert.equal(primary.runnable, false);
+    assert.equal(primary.running, false);
+
+    const lane = board.lanes[1];
+    assert.equal(lane.runnable, true);
+    assert.equal(lane.offset, 100);
+    assert.deepEqual(lane.urls, { web: 'http://127.0.0.1:5101' });
+    assert.equal(lane.dataMode, 'shared');
+    assert.equal(lane.running, false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
