@@ -25,7 +25,7 @@ ports:
     web: 8000
 ```
 
-Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Doctor (Lane setup) can propose + Accept writes the file. Create copies `env.copy` and runs `setup` when present. Drift gates Run when shared migrations are pending.
+Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup lives under Settings (`⌘,`) → Repositories → the repo (not a dialog); Write saves `.overlook/lane.yaml`. Create copies `env.copy` and runs `setup` when present. Drift gates Run when shared migrations are pending. Palette: Quick start, Tab warm time…
 
 ## Scripts
 

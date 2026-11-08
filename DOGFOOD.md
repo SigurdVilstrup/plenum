@@ -14,7 +14,7 @@ ports:
     web: 8000
 ```
 
-Or let the doctor propose one: Lane setup (gear / ⌘K → Doctor) → Accept writes the file. CLI: `overlook doctor` prints the proposal; Accept is in the app.
+Or let the doctor propose one: Settings (`⌘,`) → Repositories → Lane setup… → Write. CLI: `overlook doctor` prints the proposal; Write is in the app.
 
 Fixture / UI:
 
