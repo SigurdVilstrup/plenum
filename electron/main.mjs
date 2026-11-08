@@ -8,9 +8,14 @@ import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
 import { doctor, acceptManifest } from './lane/doctor.mjs';
+import { getPrefs, setPrefs } from './prefs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
+
+function prefsDir() {
+  return app.getPath('userData');
+}
 
 function appIcon() {
   const candidates = [
@@ -110,6 +115,9 @@ ipcMain.handle('tabs.close', async (_e, id) => {
 ipcMain.handle('tabs.rename', (_e, id, title) => tabs.renameTab(id, title));
 ipcMain.handle('tabs.setIcon', (_e, id, icon) => tabs.setIcon(id, icon));
 ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds));
+
+ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
+ipcMain.handle('prefs.set', (_e, partial) => setPrefs(partial, prefsDir()));
 
 ipcMain.handle('board.get', async (_e, root) => loadBoard(root || activePath()));
 ipcMain.handle('repo.refresh', async () => {

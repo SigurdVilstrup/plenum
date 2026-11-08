@@ -15,7 +15,7 @@
     "prestart": "vite build",
     "start": "electron .",
     "overlook": "node ./bin/overlook.mjs",
-    "test": "node --test electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs bin/*.test.mjs",
+    "test": "node --test electron/prefs.test.mjs electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs bin/*.test.mjs app/lib/*.test.js app/lib/*.test.mjs",
     "smoke:init": "node scripts/smoke-init.mjs",
     "icons": "node scripts/build-icons.mjs",
     "pack": "npm run build && electron-builder --mac --dir",
