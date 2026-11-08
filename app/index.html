@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws://localhost:5173 http://localhost:5173; img-src 'self' data:" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Overlook</title>
+    <link rel="icon" href="./app-icon-16.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles/mock.css" />
+    <link rel="stylesheet" href="./styles/app.css" />
+  </head>
+  <body class="app-shell">
+    <div class="window app">
+      <header class="titlebar">
+        <div class="traffic spacer" aria-hidden="true"></div>
+        <div class="appmark" aria-label="Overlook">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M5.5 3.5 V12.5 M5.5 11 C5.5 8.5 9.5 9.5 9.5 7 V6" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+            <circle cx="9.5" cy="5" r="1.6" fill="#5e6ad2" />
+          </svg>
+        </div>
+        <nav class="tabstrip" id="tabstrip" aria-label="Open repositories"></nav>
+        <div class="title-actions">
+          <button class="searchbtn" type="button" data-palette-open>
+            <svg class="icon sm" aria-hidden="true"><use href="#i-magnifying-glass"></use></svg>
+            <span>Lanes, branches, files, commands</span>
+            <kbd>⌘P</kbd>
+          </button>
+        </div>
+      </header>
+
+      <div class="body" id="body">
+        <div class="loading-screen" id="loading" hidden>
+          <div class="loading-card">
+            <div class="spinner" aria-hidden="true"></div>
+            <p id="loading-title">Opening repository…</p>
+            <p class="mono muted" id="loading-path"></p>
+          </div>
+        </div>
+        <div class="empty-screen" id="empty">
+          <svg class="icon xl" aria-hidden="true"><use href="#i-tree-structure"></use></svg>
+          <p>Open a repository to see its worktrees.</p>
+          <button class="btn primary" type="button" id="open-repo">Open Repository…</button>
+        </div>
+        <aside class="panel" id="panel" aria-label="Lanes" hidden></aside>
+        <main class="main" id="main" hidden>
+          <header class="lane-head" id="lane-head"></header>
+          <section class="graph" aria-label="Commit graph">
+            <div class="graph-cols" aria-hidden="true">
+              <span>Graph</span><span>Commit</span><span>Author</span><span>SHA</span><span>When</span>
+            </div>
+            <div class="rows" id="rows" role="table" aria-label="Commits, newest first"></div>
+            <footer class="graph-foot">
+              <span><i style="background: var(--human)"></i>Human tip</span>
+              <span><i style="background: var(--assisted)"></i>Assisted tip</span>
+              <span><i style="background: var(--agent)"></i>Agent tip</span>
+              <span><svg class="icon sm" aria-hidden="true"><use href="#i-circle-dashed"></use></svg>Uncommitted work sits above its lane's tip</span>
+            </footer>
+          </section>
+        </main>
+      </div>
+
+      <div class="palette-layer" id="palette-layer" role="dialog" aria-label="Command palette" hidden>
+        <div class="palette">
+          <div class="search">
+            <svg class="icon" aria-hidden="true"><use href="#i-magnifying-glass"></use></svg>
+            <input type="text" id="palette-input" placeholder="Jump to a lane, branch, file, repo, or command" aria-label="Search" />
+            <kbd>esc</kbd>
+          </div>
+          <div class="results" id="palette-results"></div>
+          <div class="foot">
+            <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>⌘P</kbd> toggles</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-layer" id="sheet-layer"></div>
+      <div class="toast" id="toast" hidden></div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
