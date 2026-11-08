@@ -81,6 +81,7 @@ ipcMain.handle('tabs.close', async (_e, id) => {
 });
 ipcMain.handle('tabs.rename', (_e, id, title) => tabs.renameTab(id, title));
 ipcMain.handle('tabs.setIcon', (_e, id, icon) => tabs.setIcon(id, icon));
+ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds));
 
 ipcMain.handle('board.get', async (_e, root) => loadBoard(root || activePath()));
 ipcMain.handle('repo.refresh', async () => {

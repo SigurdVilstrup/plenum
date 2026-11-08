@@ -90,4 +90,17 @@ export function setIcon(id, icon) {
   return data;
 }
 
+export function reorderTabs(orderedIds) {
+  const data = read();
+  const ids = Array.isArray(orderedIds) ? orderedIds.map(String) : [];
+  if (ids.length !== data.tabs.length) throw new Error('Invalid tab order.');
+  const byId = new Map(data.tabs.map((t) => [t.id, t]));
+  if (ids.some((id) => !byId.has(id)) || new Set(ids).size !== ids.length) {
+    throw new Error('Invalid tab order.');
+  }
+  data.tabs = ids.map((id) => byId.get(id));
+  write(data);
+  return data;
+}
+
 export { ICONS as TAB_ICONS };
