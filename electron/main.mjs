@@ -10,6 +10,7 @@ import * as supervisor from './lane/supervisor.mjs';
 import { doctor, acceptManifest } from './lane/doctor.mjs';
 import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
+import * as creds from './git/credentials.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -220,6 +221,29 @@ ipcMain.handle('lane.create', (_e, payload) => withRoot((root, p) => {
   const lanesFolder = prefs.repoOverrides?.[root]?.lanesFolder || prefs.defaultLanesFolder;
   return ops.createLane(root, { ...p, lanesFolder });
 }, payload));
+async function accountsList() {
+  return {
+    hosts: getPrefs(prefsDir()).credentialHosts,
+    helper: await creds.credentialHelper(),
+    ssh: await creds.sshStatus(),
+  };
+}
+// The token goes to `git credential approve` and nowhere else: not prefs, not the reply, not a log.
+ipcMain.handle('accounts.setHttps', async (_e, { kind, host, username, token }) => {
+  const h = creds.sanitizeHost(kind === 'github' ? 'github.com' : host);
+  const user = String(username ?? '').trim();
+  await creds.approve({ host: h, username: user, password: token });
+  const list = creds.upsertHost(getPrefs(prefsDir()).credentialHosts, { host: h, username: user, kind });
+  setPrefs({ credentialHosts: list }, prefsDir());
+  return accountsList();
+});
+ipcMain.handle('accounts.removeHttps', async (_e, { host, username }) => {
+  const h = creds.sanitizeHost(host);
+  await creds.reject({ host: h, username });
+  setPrefs({ credentialHosts: creds.removeHost(getPrefs(prefsDir()).credentialHosts, h, username) }, prefsDir());
+  return accountsList();
+});
+ipcMain.handle('accounts.list', accountsList);
 ipcMain.handle('git.identity.get', () => getIdentity(activePath()));
 ipcMain.handle('git.identity.set', (_e, payload) => setIdentity(activePath(), payload || {}));
 ipcMain.handle('lane.remove', (_e, laneIndex) => withRoot(ops.removeLane, laneIndex));

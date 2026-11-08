@@ -2120,3 +2120,18 @@ a.btn {
   font-size: 12px;
   min-width: 220px;
 }
+
+.list-row.acct {
+  grid-template-columns: 20px 160px 1fr auto auto;
+}
+
+.acct-fields {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.acct-fields .input {
+  flex: 1;
+  min-width: 0;
+}

@@ -54,6 +54,7 @@ const state = {
   warmTabs: new Map(),
   prefs: {},
   identity: null,
+  accounts: null,
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null },
@@ -1465,10 +1466,49 @@ const SETTINGS_PAGES = {
         ${settingsRow('list', 'Font', '', 'Inter, JetBrains Mono and IBM Plex use the copy installed on this Mac, else the system font', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }))}
       </div>`;
   },
-  accounts: () => settingsPlaceholder('Accounts', 'Credentials for pushing and pulling over HTTPS.'),
+  accounts: () => {
+    const a = state.accounts;
+    const helper = a?.helper?.length ? a.helper.join(', ') : '';
+    const where = /osxkeychain/.test(helper) ? 'Keychain' : helper ? `credential helper (${esc(helper)})` : '';
+    const saved = (a?.hosts || []).map((h) => `<div class="list-row">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token saved in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
+      || `<div class="list-row">${iconHTML('key')}<div class="name">None yet</div><div class="detail">Push and pull over https asks nothing until you add one.</div><span></span><span></span></div>`;
+    const field = (name, ph, type = 'text') => `<input class="input" name="${name}" type="${type}" placeholder="${ph}" aria-label="${ph}" autocomplete="off" required />`;
+    const ssh = !a ? '' : a.ssh.state === 'keys' ? `${a.ssh.count} key${a.ssh.count === 1 ? '' : 's'} in ssh-agent` : a.ssh.state === 'none' ? 'ssh-agent has no keys' : 'No ssh-agent running';
+    return `<h1>Accounts</h1><p class="lede">How Overlook pushes and pulls over https. A token goes to git's credential helper${where ? ` (${where})` : ''}. Overlook keeps the host and username, never the token.</p>
+      <div class="group-head">HTTPS credentials</div>
+      <div class="list">${saved}</div>
+      <div class="group-head">Add<small>Use a personal access token with repo access, not your password.</small></div>
+      <div class="list">
+        <form class="list-row acct" data-acct="github">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+        <form class="list-row acct" data-acct="https">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+      </div>
+      <div class="group-head">SSH<small>Overlook never touches keys. Git uses your ssh-agent and <span class="mono">~/.ssh/config</span>.</small></div>
+      <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`)}</div>`;
+  },
   repositories: () => settingsPlaceholder('Repositories', 'Per repository: lanes folder and lane setup.'),
   agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
 };
+
+async function loadAccounts() {
+  try { state.accounts = await invoke('accounts.list'); } catch { return; }
+  if (state.settings.open && state.settings.page === 'accounts') renderSettings();
+}
+
+function bindAccounts(root) {
+  const apply = (a) => { state.accounts = a; renderSettings(); };
+  root.querySelectorAll('form[data-acct]').forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = (n) => f.elements[n]?.value ?? '';
+    const kind = f.dataset.acct;
+    try {
+      apply(await invoke('accounts.setHttps', { kind, host: v('host'), username: v('username'), token: v('token') }));
+      toast('Saved. The token is in your credential helper.', 'ok');
+    } catch { /* toasted */ }
+  }));
+  root.querySelectorAll('[data-remove-host]').forEach((b) => b.addEventListener('click', async () => {
+    try { apply(await invoke('accounts.removeHttps', { host: b.dataset.removeHost, username: b.dataset.user })); } catch { /* toasted */ }
+  }));
+}
 
 async function loadIdentity() {
   try { state.identity = await invoke('git.identity.get'); } catch { return; }
@@ -1507,6 +1547,7 @@ function openSettings(page = state.settings.page) {
   paint();
   renderSettings();
   if (page === 'general') loadIdentity();
+  if (page === 'accounts') loadAccounts();
 }
 
 function closeSettings() {
@@ -1522,6 +1563,7 @@ function renderSettings() {
     <div class="heading">Settings</div>${nav}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   if (page === 'general') bindIdentity(el.settingsBody);
+  if (page === 'accounts') bindAccounts(el.settingsBody);
   bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
