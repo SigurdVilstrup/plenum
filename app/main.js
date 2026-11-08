@@ -1,6 +1,7 @@
 import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
 import { authorshipPillHTML, authorIcon, authorLabel } from './lib/authorship-pill.js';
+import { shouldFreeze, evictOldest, markFrozen, WARM_MAX, WARM_REFRESH_MS } from './lib/warm-tabs.js';
 
 const api = window.overlook;
 const icon = (n, c = '') => {
@@ -50,6 +51,8 @@ const state = {
   changesPaintKey: '',
   changesCache: null,
   commitDraft: '',
+  warmTabs: new Map(),
+  warmTtlMs: 120000,
 };
 
 const el = {
@@ -135,6 +138,59 @@ async function invoke(channel, ...args) {
 function applyStore(store) {
   if (store) state.store = store;
 }
+
+function dropWarm(id) {
+  const e = state.warmTabs.get(id);
+  if (!e) return;
+  markFrozen(e);
+  state.warmTabs.delete(id);
+}
+
+function snapshotWarm(id) {
+  if (!id || !state.board) return;
+  const tab = state.store.tabs.find((t) => t.id === id);
+  const prev = state.warmTabs.get(id);
+  if (prev?.timerId) clearInterval(prev.timerId);
+  const entry = {
+    path: tab?.path || state.board.root,
+    board: state.board,
+    selectedLane: state.selectedLane,
+    leftAt: Date.now(),
+    timerId: null,
+    frozen: false,
+  };
+  entry.timerId = setInterval(() => warmRefresh(id), WARM_REFRESH_MS);
+  state.warmTabs.set(id, entry);
+  evictOldest(state.warmTabs, WARM_MAX);
+  for (const [k, v] of [...state.warmTabs]) {
+    if (k === id) continue;
+    if (shouldFreeze(v.leftAt, Date.now(), state.warmTtlMs) && !v.frozen) markFrozen(v);
+  }
+  // schedule freeze check
+  setTimeout(() => {
+    const e = state.warmTabs.get(id);
+    if (!e || e.frozen) return;
+    if (shouldFreeze(e.leftAt, Date.now(), state.warmTtlMs)) markFrozen(e);
+  }, state.warmTtlMs + 50);
+}
+
+async function warmRefresh(id) {
+  const e = state.warmTabs.get(id);
+  if (!e || e.frozen) return;
+  if (shouldFreeze(e.leftAt, Date.now(), state.warmTtlMs)) {
+    markFrozen(e);
+    return;
+  }
+  try {
+    const board = await invoke('board.get', e.path);
+    if (!board) return;
+    const cur = state.warmTabs.get(id);
+    if (!cur || cur.frozen) return;
+    cur.board = board;
+    if (state.store.activeId === id) applyBoard(board);
+  } catch { /* silent */ }
+}
+
 
 async function applyBoard(board, { selectLane, enterLane } = {}) {
   const prev = state.board;
@@ -299,6 +355,7 @@ function openCtxMenu(x, y, tab, anchor) {
   close.textContent = 'Close Tab';
   close.addEventListener('click', async () => {
     menu.remove();
+    dropWarm(tab.id);
     const res = await invoke('tabs.close', tab.id);
     applyStore(res.store);
     applyBoard(res.board);
@@ -1356,18 +1413,45 @@ async function openRepo() {
 
 async function selectTab(id) {
   if (id === state.store.activeId) return;
+  const prevId = state.store.activeId;
+  snapshotWarm(prevId);
   state.store = { ...state.store, activeId: id };
   paintTabs();
+  const warm = state.warmTabs.get(id);
+  let usedWarm = false;
+  if (warm?.board) {
+    usedWarm = true;
+    applyBoard(warm.board, { selectLane: warm.selectedLane });
+    if (warm.timerId) { clearInterval(warm.timerId); warm.timerId = null; }
+  }
   try {
     const res = await invoke('tabs.select', id);
     applyStore(res.store);
-    if (res.board) applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
-    else {
-      state.board = null;
-      paint();
+    if (!usedWarm) {
+      if (res.board) applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
+      else {
+        state.board = null;
+        paint();
+      }
+    } else if (warm.frozen) {
+      warm.frozen = false;
+      warm.leftAt = Date.now();
+      await refresh();
+      const e = state.warmTabs.get(id);
+      if (e) {
+        e.board = state.board;
+        e.selectedLane = state.selectedLane;
+        e.leftAt = Date.now();
+        e.frozen = false;
+        if (e.timerId) clearInterval(e.timerId);
+        e.timerId = setInterval(() => warmRefresh(id), WARM_REFRESH_MS);
+      }
+    } else {
+      // showing cache; optional background refresh for active
+      refresh().catch(() => {});
     }
   } catch {
-    paint();
+    if (!usedWarm) paint();
   }
 }
 
@@ -1382,6 +1466,10 @@ async function refresh() {
 window.addEventListener('focus', () => { refresh(); });
 
 async function boot() {
+  try {
+    const prefs = await invoke('prefs.get');
+    if (prefs?.warmTabTtlMs) state.warmTtlMs = prefs.warmTabTtlMs;
+  } catch { /* defaults */ }
   const store = await invoke('tabs.list');
   applyStore(store);
   if (store.activeId) {
