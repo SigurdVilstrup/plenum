@@ -891,8 +891,7 @@ function openQuickStartSheet() {
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
-      <div class="eyebrow">${iconHTML('tree-structure', 'sm')}Quick start</div>
-      <h1 id="qs-title">What are lanes?</h1>
+      <h1 id="qs-title">Quick start: what are lanes?</h1>
       <div class="list">${rows}</div>
       <div class="row-end"><button class="btn primary" type="button" data-close>Done</button></div>
     </form>`);
@@ -904,7 +903,6 @@ function openWarmSheet() {
   const cur = state.prefs.warmTabTtlMs || state.warmTtlMs;
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="warm-title">
-      <div class="eyebrow">${iconHTML('clock', 'sm')}Tabs</div>
       <h1 id="warm-title">Tab warm time</h1>
       <p>How long a tab you left keeps refreshing in the background. Coming back inside that time shows the board at once.</p>
       <div class="list">
@@ -1659,7 +1657,7 @@ function paletteCommands() {
   const lane = laneByIndex(state.selectedLane);
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
-    { id: 'quickstart', label: 'Quick start · What are lanes?', run: openQuickStartSheet },
+    { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStartSheet },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },

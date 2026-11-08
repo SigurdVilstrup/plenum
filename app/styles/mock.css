@@ -34,6 +34,16 @@
   --lane-3: #d0689a;
   --lane-4: #8c6bb1;
   --scrim: rgba(1, 1, 2, 0.72);
+  --on-danger: #ffffff;
+  --traffic-close: #ff5f57;
+  --traffic-min: #febc2e;
+  --traffic-max: #28c840;
+  --traffic-edge: rgba(0, 0, 0, 0.2);
+  --shadow-window: 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 22px 60px rgba(0, 0, 0, 0.35);
+  --shadow-sheet: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --shadow-palette: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.4);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -82,6 +92,7 @@ html[data-font='ibm-plex'] {
   --lane-3: #c2558a;
   --lane-4: #7c5aa6;
   --scrim: rgba(10, 10, 11, 0.4);
+  --shadow-window: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 22px 60px rgba(0, 0, 0, 0.18);
 }
 
 * {
@@ -117,6 +128,7 @@ button {
   cursor: pointer;
 }
 
+a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -184,15 +196,7 @@ kbd {
   overflow: hidden;
   background: var(--canvas);
   border: 1px solid var(--hairline-strong);
-  box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.5),
-    0 22px 60px rgba(0, 0, 0, 0.35);
-}
-
-[data-theme='light'] .window {
-  box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.12),
-    0 22px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-window);
 }
 
 .caption {
@@ -232,17 +236,17 @@ kbd {
   height: 12px;
   border-radius: 50%;
   background: var(--hairline-strong);
-  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 0 0 0.5px var(--traffic-edge);
 }
 
 .traffic span:nth-child(1) {
-  background: #ff5f57;
+  background: var(--traffic-close);
 }
 .traffic span:nth-child(2) {
-  background: #febc2e;
+  background: var(--traffic-min);
 }
 .traffic span:nth-child(3) {
-  background: #28c840;
+  background: var(--traffic-max);
 }
 
 .appmark {
@@ -831,7 +835,7 @@ a.iconbtn,
 .modal {
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   border-top: 0;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-sheet);
 }
 
 /* Settings is a page in the main window; the sidebar's first item goes back to the board. */
@@ -1282,7 +1286,7 @@ a.navitem.back {
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-lg);
   background: var(--surface-1);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-palette);
   overflow: hidden;
 }
 
@@ -1438,6 +1442,7 @@ a.navitem {
 }
 
 .settings-body h1 {
+  text-wrap: balance;
   margin: 0 0 4px;
   font-size: 16px;
   font-weight: 600;
@@ -1525,6 +1530,10 @@ a.navitem {
   background: var(--hairline-strong);
 }
 
+.status:not(.on):not(.warn) i {
+  display: none;
+}
+
 .status.on i {
   background: var(--success);
 }
@@ -1607,7 +1616,7 @@ a.navitem {
 .btn.danger {
   background: var(--danger);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-danger);
 }
 
 .modal .list {
@@ -1642,6 +1651,7 @@ a.navitem {
 }
 
 .modal h1 {
+  text-wrap: balance;
   margin: 4px 0 6px;
   font-size: 18px;
   font-weight: 600;
