@@ -19,7 +19,7 @@ function alive(pid) {
   }
 }
 
-async function fixture() {
+async function fixture(run = 'node -e "setInterval(()=>{}, 1000)"') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-sup-'));
   const wt = path.join(os.tmpdir(), `ovl-sup-wt-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   sh(['init', '-b', 'main', root]);
@@ -37,7 +37,7 @@ async function fixture() {
     path.join(overlook, 'lane.yaml'),
     [
       'version: 1',
-      'run: node -e "setInterval(()=>{}, 1000)"',
+      `run: ${run}`,
       'ports:',
       '  offset: 100',
       '  expose:',
@@ -71,6 +71,28 @@ test('refuses primary checkout', async () => {
   try {
     await assert.rejects(() => supervisor.up(root, 0), /protected/);
   } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('up templates {port.*} in run', async () => {
+  const run = 'node -e "require(\'fs\').writeFileSync(\'port.txt\',\'{port.web}\'); setInterval(()=>{}, 1000)"';
+  const { root, wt } = await fixture(run);
+  try {
+    await supervisor.up(root, 1);
+    const portFile = path.join(wt, 'port.txt');
+    let written = '';
+    for (let i = 0; i < 50; i++) {
+      if (fs.existsSync(portFile)) {
+        written = fs.readFileSync(portFile, 'utf8');
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.equal(written, '5101');
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
   }

@@ -106,7 +106,7 @@ export async function up(root, laneIndex) {
     env[k] = renderTemplate(String(v), ctx);
   }
 
-  const child = spawn(String(manifest.run), {
+  const child = spawn(renderTemplate(String(manifest.run), ctx), {
     shell: true,
     detached: true,
     cwd,
@@ -114,6 +114,24 @@ export async function up(root, laneIndex) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  await new Promise((resolve, reject) => {
+    const onError = (err) => reject(err);
+    child.once('error', onError);
+    if (child.pid != null) {
+      child.off('error', onError);
+      resolve();
+      return;
+    }
+    child.once('spawn', () => {
+      child.off('error', onError);
+      if (child.pid == null) reject(new Error('spawn produced no pid'));
+      else resolve();
+    });
+  });
+
+  if (child.pid == null) throw new Error('spawn produced no pid');
+
+  const key = procKey(top, laneIndex);
   const entry = {
     root: top,
     laneIndex,
@@ -127,11 +145,14 @@ export async function up(root, laneIndex) {
   child.stderr.setEncoding('utf8');
   child.stdout.on('data', (d) => pushLog(entry.logs.stdout, d));
   child.stderr.on('data', (d) => pushLog(entry.logs.stderr, d));
+  child.on('error', () => {
+    if (procs.get(key) === entry) procs.delete(key);
+  });
   child.on('exit', () => {
-    if (procs.get(procKey(top, laneIndex)) === entry) procs.delete(procKey(top, laneIndex));
+    if (procs.get(key) === entry) procs.delete(key);
   });
 
-  procs.set(procKey(top, laneIndex), entry);
+  procs.set(key, entry);
   return snapshot(entry);
 }
 
@@ -155,6 +176,10 @@ export async function down(root, laneIndex) {
   killGroup(pid, 'SIGTERM');
 
   await new Promise((resolve) => {
+    if (child.exitCode != null || child.signalCode != null || child.killed || !alive(pid)) {
+      resolve();
+      return;
+    }
     const t = setTimeout(() => {
       if (alive(pid)) killGroup(pid, 'SIGKILL');
       resolve();
@@ -163,6 +188,11 @@ export async function down(root, laneIndex) {
       clearTimeout(t);
       resolve();
     });
+    // exit may have fired between the pre-check and once('exit')
+    if (child.exitCode != null || child.signalCode != null || child.killed || !alive(pid)) {
+      clearTimeout(t);
+      resolve();
+    }
   });
 
   procs.delete(key);
