@@ -11,6 +11,8 @@ const TEST_TIMEOUT_MS = 10 * 60 * 1000;
 const procs = new Map();
 /** @type {Map<string, { ok: boolean, code: number|null, at: number, log: string[] }>} */
 const lastTests = new Map();
+/** @type {Map<string, Promise<{ ok: boolean, code: number|null, at: number, log: string[] }>>} */
+const inflightTests = new Map();
 
 function procKey(root, laneIndex) {
   let abs = path.resolve(root);
@@ -221,59 +223,73 @@ export async function down(root, laneIndex) {
  * @param {{ timeoutMs?: number }} [opts]
  */
 export async function test(root, laneIndex, { timeoutMs = TEST_TIMEOUT_MS } = {}) {
-  const { top, cwd, manifest, ctx, env } = await prepareLane(root, laneIndex);
-  if (!manifest?.test) throw new Error('lane manifest has no test command');
+  const key = procKey(root, laneIndex);
+  if (inflightTests.has(key)) throw new Error('test already in progress for this lane');
 
-  const child = spawn(renderTemplate(String(manifest.test), ctx), {
-    shell: true,
-    detached: true,
-    cwd,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const run = (async () => {
+    const { top, cwd, manifest, ctx, env } = await prepareLane(root, laneIndex);
+    if (!manifest?.test) throw new Error('lane manifest has no test command');
 
-  await new Promise((resolve, reject) => {
-    const onError = (err) => reject(err);
-    child.once('error', onError);
-    if (child.pid != null) {
-      child.off('error', onError);
-      resolve();
-      return;
-    }
-    child.once('spawn', () => {
-      child.off('error', onError);
-      if (child.pid == null) reject(new Error('spawn produced no pid'));
-      else resolve();
+    const child = spawn(renderTemplate(String(manifest.test), ctx), {
+      shell: true,
+      detached: true,
+      cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-  });
 
-  if (child.pid == null) throw new Error('spawn produced no pid');
+    await new Promise((resolve, reject) => {
+      const onError = (err) => reject(err);
+      child.once('error', onError);
+      if (child.pid != null) {
+        child.off('error', onError);
+        resolve();
+        return;
+      }
+      child.once('spawn', () => {
+        child.off('error', onError);
+        if (child.pid == null) reject(new Error('spawn produced no pid'));
+        else resolve();
+      });
+    });
 
-  const log = [];
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (d) => pushLog(log, d, TEST_LOG_LINES));
-  child.stderr.on('data', (d) => pushLog(log, d, TEST_LOG_LINES));
+    if (child.pid == null) throw new Error('spawn produced no pid');
 
-  const code = await new Promise((resolve) => {
-    let settled = false;
-    const finish = (exitCode) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(exitCode);
-    };
-    const timer = setTimeout(() => {
-      if (alive(child.pid)) killGroup(child.pid, 'SIGKILL');
-      finish(null);
-    }, timeoutMs);
-    child.once('exit', (exitCode) => finish(exitCode));
-    child.once('error', () => finish(null));
-  });
+    const log = [];
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (d) => pushLog(log, d, TEST_LOG_LINES));
+    child.stderr.on('data', (d) => pushLog(log, d, TEST_LOG_LINES));
 
-  const result = { ok: code === 0, code, at: Date.now(), log: log.slice() };
-  lastTests.set(procKey(top, laneIndex), result);
-  return result;
+    const code = await new Promise((resolve) => {
+      let settled = false;
+      const finish = (exitCode) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        clearTimeout(forceDone);
+        resolve(exitCode);
+      };
+      const timer = setTimeout(() => {
+        if (alive(child.pid)) killGroup(child.pid, 'SIGKILL');
+      }, timeoutMs);
+      // ponytail: if kill doesn't reap, don't hang forever
+      const forceDone = setTimeout(() => finish(null), timeoutMs + 2000);
+      child.once('exit', (exitCode) => finish(exitCode));
+      child.once('error', () => finish(null));
+    });
+
+    const result = { ok: code === 0, code, at: Date.now(), log: log.slice() };
+    lastTests.set(procKey(top, laneIndex), result);
+    return result;
+  })();
+
+  inflightTests.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (inflightTests.get(key) === run) inflightTests.delete(key);
+  }
 }
 
 /** Force-stop every supervised process (app quit). */

@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { loadBoard } from '../git/board.mjs';
 import * as supervisor from './supervisor.mjs';
 
 function sh(args, cwd) {
@@ -137,6 +138,62 @@ test('test refuses primary checkout', async () => {
   const { root, wt } = await fixture();
   try {
     await assert.rejects(() => supervisor.test(root, 0), /protected/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('test timeout kills hang and stores failure', async () => {
+  const hang = 'node -e "require(\'fs\').writeFileSync(\'pid.txt\',String(process.pid));setInterval(()=>{},1000)"';
+  const { root, wt } = await fixture({ testCmd: hang });
+  try {
+    const result = await supervisor.test(root, 1, { timeoutMs: 300 });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, null);
+    assert.deepEqual(supervisor.getLastTest(root, 1), result);
+
+    const pidFile = path.join(wt, 'pid.txt');
+    let pid = null;
+    for (let i = 0; i < 50; i++) {
+      if (fs.existsSync(pidFile)) {
+        pid = Number(fs.readFileSync(pidFile, 'utf8'));
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.ok(pid);
+    assert.equal(alive(pid), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('loadBoard surfaces lastTest after test', async () => {
+  const { root, wt } = await fixture({ testCmd: 'node -e "process.exit(0)"' });
+  try {
+    await supervisor.test(root, 1);
+    const board = await loadBoard(root);
+    const lane = board.lanes[1];
+    assert.equal(lane.lastTest.ok, true);
+    assert.equal(lane.lastTest.code, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('test rejects overlapping run for same lane', async () => {
+  const { root, wt } = await fixture({
+    testCmd: 'node -e "setTimeout(()=>process.exit(0), 800)"',
+  });
+  try {
+    const first = supervisor.test(root, 1, { timeoutMs: 5000 });
+    await new Promise((r) => setTimeout(r, 50));
+    await assert.rejects(() => supervisor.test(root, 1), /already in progress/);
+    const result = await first;
+    assert.equal(result.ok, true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
