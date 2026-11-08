@@ -459,6 +459,7 @@ export async function loadBoard(repoPath) {
     root: trees[0].path,
     teamBranch: team,
     teamRef,
+    hasManifest: Boolean(manifest),
     readAt: Date.now(),
     stashCount,
     lanes,

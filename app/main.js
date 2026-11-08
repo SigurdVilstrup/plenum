@@ -55,6 +55,7 @@ const state = {
   prefs: {},
   identity: null,
   accounts: null,
+  repoBoards: new Map(),
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null },
@@ -1485,9 +1486,51 @@ const SETTINGS_PAGES = {
       <div class="group-head">SSH<small>Overlook never touches keys. Git uses your ssh-agent and <span class="mono">~/.ssh/config</span>.</small></div>
       <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`)}</div>`;
   },
-  repositories: () => settingsPlaceholder('Repositories', 'Per repository: lanes folder and lane setup.'),
+  repositories: () => {
+    const head = `<h1>Repositories</h1><p class="lede">Per repository: the team branch, where lanes live, and how a lane runs. Lane setup is a file in the repo, <span class="mono">.overlook/lane.yaml</span>, shared by the team and every agent.</p>`;
+    if (!state.store.tabs.length) return `${head}<div class="list">${settingsRow('folder-simple', 'No repositories open', '', 'Open one to see its settings.')}</div>`;
+    return head + state.store.tabs.map((t) => {
+      const b = state.repoBoards.get(t.path);
+      const root = b?.root || t.path;
+      const folder = state.prefs.repoOverrides?.[root]?.lanesFolder || '';
+      const setup = !b ? '<span class="status"><i></i>Checking…</span>'
+        : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
+      return `<div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
+        <div class="list">
+          ${settingsRow('shield-check', 'Team branch', 'What behind is measured against', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '')}
+          ${settingsRow('tree-structure', 'Lanes folder', 'Where new lanes are created', `Empty uses <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`)}
+          ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.overlook/lane.yaml' : 'No <span class="mono">.overlook/lane.yaml</span> yet', b?.hasManifest ? 'Lanes can start from the board.' : 'Lanes show on the board but cannot start yet.', `${setup}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run lane setup' : 'Lane setup…'}</button>`)}
+        </div>`;
+    }).join('');
+  },
+  setup: () => settingsPlaceholder('Lane setup', 'Why a second checkout cannot start today.'),
   agents: () => settingsPlaceholder('Agents', 'MCP and CLI for agents.'),
 };
+
+async function loadRepos() {
+  await Promise.all(state.store.tabs.map(async (t) => {
+    try {
+      const b = await api.invoke('board.get', t.path);
+      b.displayRoot = await prettyPath(b.root);
+      state.repoBoards.set(t.path, b);
+    } catch { /* leave as Checking… */ }
+  }));
+  if (state.settings.open && state.settings.page === 'repositories') renderSettings();
+}
+
+function bindRepos(root) {
+  root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => {
+    state.settings.setupRoot = b.dataset.setupRoot;
+    openSettings('setup');
+  }));
+  root.querySelectorAll('[data-lanes-root]').forEach((n) => n.addEventListener('change', () => {
+    const ov = { ...state.prefs.repoOverrides };
+    const v = n.value.trim();
+    if (v) ov[n.dataset.lanesRoot] = { ...ov[n.dataset.lanesRoot], lanesFolder: v };
+    else delete ov[n.dataset.lanesRoot];
+    setPref({ repoOverrides: ov }).catch(() => {});
+  }));
+}
 
 async function loadAccounts() {
   try { state.accounts = await invoke('accounts.list'); } catch { return; }
@@ -1548,6 +1591,7 @@ function openSettings(page = state.settings.page) {
   renderSettings();
   if (page === 'general') loadIdentity();
   if (page === 'accounts') loadAccounts();
+  if (page === 'repositories') loadRepos();
 }
 
 function closeSettings() {
@@ -1557,13 +1601,15 @@ function closeSettings() {
 
 function renderSettings() {
   const { page } = state.settings;
+  const lit = page === 'setup' ? 'repositories' : page; // Lane setup lives under Repositories
   const nav = SETTINGS_NAV.map(([id, ic, label]) =>
-    `<button class="navitem${id === page ? ' active' : ''}" type="button" data-page="${id}"${id === page ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
+    `<button class="navitem${id === lit ? ' active' : ''}" type="button" data-page="${id}"${id === lit ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
   el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
     <div class="heading">Settings</div>${nav}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   if (page === 'general') bindIdentity(el.settingsBody);
   if (page === 'accounts') bindAccounts(el.settingsBody);
+  if (page === 'repositories') bindRepos(el.settingsBody);
   bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
