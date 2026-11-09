@@ -381,7 +381,8 @@ ipcMain.handle('lane.conflictStage', (_e, laneIndex, file, conflictRoot) => with
 ipcMain.handle('lane.conflictContinue', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictContinue, laneIndex, conflictRoot));
 ipcMain.handle('lane.conflictAbort', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictAbort, laneIndex, conflictRoot));
 ipcMain.handle('lane.stash', (_e, laneIndex) => withRoot(ops.stashLane, laneIndex));
-ipcMain.handle('lane.stashPop', (_e, laneIndex) => withRoot(ops.stashPopLane, laneIndex));
+ipcMain.handle('lane.stashPop', (_e, laneIndex, ref) => withRoot(ops.stashPopLane, laneIndex, ref));
+ipcMain.handle('lane.stashShow', (_e, ref) => withRoot(ops.stashShow, ref));
 ipcMain.handle('lane.up', (_e, laneIndex, opts) => withRoot(async (root, idx) => {
   try {
     await supervisor.up(root, idx, opts);

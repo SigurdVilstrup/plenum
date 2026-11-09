@@ -345,10 +345,27 @@ export async function stashLane(root, laneIndex) {
   return loadBoard(root);
 }
 
-export async function stashPopLane(root, laneIndex) {
+export async function stashPopLane(root, laneIndex, ref = 'stash@{0}') {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
   if (!board.stashCount) throw new Error('No stash to pop.');
-  await git(['stash', 'pop'], lane.path);
+  const target = String(ref || 'stash@{0}').trim();
+  if (!/^stash@\{\d+\}$/.test(target)) throw new Error('Invalid stash ref.');
+  await git(['stash', 'pop', target], lane.path);
   return loadBoard(root);
+}
+
+export async function stashShow(root, ref = 'stash@{0}') {
+  const board = await loadBoard(root);
+  const cwd = board.lanes[0]?.path || root;
+  const target = String(ref || 'stash@{0}').trim();
+  if (!/^stash@\{\d+\}$/.test(target)) throw new Error('Invalid stash ref.');
+  let nameStatus = '';
+  try { nameStatus = await git(['stash', 'show', '--name-status', '--include-untracked', target], cwd); } catch { /* empty */ }
+  const files = nameStatus.split(/\n/).filter(Boolean).map((line) => {
+    const tab = line.indexOf('\t');
+    if (tab < 0) return null;
+    return { code: line.slice(0, tab), path: line.slice(tab + 1) };
+  }).filter(Boolean);
+  return { ref: target, files };
 }

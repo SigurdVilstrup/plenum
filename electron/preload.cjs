@@ -7,7 +7,7 @@ const ALLOWED = new Set([
   'lane.create', 'lane.remove', 'lane.commit', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.conflicts',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
-  'lane.stash', 'lane.stashPop',
+  'lane.stash', 'lane.stashPop', 'lane.stashShow',
   'lane.up', 'lane.down', 'lane.test', 'lane.status',
   'commit.changes',
   'file.diff', 'file.history', 'file.blame', 'file.show',

@@ -631,7 +631,7 @@ function gitActionsHTML(l) {
   if (l.isPrimary) {
     if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit on ${esc(l.name)}">${iconHTML('git-commit', 'sm')}Commit</button>`);
     if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
-    if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
+    if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop latest stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
     if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
     a.push(`<button class="btn" type="button" data-act="pull" title="Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
     return a.join('');
@@ -639,7 +639,7 @@ function gitActionsHTML(l) {
   if (l.readiness === 'safe' && !state.conflictRoot && !stashes) return a.join('');
   if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit in this lane">${iconHTML('git-commit', 'sm')}Commit</button>`);
   if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
-  if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
+  if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop latest stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
   if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
   if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase this lane onto ${esc(state.board.teamRef)}">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase on main</button>`);
   else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
@@ -776,7 +776,7 @@ async function handleAction(act, lane, url) {
       return runGit('lane.stash', lane.index, `Stashed uncommitted changes on ${lane.name}`, 'stash');
     }
     if (act === 'stashPop') {
-      return runGit('lane.stashPop', lane.index, `Popped stash onto ${lane.name}`, 'stashPop');
+      return openStashPopSheet(lane);
     }
     if (act === 'up') {
       return runUp(lane);
@@ -1104,6 +1104,67 @@ function openFeedbackSheet(seed = {}) {
   if (comment) ta.setSelectionRange(comment.length, comment.length);
 }
 
+
+
+async function openStashPopSheet(lane) {
+  const list = state.board?.stashes?.length
+    ? state.board.stashes
+    : Array.from({ length: state.board?.stashCount || 0 }, (_, i) => ({ ref: `stash@{${i}}`, age: '', subject: '' }));
+  if (!list.length) {
+    toast('No stash to pop', 'bad');
+    return;
+  }
+  let selected = list[0].ref;
+  const renderFiles = (files) => files.length
+    ? `<ul class="stash-files">${files.map((f) => `<li><span class="mono">${esc(f.code)}</span> ${esc(f.path)}</li>`).join('')}</ul>`
+    : '<p class="lede">No file list for this stash.</p>';
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="stash-pop-title">
+      <div class="eyebrow">${iconHTML('stack', 'sm')}Pop stash</div>
+      <h1 id="stash-pop-title">Choose a stash for ${esc(lane.name)}</h1>
+      <p>Plenum pops the selected entry onto this lane. Latest is selected by default.</p>
+      <div class="list" data-stash-list>
+        ${list.map((s, i) => `
+          <label class="list-row compact choice">
+            <input type="radio" name="stash" value="${esc(s.ref)}"${i === 0 ? ' checked' : ''} />
+            <div class="name"><span class="mono">${esc(s.ref)}</span>${s.age ? ` · ${esc(s.age)}` : ''}<small>${esc(s.subject || '')}</small></div>
+          </label>`).join('')}
+      </div>
+      <div class="group-head">Files in stash</div>
+      <div data-stash-files><p class="lede">Loading…</p></div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">${iconHTML('stack', 'sm')}Pop selected</button>
+      </div>
+    </form>`);
+  const modal = el.sheetLayer.querySelector('.modal');
+  const filesEl = modal.querySelector('[data-stash-files]');
+  const loadPreview = async (ref) => {
+    filesEl.innerHTML = '<p class="lede">Loading…</p>';
+    try {
+      const data = await invoke('lane.stashShow', ref);
+      filesEl.innerHTML = renderFiles(data.files || []);
+    } catch (e) {
+      filesEl.innerHTML = `<p class="lede">${esc(e.message || 'Could not load stash')}</p>`;
+    }
+  };
+  loadPreview(selected);
+  modal.querySelectorAll('input[name=stash]').forEach((input) => {
+    input.addEventListener('change', () => {
+      selected = input.value;
+      loadPreview(selected);
+    });
+  });
+  modal.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const board = await invoke('lane.stashPop', lane.index, selected);
+      closeSheet();
+      applyBoard(board);
+      toast(`Popped ${selected} onto ${lane.name}`, 'ok');
+    } catch { /* toasted */ }
+  });
+}
 
 async function openLaneFromBranch(branch) {
   const name = String(branch || '').trim();

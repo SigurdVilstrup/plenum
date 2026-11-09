@@ -167,7 +167,10 @@ test('stash and pop uncommitted', async () => {
   board = await ops.stashLane(root, 0);
   assert.equal(board.lanes[0].dirty, 0);
   assert.ok(board.stashCount >= 1);
-  board = await ops.stashPopLane(root, 0);
+  assert.ok(board.stashes?.[0]?.ref);
+  const shown = await ops.stashShow(root, board.stashes[0].ref);
+  assert.ok(shown.files.some((f) => f.path === 'stashed.txt'));
+  board = await ops.stashPopLane(root, 0, board.stashes[0].ref);
   assert.equal(board.lanes[0].dirty, 1);
 });
 

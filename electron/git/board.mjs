@@ -515,10 +515,15 @@ export async function loadBoard(repoPath) {
 
   const commits = hasCommit ? await history(top, lanes, team, teamRef) : [];
 
-  let stashCount = 0;
+  let stashes = [];
   try {
-    stashCount = (await git(['stash', 'list'], top)).split(/\n/).filter(Boolean).length;
+    const raw = await git(['stash', 'list', '--format=%gd%x1f%cr%x1f%s'], top);
+    stashes = raw.split(/\n/).filter(Boolean).map((line) => {
+      const parts = line.split(String.fromCharCode(0x1f));
+      return { ref: parts[0] || '', age: parts[1] || '', subject: parts[2] || '' };
+    });
   } catch { /* empty */ }
+  const stashCount = stashes.length;
 
   const services = manifest?.services
     ? Object.entries(manifest.services).map(([name, s]) => ({
@@ -544,6 +549,7 @@ export async function loadBoard(repoPath) {
       : null,
     readAt: Date.now(),
     stashCount,
+    stashes,
     lanes,
     branches,
     commits,
