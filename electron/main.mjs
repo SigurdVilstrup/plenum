@@ -131,6 +131,7 @@ ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds))
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
 ipcMain.handle('prefs.set', (_e, partial) => setPrefs(partial, prefsDir()));
+ipcMain.handle('app.version', () => app.getVersion());
 
 // Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
 ipcMain.handle('feedback.save', async (_e, payload) => {
