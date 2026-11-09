@@ -1,6 +1,7 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
 import { authorshipPillHTML, authorIcon, authorLabel } from './authorship-pill.js';
+import { dateBandLabel } from './date-band.js';
 import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
@@ -100,9 +101,13 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     <g>${nodes}</g>
   </svg>`;
 
+  let prevAt = null;
   const rows = commits
     .map((c) => {
       const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
+      const band = dateBandLabel(c.at, prevAt);
+      if (c.at) prevAt = c.at;
+      const bandEl = band ? `<span class="date-band">${esc(band)}</span>` : '';
       if (c.isWIP) {
         const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
         const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
@@ -129,7 +134,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
       return `<div class="row clickable${sel}${on}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="Show commit changes">
         <span></span>
-        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
+        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span>${bandEl}</span>
         <span class="who">${who}</span>
         <span class="sha">${sha}</span>
         <span class="time">${esc(c.when)}</span>

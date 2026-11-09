@@ -330,6 +330,7 @@ async function history(cwd, lanes, team, teamRef) {
     const who = classifyAuthorship(name, email, body);
     const refs = pills(decoration, team, primaryBranch, laneBranches);
     const tip = heads.has(sha) || refs.some((r) => !r.tag);
+    const at = parseInt(when, 10) || 0;
     rows.push({
       id: sha,
       lane,
@@ -337,7 +338,8 @@ async function history(cwd, lanes, team, teamRef) {
       author: name,
       kind: who.kind,
       tool: who.tool,
-      when: ago(parseInt(when, 10) || 0),
+      when: ago(at),
+      at,
       parents,
       isWIP: false,
       isMerge: parents.length > 1,
@@ -357,6 +359,7 @@ async function history(cwd, lanes, team, teamRef) {
         kind: 'human',
         tool: null,
         when: '',
+        at: 0,
         parents: [lane.head],
         isWIP: true,
         isMerge: false,
