@@ -1241,8 +1241,10 @@ function closeChanges() {
 
 function jumpToCommitOnGraph(sha) {
   if (!sha) return;
+  const hit = state.board?.commits?.find((c) => c.id === sha || c.id.startsWith(sha));
+  if (hit) state.selectedLane = hit.lane;
   state.filePane = null;
-  state.changes = { kind: 'commit', sha };
+  state.changes = { kind: 'commit', sha: hit?.id || sha };
   state.changesPaintKey = '';
   paint();
   requestAnimationFrame(() => {
