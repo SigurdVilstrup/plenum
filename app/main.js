@@ -60,6 +60,7 @@ const state = {
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, repoPath: null },
+  appVersion: '',
 };
 
 const el = {
@@ -1514,6 +1515,17 @@ const SETTINGS_PAGES = {
     const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
     const external = [['internal', 'Internal (coming soon)']];
     return `<h1>General</h1><p class="lede">How Overlook opens tools and folders on this Mac.</p>
+      <div class="group-head">About</div>
+      <div class="list">
+        ${settingsRow(
+          'stack',
+          'Version',
+          '',
+          `<span class="mono">${esc(state.appVersion || '…')}</span>`,
+          '',
+          'From package.json. Bump with npm run version:patch (or minor/major) before pack.',
+        )}
+      </div>
       <div class="group-head">Open with</div>
       <div class="list">
         ${settingsRow('cursor', 'Editor', '', '', selectHTML('editor', [['cursor', 'Cursor'], ['vscode', 'VS Code'], ['zed', 'Zed'], ['custom', 'Other app…']], p.editor, 'Editor'), 'App used for Open in editor and after you create a lane.')}
@@ -1641,7 +1653,7 @@ const SETTINGS_PAGES = {
         <div class="group-head">Local MCP</div>
         <div class="list">
           ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">overlook mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at overlook mcp. Overlook does not host an HTTP MCP port yet.')}
-          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', '<span class="status"><i></i>0.1.0</span>', 'Install the overlook binary on your PATH for shells and scripts.')}
+          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appVersion || '…')}</span>`, 'Install the overlook binary on your PATH for shells and scripts.')}
         </div>
         <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
         <div class="list">
@@ -2003,6 +2015,9 @@ async function boot() {
     state.prefs = await invoke('prefs.get');
     applyPrefs();
   } catch { /* defaults */ }
+  try {
+    state.appVersion = await invoke('app.version');
+  } catch { state.appVersion = ''; }
   const store = await invoke('tabs.list');
   applyStore(store);
   if (store.activeId) {
