@@ -339,13 +339,14 @@ function pills(decoration, team, primaryBranch, laneBranches) {
   });
 }
 
-async function history(cwd, lanes, team, teamRef) {
+async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
   const format = '%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x1f%b';
   let raw;
   try {
-    raw = await git(['log', '--date-order', '-n', '120', '--all', `--pretty=format:${format}`], cwd);
+    const n = Math.max(50, Math.min(5000, Number(limit) || 120));
+    raw = await git(['log', '--date-order', '-n', String(n), '--all', `--pretty=format:${format}`], cwd);
   } catch {
-    return [];
+    return { rows: [], scanned: 0 };
   }
   const teamSet = await shaSet(['rev-list', teamRef], cwd);
   const laneSets = new Map();
@@ -360,7 +361,7 @@ async function history(cwd, lanes, team, teamRef) {
   }
 
   // Membership only: which commits appear. Visual columns come from assignColumns below.
-  // Window is 120 until paint proves larger is fine.
+  // Initial window is small; UI can raise `historyLimit` to load older commits.
   function belongs(sha) {
     if (teamSet.has(sha)) return true;
     for (const lane of lanes) {
@@ -431,10 +432,10 @@ async function history(cwd, lanes, team, teamRef) {
     }
   }
   if (wips.length) rows.unshift(...wips);
-  return rows;
+  return { rows, scanned: raw.split("\x1e").filter(Boolean).length };
 }
 
-export async function loadBoard(repoPath) {
+export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
   const opened = path.resolve(repoPath);
   const inside = (await git(['rev-parse', '--is-inside-work-tree'], opened)).trim();
   if (inside !== 'true') throw new Error(`${opened} is not a git repository.`);
@@ -513,7 +514,15 @@ export async function loadBoard(repoPath) {
       .map((name) => ({ name }));
   } catch { /* empty */ }
 
-  const commits = hasCommit ? await history(top, lanes, team, teamRef) : [];
+  const limit = Math.max(50, Math.min(5000, Number(historyLimit) || 120));
+  let commits = [];
+  let historyHasMore = false;
+  let historyLimitUsed = limit;
+  if (hasCommit) {
+    const hist = await history(top, lanes, team, teamRef, { limit });
+    commits = hist.rows;
+    historyHasMore = hist.scanned >= limit && limit < 5000;
+  }
 
   let stashes = [];
   try {
@@ -550,6 +559,8 @@ export async function loadBoard(repoPath) {
     readAt: Date.now(),
     stashCount,
     stashes,
+    historyLimit: historyLimitUsed,
+    historyHasMore,
     lanes,
     branches,
     commits,

@@ -63,6 +63,7 @@ const state = {
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, repoPath: null },
   appInfo: { version: '', commit: '', committedAt: '' },
+  historyLimit: 120,
   editors: [],
 };
 
@@ -237,7 +238,7 @@ async function warmRefresh(id) {
     return;
   }
   try {
-    const board = await invoke('board.get', e.path);
+    const board = await invoke('board.get', e.path, { historyLimit: state.historyLimit || 120 });
     if (!board) return;
     const cur = state.warmTabs.get(id);
     if (!cur || cur.frozen) return;
@@ -251,6 +252,7 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
   const prev = state.board;
   state.board = board;
   if (board) {
+    if (board.historyLimit) state.historyLimit = board.historyLimit;
     board.displayRoot = await prettyPath(board.root);
     for (const l of board.lanes) l.displayPath = await prettyPath(l.path);
     if (enterLane != null) state.enteringLanes.add(enterLane);
@@ -309,6 +311,19 @@ function paint() {
     runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
     currentBranch: laneByIndex(state.selectedLane)?.branch || null,
   });
+  const rowsEl = el.graph.querySelector('.rows');
+  if (rowsEl && state.board.historyHasMore) {
+    let foot = rowsEl.querySelector('[data-load-older]');
+    if (!foot) {
+      foot = document.createElement('button');
+      foot.type = 'button';
+      foot.className = 'btn load-older';
+      foot.dataset.loadOlder = '1';
+      foot.textContent = 'Load older commits';
+      rowsEl.appendChild(foot);
+      foot.addEventListener('click', () => loadOlderHistory());
+    }
+  }
   if (state.changes) paintChanges();
 }
 
@@ -2275,7 +2290,17 @@ async function selectTab(id) {
 async function refresh() {
   if (!state.board) return;
   try {
-    const board = await invoke('repo.refresh');
+    const board = await invoke('repo.refresh', { historyLimit: state.historyLimit || 120 });
+    if (board) applyBoard(board);
+  } catch { /* toasted */ }
+}
+
+async function loadOlderHistory() {
+  if (!state.board?.historyHasMore) return;
+  const next = Math.min(5000, (state.historyLimit || 120) + 120);
+  state.historyLimit = next;
+  try {
+    const board = await invoke('board.get', state.board.root, { historyLimit: next });
     if (board) applyBoard(board);
   } catch { /* toasted */ }
 }

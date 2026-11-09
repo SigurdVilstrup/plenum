@@ -187,16 +187,16 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
   return { dir };
 });
 
-ipcMain.handle('board.get', async (_e, root) => loadBoard(root || activePath()));
+ipcMain.handle('board.get', async (_e, root, opts) => loadBoard(root || activePath(), opts || {}));
 ipcMain.handle('repo.setTeamBranch', async (_e, name, rootArg) => {
   const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');
   return setTeamBranch(root, name);
 });
-ipcMain.handle('repo.refresh', async () => {
+ipcMain.handle('repo.refresh', async (_e, opts) => {
   const p = activePath();
   if (!p) return null;
-  return loadBoard(p);
+  return loadBoard(p, opts || {});
 });
 /** Active tab, or another open tab's root (Settings > Repositories). Never an arbitrary path. */
 function tabRoot(root) {
