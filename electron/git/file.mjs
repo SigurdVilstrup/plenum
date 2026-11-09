@@ -36,7 +36,7 @@ function parseUnifiedHunks(patch) {
     if (!cur) continue;
     if (raw.startsWith('+')) cur.lines.push({ type: 'add', text: raw.slice(1) });
     else if (raw.startsWith('-')) cur.lines.push({ type: 'del', text: raw.slice(1) });
-    else if (raw.startsWith(' ') || raw === '') cur.lines.push({ type: 'ctx', text: raw.slice(1) });
+    else if (raw.startsWith(' ')) cur.lines.push({ type: 'ctx', text: raw.slice(1) });
     // skip "\ No newline at end of file" and diff headers
   }
   return hunks;

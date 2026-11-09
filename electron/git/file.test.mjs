@@ -38,6 +38,8 @@ test('loadFileDiff: unified hunks for a line add', async () => {
     assert.ok(lines.some((l) => l.type === 'add' && l.text === 'world'));
     assert.ok(lines.some((l) => l.type === 'ctx' && l.text === 'hello'));
     assert.ok(diff.hunks[0].header.startsWith('@@'));
+    assert.equal(lines.at(-1)?.type === 'ctx' && lines.at(-1)?.text === '', false,
+      'no phantom trailing empty ctx from split(/\\n/)');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
