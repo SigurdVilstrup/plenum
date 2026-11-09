@@ -9,7 +9,7 @@ const ALLOWED = new Set([
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
   'lane.stash', 'lane.stashPop', 'lane.stashShow',
   'lane.up', 'lane.down', 'lane.test', 'lane.status',
-  'commit.changes',
+  'commit.changes', 'file.workingDiff', 'file.workingShow',
   'file.diff', 'file.history', 'file.blame', 'file.show',
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',
   'prefs.get', 'prefs.set', 'git.identity.get', 'git.identity.set',

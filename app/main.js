@@ -1386,6 +1386,7 @@ function bindFilePaneChrome() {
       paintChanges();
     });
   });
+  // Editor button also bound in paintFilePane when present
 }
 
 function bindFilePaneJumps() {
@@ -1401,29 +1402,59 @@ function bindFilePaneJumps() {
 function filePaneStill(pane) {
   return state.filePane?.sha === pane.sha
     && state.filePane?.path === pane.path
-    && state.filePane?.mode === pane.mode;
+    && state.filePane?.mode === pane.mode
+    && state.filePane?.cwd === pane.cwd;
 }
 
 async function paintFilePane(pane) {
-  const mode = pane.mode === 'blame' || pane.mode === 'history' ? pane.mode : 'diff';
-  const title = mode === 'blame' ? 'Blame' : mode === 'history' ? 'History' : 'Diff View';
+  const wip = pane.sha === 'WORKTREE';
+  const mode = wip
+    ? (pane.mode === 'read' ? 'read' : 'diff')
+    : (pane.mode === 'blame' || pane.mode === 'history' ? pane.mode : 'diff');
+  const title = mode === 'blame' ? 'Blame' : mode === 'history' ? 'History' : mode === 'read' ? 'File' : 'Diff View';
   const modeBtn = (id, label) =>
     `<button type="button" class="file-mode-btn${mode === id ? ' on' : ''}" data-file-mode="${id}" aria-pressed="${mode === id ? 'true' : 'false'}">${label}</button>`;
+  const modes = wip
+    ? `${modeBtn('diff', 'Diff')}${modeBtn('read', 'Read')}`
+    : `${modeBtn('diff', 'Diff')}${modeBtn('blame', 'Blame')}${modeBtn('history', 'History')}`;
+  const openPath = pane.cwd ? `${pane.cwd}/${pane.path}` : pane.path;
   el.body.classList.add('with-file-pane');
   el.changes.innerHTML = `
     <div class="changes-head file-pane-head">
       <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to files" aria-label="Back to files">${iconHTML('caret-right')}</button>
       <div class="title">${title}<small>${esc(pane.path)}</small></div>
       <div class="file-pane-modes" role="group" aria-label="File view mode">
-        ${modeBtn('diff', 'Diff')}${modeBtn('blame', 'Blame')}${modeBtn('history', 'History')}
+        ${modes}
       </div>
+      <button class="btn" type="button" data-open-external title="Open in ${esc(editorName())}">${iconHTML('arrow-square-out', 'sm')}Editor</button>
       <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
     </div>
     <div class="file-pane-body" role="region" aria-label="${esc(title)}"><div class="fx-empty">Loading…</div></div>`;
   bindFilePaneChrome();
+  el.changes.querySelector('[data-open-external]')?.addEventListener('click', () => {
+    invoke('os.openEditor', openPath).catch(() => {});
+  });
   const body = el.changes.querySelector('.file-pane-body');
   try {
-    if (mode === 'diff') {
+    if (wip && mode === 'diff') {
+      const data = await invoke('file.workingDiff', pane.path, pane.cwd);
+      if (!filePaneStill(pane) || !body) return;
+      if (data.binary || data.tooLarge) {
+        body.innerHTML = `<div class="fx-empty">${data.binary ? 'Binary file' : 'File too large'} — use Editor.</div>`;
+      } else if (data.empty && !data.hunks?.length) {
+        body.innerHTML = '<div class="fx-empty">No textual changes vs HEAD</div>';
+      } else {
+        body.innerHTML = `<div class="file-pane-diff">${renderDiffBody(data.hunks)}</div>`;
+      }
+    } else if (wip && mode === 'read') {
+      const shown = await invoke('file.workingShow', pane.path, pane.cwd);
+      if (!filePaneStill(pane) || !body) return;
+      if (shown.binary || shown.tooLarge || shown.missing) {
+        body.innerHTML = `<div class="fx-empty">${shown.missing ? 'Missing on disk' : shown.binary ? 'Binary file' : 'File too large'} — use Editor.</div>`;
+      } else {
+        body.innerHTML = `<pre class="file-read mono">${esc(shown.text)}</pre>`;
+      }
+    } else if (mode === 'diff') {
       const data = await invoke('file.diff', pane.sha, pane.path);
       if (!filePaneStill(pane) || !body) return;
       body.innerHTML = `<div class="file-pane-diff">${renderDiffBody(data.hunks)}</div>`;
@@ -1515,6 +1546,10 @@ async function paintChanges() {
     await paintFilePane(state.filePane);
     return;
   }
+  if (view.kind === 'wip' && state.filePane?.sha === 'WORKTREE') {
+    await paintFilePane(state.filePane);
+    return;
+  }
   el.body.classList.remove('with-file-pane');
 
   if (view.kind === 'wip') {
@@ -1542,7 +1577,12 @@ async function paintChanges() {
             <span class="hint">⌘⏎</span>
           </div>` : ''}
       </div>`;
-    bindChangesTree(lane.path);
+    bindChangesTree(lane.path, {
+      onFile: (filePath) => {
+        state.filePane = { sha: 'WORKTREE', cwd: lane.path, path: filePath, mode: 'diff' };
+        paintChanges();
+      },
+    });
     const ta = el.changes.querySelector('.commit-msg');
     const doCommit = async () => {
       try { await commitLaneMessage(lane, ta?.value); } catch { /* toasted */ }

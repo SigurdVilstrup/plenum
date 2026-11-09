@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { git } from './run.mjs';
 
 /**
@@ -152,4 +153,55 @@ export async function loadFileShow(repoPath, sha, filePath) {
   const full = (await git(['rev-parse', id], cwd)).trim();
   const text = await git(['show', `${full}:${safe}`], cwd);
   return { sha: full, path: safe, text: String(text ?? '') };
+}
+
+
+/** Working-tree diff vs HEAD for one path (WIP peek). */
+export async function loadWorkingDiff(repoPath, filePath) {
+  const cwd = path.resolve(repoPath);
+  const safe = assertSafeRepoPath(filePath);
+  let patch = '';
+  try {
+    patch = await git(['diff', '--unified=3', 'HEAD', '--', safe], cwd);
+  } catch { /* empty */ }
+  if (!patch.trim()) {
+    // Untracked or identical to HEAD — synthesize from file on disk vs empty/HEAD blob
+    const abs = path.join(cwd, safe);
+    if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
+      return { sha: 'WORKTREE', path: safe, hunks: [], binary: false, empty: true };
+    }
+    const text = fs.readFileSync(abs, 'utf8');
+    // Heuristic: treat as all-add if untracked
+    const tracked = await git(['ls-files', '--', safe], cwd).then((s) => !!s.trim()).catch(() => false);
+    if (!tracked) {
+      const lines = text.split('\n');
+      if (lines.length && lines[lines.length - 1] === '') lines.pop();
+      return {
+        sha: 'WORKTREE',
+        path: safe,
+        hunks: [{
+          header: `@@ -0,0 +1,${lines.length} @@`,
+          lines: lines.map((text) => ({ type: 'add', text })),
+        }],
+        binary: false,
+        empty: false,
+      };
+    }
+  }
+  return { sha: 'WORKTREE', path: safe, hunks: parseUnifiedHunks(patch), binary: false, empty: !patch.trim() };
+}
+
+/** Working-tree file text for read mode. */
+export async function loadWorkingShow(repoPath, filePath) {
+  const cwd = path.resolve(repoPath);
+  const safe = assertSafeRepoPath(filePath);
+  const abs = path.join(cwd, safe);
+  if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
+    return { path: safe, text: '', missing: true };
+  }
+  const buf = fs.readFileSync(abs);
+  // Skip obvious binaries
+  if (buf.includes(0)) return { path: safe, text: '', binary: true };
+  if (buf.length > 1_500_000) return { path: safe, text: '', tooLarge: true };
+  return { path: safe, text: buf.toString('utf8'), binary: false };
 }

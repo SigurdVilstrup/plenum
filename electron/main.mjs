@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch } from './git/board.mjs';
-import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow } from './git/file.mjs';
+import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
@@ -403,6 +403,26 @@ ipcMain.handle('lane.test', (_e, laneIndex) => withRoot(async (root, idx) => {
 }));
 ipcMain.handle('commit.changes', (_e, sha) => withRoot(loadCommitChanges, sha));
 ipcMain.handle('file.diff', (_e, sha, filePath) => withRoot(loadFileDiff, sha, filePath));
+ipcMain.handle('file.workingDiff', async (_e, filePath, cwdArg) => {
+  const root = activePath();
+  if (!root) throw new Error('No repository open.');
+  const cwd = path.resolve(String(cwdArg || root));
+  const board = await loadBoard(root);
+  if (!board.lanes.some((l) => path.resolve(l.path) === cwd) && cwd !== path.resolve(root)) {
+    throw new Error('Not an open worktree.');
+  }
+  return loadWorkingDiff(cwd, filePath);
+});
+ipcMain.handle('file.workingShow', async (_e, filePath, cwdArg) => {
+  const root = activePath();
+  if (!root) throw new Error('No repository open.');
+  const cwd = path.resolve(String(cwdArg || root));
+  const board = await loadBoard(root);
+  if (!board.lanes.some((l) => path.resolve(l.path) === cwd) && cwd !== path.resolve(root)) {
+    throw new Error('Not an open worktree.');
+  }
+  return loadWorkingShow(cwd, filePath);
+});
 ipcMain.handle('file.history', (_e, filePath) => withRoot(loadFileHistory, filePath));
 ipcMain.handle('file.blame', (_e, sha, filePath) => withRoot(loadFileBlame, sha, filePath));
 ipcMain.handle('file.show', (_e, sha, filePath) => withRoot(loadFileShow, sha, filePath));

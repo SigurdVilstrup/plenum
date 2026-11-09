@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow } from './file.mjs';
+import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './file.mjs';
 
 function git(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
@@ -162,6 +162,32 @@ test('loadFileShow: returns file text at sha', async () => {
     assert.equal(shown.path, 'notes.txt');
     assert.equal(shown.text, 'alpha\nbeta\n');
     await assert.rejects(() => loadFileShow(root, sha, '../notes.txt'), /path/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadWorkingDiff: modified tracked file', async () => {
+  const root = tempRepo();
+  try {
+    fs.writeFileSync(path.join(root, 'a.txt'), 'one\n');
+    git(['add', 'a.txt'], root);
+    git(['commit', '-m', 'init'], root);
+    fs.writeFileSync(path.join(root, 'a.txt'), 'one\ntwo\n');
+    const diff = await loadWorkingDiff(root, 'a.txt');
+    assert.ok(diff.hunks.length);
+    assert.ok(diff.hunks.some((h) => h.lines.some((l) => l.type === 'add' && l.text === 'two')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadWorkingShow: reads working tree text', async () => {
+  const root = tempRepo();
+  try {
+    fs.writeFileSync(path.join(root, 'b.txt'), 'hello');
+    const shown = await loadWorkingShow(root, 'b.txt');
+    assert.equal(shown.text, 'hello');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
