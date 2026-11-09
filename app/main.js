@@ -545,10 +545,12 @@ function paintPanel() {
 
   html += `<div class="panel-foot">
     <button class="lane-row" type="button" data-settings>${iconHTML('gear-six')}<span class="name">Settings</span><kbd>⌘,</kbd></button>
+    <button class="lane-row" type="button" data-feedback>${iconHTML('pencil-simple')}<span class="name">Feedback</span></button>
   </div>`;
 
   el.panel.innerHTML = html;
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
+  el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   el.panel.querySelectorAll('[data-lane]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.selectedLane = Number(btn.dataset.lane);
@@ -887,6 +889,7 @@ function openQuickStartSheet() {
     ['cloud-arrow-down', 'Behind', 'Commits the team branch has that this lane does not.'],
     ['sparkle', 'Authorship', 'Who wrote the newest commit, read from the author and agent trailers. Human gets no pill.'],
     ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .overlook/lane.yaml. Without that file it still shows on the board.'],
+    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the row under Settings. Point at UI optional; saved on this Mac.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
@@ -1784,6 +1787,7 @@ function paletteCommands() {
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
     { id: 'quickstart', label: 'Quick start · What are lanes?', run: openQuickStartSheet },
+    { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },
@@ -1830,7 +1834,11 @@ function closePalette() {
 
 function renderPalette(q) {
   const needle = q.trim().toLowerCase();
-  const items = paletteCommands().filter((c) => !needle || c.label.toLowerCase().includes(needle));
+  const items = paletteCommands().filter((c) => {
+    if (!needle) return true;
+    if (c.label.toLowerCase().includes(needle)) return true;
+    return (c.match || []).some((m) => m.toLowerCase().includes(needle) || needle.includes(m.toLowerCase()));
+  });
   if (paletteActive >= items.length) paletteActive = Math.max(0, items.length - 1);
   el.paletteResults.innerHTML = items.map((c, i) =>
     `<button class="item${i === paletteActive ? ' active' : ''}" type="button" data-i="${i}">${iconHTML('command', 'sm')}<span>${esc(c.label)}</span></button>`).join('') || '<div class="empty">No matches</div>';
