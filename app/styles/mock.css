@@ -1289,8 +1289,8 @@ a.navitem.back {
   cursor: pointer;
 }
 
-.row.wip:hover,
-.row.wip.selected-lane:hover {
+.row.wip:hover:not(.active-commit),
+.row.wip.selected-lane:hover:not(.active-commit) {
   background: var(--surface-2);
 }
 
