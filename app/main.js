@@ -2,6 +2,7 @@ import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
 import { authorshipPillHTML, authorIcon, authorLabel } from './lib/authorship-pill.js';
 import { shouldFreeze, evictOldest, markFrozen, WARM_MAX, WARM_REFRESH_MS } from './lib/warm-tabs.js';
+import { renderDiffBody } from './lib/file-pane.js';
 
 const api = window.overlook;
 const icon = (n, c = '') => {
@@ -47,6 +48,7 @@ const state = {
   conflictRoot: null,
   branchesOpen: false,
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
+  filePane: null, // { sha, path, mode: 'diff' } | null
   collapsedDirs: new Set(),
   changesPaintKey: '',
   changesCache: null,
@@ -1217,21 +1219,52 @@ function renderDirtyTree(node, depth = 0, prefix = '') {
 function changesKey(view) {
   if (!view) return '';
   const fold = [...state.collapsedDirs].join(',');
+  const pane = state.filePane;
+  const paneKey = pane ? `${pane.sha}:${pane.path}:${pane.mode}` : '';
   if (view.kind === 'wip') {
     const lane = laneByIndex(view.laneIndex);
     const files = lane?.dirtyFiles || [];
     return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}`;
   }
-  return `c:${view.sha}:${fold}`;
+  return `c:${view.sha}:${fold}:${paneKey}`;
 }
 
 function closeChanges() {
   state.changes = null;
+  state.filePane = null;
   state.changesPaintKey = '';
   state.changesCache = null;
   el.changes.hidden = true;
   el.changes.innerHTML = '';
-  el.body.classList.remove('with-changes');
+  el.body.classList.remove('with-changes', 'with-file-pane');
+}
+
+async function paintFileDiff(pane) {
+  el.body.classList.add('with-file-pane');
+  el.changes.innerHTML = `
+    <div class="changes-head file-pane-head">
+      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to files" aria-label="Back to files">${iconHTML('caret-right')}</button>
+      <div class="title">Diff View<small>${esc(pane.path)}</small></div>
+      <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
+    </div>
+    <div class="file-pane-diff" role="region" aria-label="Unified diff"><div class="fx-empty">Loading diff…</div></div>`;
+  el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => { closeChanges(); paint(); });
+  el.changes.querySelector('[data-file-pane-back]')?.addEventListener('click', () => {
+    state.filePane = null;
+    state.changesPaintKey = '';
+    paintChanges();
+  });
+  try {
+    const data = await invoke('file.diff', pane.sha, pane.path);
+    if (state.filePane?.sha !== pane.sha || state.filePane?.path !== pane.path) return;
+    const body = el.changes.querySelector('.file-pane-diff');
+    if (body) body.innerHTML = renderDiffBody(data.hunks);
+  } catch {
+    if (state.filePane?.sha === pane.sha && state.filePane?.path === pane.path) {
+      const body = el.changes.querySelector('.file-pane-diff');
+      if (body) body.innerHTML = '<div class="fx-empty">Could not load diff</div>';
+    }
+  }
 }
 
 function bindCommitChord(textarea, onCommit) {
@@ -1258,7 +1291,7 @@ async function commitLaneMessage(lane, message) {
   return true;
 }
 
-function bindChangesTree(basePath) {
+function bindChangesTree(basePath, { onFile } = {}) {
   el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => {
     closeChanges();
     paint();
@@ -1272,7 +1305,11 @@ function bindChangesTree(basePath) {
     });
   });
   el.changes.querySelectorAll('[data-file]').forEach((btn) => {
-    btn.addEventListener('click', () => invoke('os.openEditor', `${basePath}/${btn.dataset.file}`));
+    btn.addEventListener('click', () => {
+      const filePath = btn.dataset.file;
+      if (onFile) onFile(filePath);
+      else invoke('os.openEditor', `${basePath}/${filePath}`);
+    });
   });
 }
 
@@ -1287,6 +1324,12 @@ async function paintChanges() {
   state.changesPaintKey = key;
   el.changes.hidden = false;
   el.body.classList.add('with-changes');
+
+  if (view.kind === 'commit' && state.filePane?.sha === view.sha) {
+    await paintFileDiff(state.filePane);
+    return;
+  }
+  el.body.classList.remove('with-file-pane');
 
   if (view.kind === 'wip') {
     const lane = laneByIndex(view.laneIndex);
@@ -1342,7 +1385,12 @@ async function paintChanges() {
         <div class="changes-tree" role="tree">
           ${files.length ? renderDirtyTree(tree) : '<div class="fx-empty">No file changes</div>'}
         </div>`;
-      bindChangesTree(rootPath);
+      bindChangesTree(rootPath, {
+        onFile: (filePath) => {
+          state.filePane = { sha: token, path: filePath, mode: 'diff' };
+          paintChanges();
+        },
+      });
     };
     if (state.changesCache?.sha === token) {
       renderCommit(state.changesCache.data);
@@ -1963,6 +2011,11 @@ document.addEventListener('keydown', (e) => {
       if (state.settings.page === 'setup') openSettings('repositories');
       else closeSettings();
     }
+    else if (state.filePane) {
+      state.filePane = null;
+      state.changesPaintKey = '';
+      paintChanges();
+    }
     else if (state.changes) { closeChanges(); paint(); }
   }
 });
@@ -2082,7 +2135,9 @@ el.graph.addEventListener('click', (e) => {
     if (!lane) return;
     const closing = state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index;
     state.selectedLane = lane.index;
-    state.changes = closing ? null : { kind: 'wip', laneIndex: lane.index };
+    state.filePane = null;
+    if (closing) closeChanges();
+    else state.changes = { kind: 'wip', laneIndex: lane.index };
     paint();
     return;
   }
@@ -2090,7 +2145,9 @@ el.graph.addEventListener('click', (e) => {
   if (commit && el.graph.contains(commit)) {
     const sha = commit.dataset.commit;
     const closing = state.changes?.kind === 'commit' && state.changes.sha === sha;
-    state.changes = closing ? null : { kind: 'commit', sha };
+    state.filePane = null;
+    if (closing) closeChanges();
+    else state.changes = { kind: 'commit', sha };
     paint();
   }
 });
