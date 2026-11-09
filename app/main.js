@@ -62,7 +62,7 @@ const state = {
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, repoPath: null },
-  appVersion: '',
+  appInfo: { version: '', commit: '', committedAt: '' },
   editors: [],
 };
 
@@ -148,6 +148,25 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+function formatCommitAt(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function versionDetailHTML() {
+  const { version, commit, committedAt } = state.appInfo;
+  const ver = esc(version || '…');
+  if (!commit) return `<span class="mono">${ver}</span>`;
+  const when = formatCommitAt(committedAt);
+  const line2 = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
+  return `<span class="mono">${ver}<br>${line2}</span>`;
 }
 
 function activeTab() {
@@ -1661,7 +1680,7 @@ const SETTINGS_PAGES = {
           'stack',
           'Version',
           '',
-          `<span class="mono">${esc(state.appVersion || '…')}</span>`,
+          versionDetailHTML(),
           '',
           'From package.json. Bump with npm run version:patch (or minor/major) before pack.',
         )}
@@ -1798,7 +1817,7 @@ const SETTINGS_PAGES = {
         <div class="group-head">Local MCP</div>
         <div class="list">
           ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">overlook mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at overlook mcp. Plenum does not host an HTTP MCP port yet.')}
-          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appVersion || '…')}</span>`, 'Install the overlook binary on your PATH for shells and scripts.')}
+          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appInfo.version || '…')}</span>`, 'Install the overlook binary on your PATH for shells and scripts.')}
         </div>
         <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
         <div class="list">
@@ -2174,8 +2193,17 @@ async function boot() {
     applyPrefs();
   } catch { /* defaults */ }
   try {
-    state.appVersion = await invoke('app.version');
-  } catch { state.appVersion = ''; }
+    const v = await invoke('app.version');
+    state.appInfo = (v && typeof v === 'object')
+      ? {
+          version: String(v.version || ''),
+          commit: String(v.commit || ''),
+          committedAt: String(v.committedAt || ''),
+        }
+      : { version: String(v || ''), commit: '', committedAt: '' };
+  } catch {
+    state.appInfo = { version: '', commit: '', committedAt: '' };
+  }
   try {
     state.editors = await invoke('os.editors');
   } catch { state.editors = []; }
