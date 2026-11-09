@@ -6,6 +6,7 @@ const ALLOWED = new Set([
   'os.pickFolder', 'os.reveal', 'os.openExternal', 'os.openEditor', 'os.openTerminal', 'os.displayPath',
   'lane.create', 'lane.remove', 'lane.commit', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.conflicts',
+  'branch.checkout', 'branch.rename', 'branch.delete',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
   'lane.stash', 'lane.stashPop', 'lane.stashShow',
   'lane.up', 'lane.down', 'lane.test', 'lane.status',

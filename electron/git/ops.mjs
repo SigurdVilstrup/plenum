@@ -215,11 +215,13 @@ export async function pullLane(root, laneIndex) {
   return loadBoard(root);
 }
 
-export async function rebaseLane(root, laneIndex) {
+export async function rebaseLane(root, laneIndex, onto) {
   const board = await loadBoard(root);
   const lane = assertLane(board, laneIndex);
+  const target = String(onto || '').trim() || board.teamRef;
+  if (target.startsWith('-') || target.includes('..')) throw new Error('Invalid rebase target.');
   try {
-    await git(['rebase', board.teamRef], lane.path);
+    await git(['rebase', target], lane.path);
   } catch (e) {
     const conflicts = await listConflicts(lane.path);
     if (conflicts.length) {
@@ -232,6 +234,90 @@ export async function rebaseLane(root, laneIndex) {
     }
     throw e;
   }
+  return loadBoard(root);
+}
+
+function assertBranchName(name, label = 'Branch') {
+  const n = String(name || '').trim();
+  if (!n) throw new Error(`${label} required.`);
+  if (n.startsWith('-') || n.includes('..') || /\s/.test(n)) throw new Error(`Invalid ${label.lower()} name.`);
+  return n;
+}
+
+/** Ensure local tracking branch exists for origin/foo; return local short name. */
+async function ensureLocalBranch(cwd, branch) {
+  let name = assertBranchName(branch);
+  if (name.startsWith('origin/')) {
+    const local = name.slice('origin/'.length);
+    if (!local) throw new Error('Invalid branch name.');
+    if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${local}`], cwd))) {
+      if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/${name}`], cwd))) {
+        throw new Error(`Remote branch ${name} not found.`);
+      }
+      await git(['branch', '--track', local, name], cwd);
+    }
+    return local;
+  }
+  if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], cwd))) {
+    if (await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], cwd)) {
+      await git(['branch', '--track', name, `origin/${name}`], cwd);
+      return name;
+    }
+    throw new Error(`Branch ${name} not found.`);
+  }
+  return name;
+}
+
+/**
+ * Check out a branch in a lane worktree.
+ * Primary only accepts the team branch (recovery). Prefer Open as lane for feature work.
+ */
+export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
+  const board = await loadBoard(root);
+  const lane = board.lanes.find((l) => l.index === laneIndex);
+  if (!lane) throw new Error('Lane not found.');
+  const local = await ensureLocalBranch(board.root, branch);
+  const holder = board.lanes.find((l) => l.branch === local);
+  if (holder && holder.index !== lane.index) {
+    throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}.`);
+  }
+  if (lane.isPrimary) {
+    if (local !== board.teamBranch) {
+      throw new Error(`Protected primary stays on ${board.teamBranch}. Open ${local} as a lane instead.`);
+    }
+  }
+  if (lane.dirty) throw new Error('Uncommitted changes. Stash or commit before switching branches.');
+  await git(['checkout', local], lane.path);
+  return loadBoard(root);
+}
+
+export async function renameBranch(root, from, to) {
+  const board = await loadBoard(root);
+  const src = assertBranchName(from, 'Current branch');
+  const dest = assertBranchName(to, 'New branch');
+  if (src === board.teamBranch) throw new Error(`Cannot rename team branch ${board.teamBranch}.`);
+  if (src === dest) return board;
+  if (await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${dest}`], board.root)) {
+    throw new Error(`Branch ${dest} already exists.`);
+  }
+  // Rename works from any worktree; prefer primary path.
+  await git(['branch', '-m', src, dest], board.root);
+  return loadBoard(root);
+}
+
+export async function deleteBranch(root, name, { force = false, remote = false } = {}) {
+  const board = await loadBoard(root);
+  let ref = assertBranchName(name);
+  if (remote || ref.startsWith('origin/')) {
+    const short = ref.startsWith('origin/') ? ref.slice(7) : ref;
+    if (short === board.teamBranch) throw new Error(`Cannot delete remote team branch ${short}.`);
+    await git(['push', 'origin', '--delete', short], board.root);
+    return loadBoard(root);
+  }
+  if (ref === board.teamBranch) throw new Error(`Cannot delete team branch ${ref}.`);
+  const holder = board.lanes.find((l) => l.branch === ref);
+  if (holder) throw new Error(`Branch ${ref} is checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}.`);
+  await git(['branch', force ? '-D' : '-d', ref], board.root);
   return loadBoard(root);
 }
 

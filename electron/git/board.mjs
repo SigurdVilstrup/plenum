@@ -339,6 +339,98 @@ function pills(decoration, team, primaryBranch, laneBranches) {
   });
 }
 
+/** All local + remote branches with where / vs-team / vs-upstream. */
+export async function listBranches(cwd, lanes, team, teamRef) {
+  const byLane = new Map(lanes.filter((l) => l.branch).map((l) => [l.branch, l]));
+  const locals = new Map();
+  try {
+    const raw = await git([
+      'for-each-ref', 'refs/heads',
+      '--format=%(refname:short)%09%(objectname)%09%(upstream:short)%09%(upstream:track)',
+    ], cwd);
+    for (const line of raw.split(/\n/).filter(Boolean)) {
+      const [name, head, upstream = '', track = ''] = line.split('\t');
+      let upstreamAhead = 0;
+      let upstreamBehind = 0;
+      const am = /ahead (\d+)/.exec(track);
+      const bm = /behind (\d+)/.exec(track);
+      if (am) upstreamAhead = Number(am[1]);
+      if (bm) upstreamBehind = Number(bm[1]);
+      const lane = byLane.get(name);
+      locals.set(name, {
+        name,
+        short: name,
+        remote: false,
+        head: head || '',
+        upstream: upstream || '',
+        upstreamAhead,
+        upstreamBehind,
+        hasLane: Boolean(lane),
+        laneIndex: lane ? lane.index : null,
+        isPrimary: Boolean(lane?.isPrimary),
+        isTeam: name === team,
+        hasRemote: false,
+        ahead: 0,
+        behind: 0,
+      });
+    }
+  } catch { /* empty */ }
+
+  for (const b of locals.values()) {
+    if (!b.head) continue;
+    try {
+      b.ahead = await countRange(`${teamRef}..${b.name}`, cwd);
+      b.behind = await countRange(`${b.name}..${teamRef}`, cwd);
+    } catch { /* empty */ }
+  }
+
+  const remotes = [];
+  try {
+    const raw = await git([
+      'for-each-ref', 'refs/remotes/origin',
+      '--format=%(refname:short)%09%(objectname)',
+    ], cwd);
+    for (const line of raw.split(/\n/).filter(Boolean)) {
+      const [name, head] = line.split('\t');
+      if (!name || name.endsWith('/HEAD') || name === 'origin/HEAD') continue;
+      const short = name.startsWith('origin/') ? name.slice(7) : name;
+      if (locals.has(short)) {
+        locals.get(short).hasRemote = true;
+        continue;
+      }
+      let ahead = 0;
+      let behind = 0;
+      try {
+        ahead = await countRange(`${teamRef}..${name}`, cwd);
+        behind = await countRange(`${name}..${teamRef}`, cwd);
+      } catch { /* empty */ }
+      remotes.push({
+        name,
+        short,
+        remote: true,
+        head: head || '',
+        upstream: '',
+        upstreamAhead: 0,
+        upstreamBehind: 0,
+        hasLane: false,
+        laneIndex: null,
+        isPrimary: false,
+        isTeam: short === team,
+        hasRemote: true,
+        ahead,
+        behind,
+      });
+    }
+  } catch { /* empty */ }
+
+  return [...locals.values(), ...remotes].sort((a, b) => {
+    if (a.isTeam !== b.isTeam) return a.isTeam ? -1 : 1;
+    if (a.hasLane !== b.hasLane) return a.hasLane ? -1 : 1;
+    if (a.remote !== b.remote) return a.remote ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
   const format = '%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x1f%b';
   let raw;
@@ -360,6 +452,23 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
     primaryOnly = await shaSet(['rev-list', lanes[0].branch, '--not', teamRef], cwd);
   }
 
+  // Include every local tip so the graph is a multi-branch overview (#18), not lane-only.
+  const localHeads = new Set();
+  const orphanSets = [];
+  const allLocals = new Set();
+  try {
+    const tipRaw = await git(['for-each-ref', 'refs/heads', '--format=%(refname:short)%09%(objectname)'], cwd);
+    const laneNames = new Set(lanes.map((l) => l.branch).filter(Boolean));
+    for (const line of tipRaw.split(/\n/).filter(Boolean)) {
+      const [name, head] = line.split('\t');
+      if (!name) continue;
+      allLocals.add(name);
+      if (head) localHeads.add(head);
+      if (laneNames.has(name) || name === team) continue;
+      orphanSets.push(await shaSet(['rev-list', name, '--not', teamRef], cwd));
+    }
+  } catch { /* empty */ }
+
   // Membership only: which commits appear. Visual columns come from assignColumns below.
   // Initial window is small; UI can raise `historyLimit` to load older commits.
   function belongs(sha) {
@@ -368,11 +477,15 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
       if (lane.index > 0 && laneSets.get(lane.index)?.has(sha)) return true;
     }
     if (primaryOnly.has(sha)) return true;
+    if (localHeads.has(sha)) return true;
+    for (const s of orphanSets) {
+      if (s.has(sha)) return true;
+    }
     return false;
   }
 
-  const heads = new Set(lanes.map((l) => l.head).filter(Boolean));
-  const laneBranches = new Set(lanes.map((l) => l.branch).filter(Boolean));
+  const heads = new Set([...lanes.map((l) => l.head).filter(Boolean), ...localHeads]);
+  const laneBranches = allLocals.size ? allLocals : new Set(lanes.map((l) => l.branch).filter(Boolean));
   const primaryBranch = lanes[0]?.branch;
   const rows = [];
 
@@ -512,16 +625,9 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
     });
   }
 
-  const checked = new Set(lanes.map((l) => l.branch).filter(Boolean));
   let branches = [];
   try {
-    const names = await git(['for-each-ref', 'refs/heads', '--format=%(refname:short)'], top);
-    branches = names
-      .split(/\n/)
-      .filter(Boolean)
-      .filter((n) => !checked.has(n))
-      .sort()
-      .map((name) => ({ name }));
+    branches = await listBranches(top, lanes, team, teamRef);
   } catch { /* empty */ }
 
   const limit = Math.max(50, Math.min(5000, Number(historyLimit) || 120));

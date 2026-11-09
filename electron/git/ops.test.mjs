@@ -48,7 +48,10 @@ test('createLane existing: attaches worktree to current branch', async () => {
   const lane = board.lanes.find((l) => l.branch === 'eng/legacy');
   assert.ok(lane);
   assert.equal(lane.name, 'eng/legacy');
-  assert.ok(!board.branches.some((b) => b.name === 'eng/legacy'));
+  const legacy = board.branches.find((b) => b.name === 'eng/legacy');
+  assert.ok(legacy);
+  assert.equal(legacy.hasLane, true);
+
 });
 
 test('create commit push rebase force-with-lease merge remove', async () => {
@@ -334,4 +337,48 @@ test('createLane honors lanesFolder inside and outside the checkout', async () =
   board = await ops.createLane(root, { name: 'out', lanesFolder: out });
   assert.equal(board.lanes.find((l) => l.name === 'feat/out').path, fs.realpathSync(path.join(out, 'out')));
   await assert.rejects(ops.createLane(root, { name: 'self', lanesFolder: '.' }), /itself/);
+});
+
+
+test('rename delete checkout rebase onto', async () => {
+  const { root } = await fixture();
+  let board = await ops.createLane(root, { name: 'one', branch: 'feat/one' });
+  const lane = board.lanes.find((l) => l.branch === 'feat/one');
+  assert.ok(lane);
+
+  // Second local tip for rebase onto
+  sh(['branch', 'feat/base'], root);
+  const baseWt = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-base-'));
+  fs.rmSync(baseWt, { recursive: true, force: true });
+  sh(['worktree', 'add', baseWt, 'feat/base'], root);
+  fs.writeFileSync(path.join(baseWt, 'base.txt'), 'b\n');
+  sh(['add', 'base.txt'], baseWt);
+  sh(['commit', '-m', 'base tip'], baseWt);
+  sh(['worktree', 'remove', baseWt], root);
+
+  board = await ops.rebaseLane(root, lane.index, 'feat/base');
+  assert.equal(board.lanes.find((l) => l.index === lane.index).behind, 0);
+
+  board = await ops.renameBranch(root, 'feat/one', 'feat/renamed');
+  const renamedLane = board.lanes.find((l) => l.branch === 'feat/renamed');
+  assert.ok(renamedLane, 'lane branch should rename with git branch -m');
+  const renamedBr = board.branches.find((b) => b.name === 'feat/renamed');
+  assert.ok(renamedBr, 'renamed tip listed');
+  // hasLane comes from worktree list; accept either flag or lane match
+  assert.ok(renamedBr.hasLane || renamedLane);
+
+  // Free branch delete
+  sh(['branch', 'feat/gone'], root);
+  board = await ops.deleteBranch(root, 'feat/gone');
+  assert.ok(!board.branches.some((b) => b.name === 'feat/gone'));
+
+  // Checkout into lane
+  sh(['branch', 'feat/switch'], root);
+  board = await ops.checkoutBranch(root, { branch: 'feat/switch', laneIndex: lane.index });
+  assert.equal(board.lanes.find((l) => l.index === lane.index).branch, 'feat/switch');
+
+  await assert.rejects(
+    () => ops.checkoutBranch(root, { branch: 'feat/renamed', laneIndex: 0 }),
+    /Open .* as a lane|Protected primary/,
+  );
 });

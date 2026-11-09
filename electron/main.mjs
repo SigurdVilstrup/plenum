@@ -358,14 +358,17 @@ ipcMain.handle('lane.remove', (_e, laneIndex) => withRoot(ops.removeLane, laneIn
 ipcMain.handle('lane.commit', (_e, laneIndex, message) => withRoot(ops.commitLane, laneIndex, message));
 ipcMain.handle('lane.push', (_e, laneIndex) => withRoot(ops.pushLane, laneIndex));
 ipcMain.handle('lane.pull', (_e, laneIndex) => withRoot(ops.pullLane, laneIndex));
-ipcMain.handle('lane.rebase', async (_e, laneIndex) => {
+ipcMain.handle('lane.rebase', async (_e, laneIndex, onto) => {
   try {
-    return await withRoot(ops.rebaseLane, laneIndex);
+    return await withRoot(ops.rebaseLane, laneIndex, onto);
   } catch (e) {
-    if (e.code === 'CONFLICT') return { conflict: true, conflicts: e.conflicts, operation: e.operation };
+    if (e.code === 'CONFLICT') return { conflict: true, conflicts: e.conflicts, operation: e.operation, conflictRoot: e.conflictRoot };
     throw e;
   }
 });
+ipcMain.handle('branch.checkout', (_e, payload) => withRoot((root) => ops.checkoutBranch(root, payload || {})));
+ipcMain.handle('branch.rename', (_e, from, to) => withRoot(ops.renameBranch, from, to));
+ipcMain.handle('branch.delete', (_e, name, opts) => withRoot(ops.deleteBranch, name, opts || {}));
 ipcMain.handle('lane.merge', async (_e, laneIndex, opts) => {
   try {
     return await withRoot(ops.mergeLaneIntoMain, laneIndex, opts);

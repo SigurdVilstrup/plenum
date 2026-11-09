@@ -252,3 +252,39 @@ test('loadBoard: bad lane.yaml still loads board as not runnable', async () => {
     fs.rmSync(wt, { recursive: true, force: true });
   }
 });
+
+
+test('listBranches overview: locals remotes lane flags', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-br-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-bare-')) + '.git';
+  fs.rmSync(bare, { recursive: true, force: true });
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'T'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'a.txt'), 'a\n');
+    git(['add', 'a.txt'], root);
+    git(['commit', '-m', 'base'], root);
+    git(['init', '--bare', '-b', 'main', bare]);
+    git(['remote', 'add', 'origin', bare], root);
+    git(['push', '-u', 'origin', 'main'], root);
+    git(['branch', 'feat/solo'], root);
+    git(['push', 'origin', 'feat/solo'], root);
+    git(['branch', '-d', 'feat/solo'], root); // leave remote-only
+    git(['branch', 'feat/local'], root);
+
+    const board = await loadBoard(root);
+    const local = board.branches.find((b) => b.name === 'feat/local');
+    const remote = board.branches.find((b) => b.name === 'origin/feat/solo');
+    const team = board.branches.find((b) => b.name === 'main');
+    assert.ok(local && !local.hasLane && !local.remote);
+    assert.ok(remote && remote.remote && !remote.hasLane);
+    assert.ok(team && team.isTeam && team.hasLane);
+    // Orphan local tip should appear in graph refs
+    assert.ok(board.commits.some((c) => (c.refs || []).some((r) => r.name === 'feat/local')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
