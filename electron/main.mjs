@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { loadBoard, loadCommitChanges, displayPath } from './git/board.mjs';
+import { loadFileDiff } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
@@ -386,3 +387,4 @@ ipcMain.handle('lane.test', (_e, laneIndex) => withRoot(async (root, idx) => {
   return loadBoard(root);
 }));
 ipcMain.handle('commit.changes', (_e, sha) => withRoot(loadCommitChanges, sha));
+ipcMain.handle('file.diff', (_e, sha, filePath) => withRoot(loadFileDiff, sha, filePath));
