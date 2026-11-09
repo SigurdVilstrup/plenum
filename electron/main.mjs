@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
-import { loadBoard, loadCommitChanges, displayPath } from './git/board.mjs';
+import { loadBoard, loadCommitChanges, displayPath, setTeamBranch } from './git/board.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
 import * as tabs from './tabs.mjs';
@@ -188,6 +188,11 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
 });
 
 ipcMain.handle('board.get', async (_e, root) => loadBoard(root || activePath()));
+ipcMain.handle('repo.setTeamBranch', async (_e, name, rootArg) => {
+  const root = tabRoot(rootArg);
+  if (!root) throw new Error('No repository open.');
+  return setTeamBranch(root, name);
+});
 ipcMain.handle('repo.refresh', async () => {
   const p = activePath();
   if (!p) return null;

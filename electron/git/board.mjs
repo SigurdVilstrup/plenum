@@ -73,16 +73,19 @@ function parseWorktrees(text) {
   return out;
 }
 
-async function teamBranch(cwd) {
+async function branchExists(name, cwd) {
+  if (!name) return false;
+  return gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], cwd)
+    || gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], cwd);
+}
+
+async function detectTeamBranch(cwd) {
   try {
     const raw = (await git(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], cwd)).trim();
     if (raw) return raw.startsWith('origin/') ? raw.slice(7) : raw;
   } catch { /* fall through */ }
   for (const c of ['main', 'master', 'develop']) {
-    if (await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${c}`], cwd)
-      || await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${c}`], cwd)) {
-      return c;
-    }
+    if (await branchExists(c, cwd)) return c;
   }
   try {
     const h = (await git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).trim();
@@ -90,6 +93,30 @@ async function teamBranch(cwd) {
   } catch {
     return 'main';
   }
+}
+
+/** Local `git config overlook.teamBranch` wins when the ref exists. */
+async function teamBranch(cwd) {
+  try {
+    const override = (await git(['config', '--local', '--get', 'overlook.teamBranch'], cwd)).trim();
+    if (override && await branchExists(override, cwd)) {
+      return { name: override, source: 'override' };
+    }
+  } catch { /* fall through */ }
+  return { name: await detectTeamBranch(cwd), source: 'detected' };
+}
+
+export async function setTeamBranch(repoPath, name) {
+  const cwd = path.resolve(repoPath);
+  const branch = String(name || '').trim();
+  if (!branch) {
+    try { await git(['config', '--local', '--unset', 'overlook.teamBranch'], cwd); } catch { /* none */ }
+    return loadBoard(cwd);
+  }
+  if (!/^[A-Za-z0-9._/-]+$/.test(branch)) throw new Error('Invalid branch name.');
+  if (!(await branchExists(branch, cwd))) throw new Error(`Branch ${branch} not found locally or on origin.`);
+  await git(['config', '--local', 'overlook.teamBranch', branch], cwd);
+  return loadBoard(cwd);
 }
 
 async function resolveTeamRef(branch, cwd) {
@@ -415,7 +442,9 @@ export async function loadBoard(repoPath) {
   const trees = parseWorktrees(await git(['worktree', 'list', '--porcelain'], top));
   if (!trees.length) throw new Error(`${opened} is not a git repository.`);
 
-  const team = await teamBranch(top);
+  const teamInfo = await teamBranch(top);
+  const team = teamInfo.name;
+  const teamBranchSource = teamInfo.source;
   const teamRef = await resolveTeamRef(team, top);
   const hasCommit = await gitOk(['rev-parse', '--verify', '--quiet', 'HEAD'], top);
   let manifest = null;
@@ -502,6 +531,7 @@ export async function loadBoard(repoPath) {
     repoName: path.basename(trees[0].path),
     root: trees[0].path,
     teamBranch: team,
+    teamBranchSource,
     teamRef,
     hasManifest: Boolean(manifest),
     manifestSummary: manifest

@@ -1783,7 +1783,7 @@ const SETTINGS_PAGES = {
     return `${head}${picker}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
-        ${settingsRow('shield-check', 'Team branch', 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', '', 'Detected from the remote default / origin. Behind on the board is measured against this ref.')}
+        ${settingsRow('shield-check', 'Team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? `<input class="input mono" data-team-root="${esc(root)}" value="${esc(b.teamBranch)}" placeholder="main" aria-label="Team branch for ${esc(t.title)}" />` : '', 'Integration branch for behind / create lane / merge. Blank + Save clears override and re-detects from origin. Stored as local git config overlook.teamBranch.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'Override only for this repo. Relative paths are under the checkout; absolute paths are allowed.')}
         ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.overlook/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Run the doctor and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .overlook/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared means one instance for every lane; snapshot seeds a copy before Run.')}
@@ -1901,6 +1901,17 @@ function bindRepos(root) {
     if (v) ov[n.dataset.lanesRoot] = { ...ov[n.dataset.lanesRoot], lanesFolder: v };
     else delete ov[n.dataset.lanesRoot];
     setPref({ repoOverrides: ov }, false).catch(() => {});
+  }));
+  root.querySelectorAll('[data-team-root]').forEach((n) => n.addEventListener('change', async () => {
+    const rootPath = n.dataset.teamRoot;
+    try {
+      const board = await invoke('repo.setTeamBranch', n.value.trim(), rootPath);
+      board.displayRoot = await prettyPath(board.root);
+      state.repoBoards.set(rootPath, board);
+      if (board.root === state.board?.root) applyBoard(board);
+      toast(n.value.trim() ? `Team branch → ${board.teamBranch}` : 'Team branch re-detected', 'ok');
+      renderSettings();
+    } catch { /* toasted */ }
   }));
 }
 

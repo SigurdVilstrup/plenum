@@ -115,6 +115,41 @@ test('loadBoard: unpushed tracks origin/branch, not team ahead', async () => {
   }
 });
 
+
+test('loadBoard: overlook.teamBranch git config overrides detection', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-bare-')) + '.git';
+  fs.rmSync(bare, { recursive: true, force: true });
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'Tester'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'hello');
+    git(['add', 'README'], root);
+    git(['commit', '-m', 'init'], root);
+    git(['branch', 'develop'], root);
+    git(['init', '--bare', '-b', 'main', bare]);
+    git(['remote', 'add', 'origin', bare], root);
+    git(['push', '-u', 'origin', 'main'], root);
+    git(['push', 'origin', 'develop'], root);
+    git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'], root);
+
+    let board = await loadBoard(root);
+    assert.equal(board.teamBranch, 'main');
+    assert.equal(board.teamBranchSource, 'detected');
+
+    git(['config', 'overlook.teamBranch', 'develop'], root);
+    board = await loadBoard(root);
+    assert.equal(board.teamBranch, 'develop');
+    assert.equal(board.teamRef, 'origin/develop');
+    assert.equal(board.teamBranchSource, 'override');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
+
 test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
   const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);

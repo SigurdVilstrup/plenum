@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 const ALLOWED = new Set([
   'tabs.list', 'tabs.open', 'tabs.select', 'tabs.close', 'tabs.rename', 'tabs.setIcon', 'tabs.reorder',
-  'board.get', 'repo.refresh', 'repo.doctor', 'repo.acceptManifest',
+  'board.get', 'repo.refresh', 'repo.doctor', 'repo.acceptManifest', 'repo.setTeamBranch',
   'os.pickFolder', 'os.reveal', 'os.openExternal', 'os.openEditor', 'os.openTerminal', 'os.displayPath',
   'lane.create', 'lane.remove', 'lane.commit', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.conflicts',
