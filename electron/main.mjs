@@ -14,9 +14,11 @@ import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
 import { paintHighlight, writeFeedbackReport, collectFeedbackEnv } from './feedback.mjs';
+import { readBuildInfo } from './build-info.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
+const buildInfoPath = path.join(__dirname, 'build-info.json');
 
 /** `~` and `~/x` to the home dir; anything else unchanged. */
 function expandHome(p) {
@@ -132,7 +134,14 @@ ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds))
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
 ipcMain.handle('prefs.set', (_e, partial) => setPrefs(partial, prefsDir()));
-ipcMain.handle('app.version', () => app.getVersion());
+ipcMain.handle('app.version', () => {
+  const info = readBuildInfo(buildInfoPath);
+  return {
+    version: app.getVersion(),
+    commit: info.commit,
+    committedAt: info.committedAt,
+  };
+});
 ipcMain.handle('os.editors', () => listEditors());
 
 // Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
