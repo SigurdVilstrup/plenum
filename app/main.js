@@ -46,7 +46,8 @@ const state = {
   flashMarks: new Set(),
   busy: false,
   conflictRoot: null,
-  branchesOpen: false,
+  branchesOpen: true,
+  branchFilter: 'all',
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
@@ -593,16 +594,66 @@ function paintPanel() {
   }
 
   const branches = b.branches || [];
-  const branchBody = branches.length
-    ? branches.map((br) => `<div class="lane-row static" title="${esc(br.name)}">${iconHTML('git-branch', 'sm')}<span class="name">${esc(br.name)}</span><button class="btn" type="button" data-open-as-lane="${esc(br.name)}" title="Create a lane on ${esc(br.name)}">Open as lane</button></div>`).join('')
+  const filter = state.branchFilter || 'all';
+  const visible = branches.filter((br) => {
+    if (filter === 'lanes') return br.hasLane;
+    if (filter === 'local') return !br.remote;
+    if (filter === 'remote') return br.remote;
+    if (filter === 'free') return !br.hasLane;
+    return true;
+  });
+  const branchBody = visible.length
+    ? visible.map((br) => {
+      const where = br.isPrimary
+        ? 'primary'
+        : br.hasLane
+          ? 'lane'
+          : br.remote
+            ? 'remote'
+            : 'local';
+      const rel = [];
+      if (br.behind) rel.push(`${br.behind}↓`);
+      if (br.ahead) rel.push(`${br.ahead}↑`);
+      const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '·');
+      const title = [
+        br.name,
+        where,
+        br.upstream ? `tracks ${br.upstream}` : '',
+        br.behind || br.ahead ? `vs ${b.teamBranch}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
+      ].filter(Boolean).join(' · ');
+      const actions = [];
+      if (br.hasLane) {
+        actions.push(`<button class="btn" type="button" data-branch-select="${br.laneIndex}" title="Select lane">Select</button>`);
+      } else if (!br.isTeam) {
+        actions.push(`<button class="btn" type="button" data-open-as-lane="${esc(br.name)}" title="Create a lane on ${esc(br.name)}">Open as lane</button>`);
+      }
+      actions.push(`<button class="iconbtn" type="button" data-branch-more="${esc(br.name)}" aria-label="Branch actions">${iconHTML('list', 'sm')}</button>`);
+      return `<div class="lane-row branch-row" title="${esc(title)}" data-branch-name="${esc(br.name)}">
+        ${iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm')}
+        <span class="name">${esc(br.short || br.name)}</span>
+        <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}">${esc(relTxt)}</span>
+        <span class="branch-where">${esc(where)}</span>
+        <span class="branch-acts">${actions.join('')}</span>
+      </div>`;
+    }).join('')
     : `<div class="empty-note">None</div>`;
+  const filters = [
+    ['all', 'All'],
+    ['lanes', 'Lanes'],
+    ['local', 'Local'],
+    ['remote', 'Remote'],
+    ['free', 'No lane'],
+  ].map(([id, label]) => `<button class="chip${filter === id ? ' on' : ''}" type="button" data-branch-filter="${id}">${label}</button>`).join('');
   html += `<div class="section">
     <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}">
       <span class="mark">${iconHTML('caret-right')}</span>
-      <span class="name" style="color: var(--ink-subtle)">Branches without a lane</span>
+      <span class="name" style="color: var(--ink-subtle)">Branches</span>
       <span class="meta">${branches.length}</span>
     </button>
-    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${branchBody}</div>
+    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>
+      <div class="branch-filters">${filters}</div>
+      ${branchBody}
+    </div>
   </div>`;
 
   html += `<div class="panel-foot">
@@ -637,6 +688,26 @@ function paintPanel() {
       openLaneFromBranch(btn.dataset.openAsLane);
     });
   });
+  el.panel.querySelectorAll('[data-branch-filter]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.branchFilter = btn.dataset.branchFilter;
+      paint();
+    });
+  });
+  el.panel.querySelectorAll('[data-branch-select]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.selectedLane = Number(btn.dataset.branchSelect);
+      paint();
+    });
+  });
+  el.panel.querySelectorAll('[data-branch-more]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openBranchActions(btn.dataset.branchMore);
+    });
+  });
 }
 
 function gitActionsHTML(l) {
@@ -656,7 +727,7 @@ function gitActionsHTML(l) {
   if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
   if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop latest stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
   if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
-  if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase this lane onto ${esc(state.board.teamRef)}">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase on main</button>`);
+  if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase this lane onto a chosen tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
   else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
   if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push (force-with-lease after rebase)">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
   a.push(`<button class="btn" type="button" data-act="pull" title="Pull ff-only">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
@@ -779,9 +850,7 @@ async function handleAction(act, lane, url) {
       return runGit('lane.pull', lane.index, `Pulled ${lane.name} from origin`, 'pull');
     }
     if (act === 'rebase') {
-      const team = state.board?.teamRef || 'main';
-      return runConflictable('lane.rebase', lane, undefined, 'rebase',
-        `Rebased ${lane.name} onto ${team}`);
+      return openRebaseOntoSheet(lane);
     }
     if (act === 'merge') return openMergeSheet(lane);
     if (act === 'remove') return openRemoveSheet(lane);
@@ -1178,6 +1247,154 @@ async function openStashPopSheet(lane) {
       applyBoard(board);
       toast(`Popped ${selected} onto ${lane.name}`, 'ok');
     } catch { /* toasted */ }
+  });
+}
+
+function branchByName(name) {
+  return (state.board?.branches || []).find((b) => b.name === name || b.short === name);
+}
+
+function openBranchActions(name) {
+  const br = branchByName(name);
+  if (!br) return;
+  const team = state.board?.teamBranch || 'main';
+  const lane = laneByIndex(state.selectedLane);
+  const canCheckout = lane && !lane.isPrimary && !br.hasLane;
+  const canRename = !br.remote && !br.isTeam && !br.isPrimary;
+  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="branch-act-title">
+      <div class="eyebrow">${iconHTML('git-branch', 'sm')}Branch</div>
+      <h1 id="branch-act-title">${esc(br.name)}</h1>
+      <p>${br.hasLane ? 'Checked out in a worktree.' : br.remote ? 'Remote-only tip.' : 'Local branch without a lane.'}
+      ${br.behind || br.ahead ? ` vs ${esc(team)}: ${br.behind || 0} behind, ${br.ahead || 0} ahead.` : ''}</p>
+      <div class="list">
+        ${br.hasLane ? `<button class="list-row compact choice" type="button" data-act="select">Select lane</button>` : ''}
+        ${!br.hasLane && !br.isTeam ? `<button class="list-row compact choice" type="button" data-act="open-lane">Open as lane</button>` : ''}
+        ${canCheckout ? `<button class="list-row compact choice" type="button" data-act="checkout">Check out in ${esc(lane.name)}</button>` : ''}
+        ${canRename ? `<button class="list-row compact choice" type="button" data-act="rename">Rename…</button>` : ''}
+        ${canDelete ? `<button class="list-row compact choice" type="button" data-act="delete">Delete…</button>` : ''}
+        ${lane && !lane.isPrimary ? `<button class="list-row compact choice" type="button" data-act="rebase-onto">Rebase ${esc(lane.name)} onto this</button>` : ''}
+      </div>
+      <div class="row-end"><button class="btn" type="button" data-close>Close</button></div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  form.querySelectorAll('[data-act]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const act = btn.dataset.act;
+      if (act === 'select') {
+        closeSheet();
+        state.selectedLane = br.laneIndex;
+        paint();
+        return;
+      }
+      if (act === 'open-lane') {
+        closeSheet();
+        return openLaneFromBranch(br.name);
+      }
+      if (act === 'checkout') {
+        closeSheet();
+        try {
+          const board = await invoke('branch.checkout', { branch: br.name, laneIndex: lane.index });
+          applyBoard(board, { selectLane: lane.index });
+          toast(`Checked out ${br.short || br.name} in ${lane.name}`, 'ok');
+        } catch { /* toasted */ }
+        return;
+      }
+      if (act === 'rename') {
+        closeSheet();
+        return openRenameBranchSheet(br);
+      }
+      if (act === 'delete') {
+        closeSheet();
+        return openDeleteBranchSheet(br);
+      }
+      if (act === 'rebase-onto') {
+        closeSheet();
+        return runConflictable('lane.rebase', lane, br.name, 'rebase',
+          `Rebased ${lane.name} onto ${br.name}`);
+      }
+    });
+  });
+}
+
+function openRenameBranchSheet(br) {
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="rename-br-title">
+      <div class="eyebrow">${iconHTML('git-branch', 'sm')}Rename branch</div>
+      <h1 id="rename-br-title">${esc(br.name)}</h1>
+      <label class="field">New name<input name="to" class="input mono" value="${esc(br.name)}" required autofocus /></label>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Rename</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const to = form.querySelector('[name=to]').value.trim();
+    try {
+      const board = await invoke('branch.rename', br.name, to);
+      closeSheet();
+      applyBoard(board);
+      toast(`Renamed ${br.name} → ${to}`, 'ok');
+    } catch { /* toasted */ }
+  });
+}
+
+function openDeleteBranchSheet(br) {
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="del-br-title">
+      <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Delete branch</div>
+      <h1 id="del-br-title">${esc(br.name)}</h1>
+      <p>Removes the ${br.remote ? 'remote' : 'local'} ref. Checked-out branches and the team branch stay blocked.</p>
+      ${!br.remote ? `<label class="check"><input type="checkbox" name="force" /> Force delete even if not merged</label>` : ''}
+      ${!br.remote && br.hasRemote ? `<label class="check"><input type="checkbox" name="remote" /> Also delete origin/${esc(br.short || br.name)}</label>` : ''}
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn danger" type="submit">Delete</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const force = Boolean(form.querySelector('[name=force]')?.checked);
+    const alsoRemote = Boolean(form.querySelector('[name=remote]')?.checked);
+    try {
+      let board = await invoke('branch.delete', br.name, { force, remote: br.remote });
+      if (alsoRemote && !br.remote) {
+        board = await invoke('branch.delete', `origin/${br.short || br.name}`, { remote: true });
+      }
+      closeSheet();
+      applyBoard(board);
+      toast(`Deleted ${br.name}`, 'ok');
+    } catch { /* toasted */ }
+  });
+}
+
+function openRebaseOntoSheet(lane) {
+  const team = state.board?.teamRef || 'main';
+  const opts = (state.board?.branches || [])
+    .filter((br) => !br.remote || true)
+    .map((br) => `<option value="${esc(br.name)}"${br.name === team || br.isTeam ? ' selected' : ''}>${esc(br.name)}${br.isTeam ? ' (team)' : ''}</option>`)
+    .join('');
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="rebase-onto-title">
+      <div class="eyebrow">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</div>
+      <h1 id="rebase-onto-title">${esc(lane.name)}</h1>
+      <p>Default is the team tip. Pick any local or remote tip as the new base.</p>
+      <label class="field">Onto<select name="onto" class="input">${opts}</select></label>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Rebase</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const onto = form.querySelector('[name=onto]').value;
+    closeSheet();
+    await runConflictable('lane.rebase', lane, onto, 'rebase', `Rebased ${lane.name} onto ${onto}`);
   });
 }
 

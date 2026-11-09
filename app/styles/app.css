@@ -150,7 +150,8 @@ input, textarea, [contenteditable="true"] {
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-.lane-row.static { cursor: default; pointer-events: none; }
+.lane-row.static { cursor: default; }
+.lane-row.static > :not(button) { pointer-events: none; }
 
 .branch-list {
   padding: 2px 0 6px 28px;
@@ -623,4 +624,54 @@ button.env-link {
 .window.app .panel .lane-row .meta {
   font-size: 11px;
   color: var(--ink-tertiary);
+}
+
+/* #14 / #18 — branch overview */
+.branch-list {
+  padding: 2px 0 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.branch-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 4px 8px;
+}
+.branch-filters .chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-tertiary);
+}
+.branch-filters .chip.on {
+  background: var(--surface-3);
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.branch-row {
+  grid-template-columns: 16px minmax(0, 1fr) auto auto auto;
+  column-gap: 8px;
+  pointer-events: auto;
+  cursor: default;
+}
+.branch-row .branch-where {
+  font-size: 10px;
+  color: var(--ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.branch-row .branch-acts {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  opacity: 0.7;
+}
+.branch-row:hover .branch-acts { opacity: 1; }
+.branch-row .btn {
+  font-size: 11px;
+  padding: 2px 6px;
 }
