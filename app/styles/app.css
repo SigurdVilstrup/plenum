@@ -581,3 +581,46 @@ button.env-link {
   max-height: 100%;
   overflow: auto;
 }
+
+/* #7 — left rail density + calm fold-out (overlay changes, stable graph) */
+:root {
+  --rail-w: 300px;
+}
+.window.app .body {
+  grid-template-columns: var(--rail-w) 1fr;
+  position: relative;
+}
+.window.app .body.with-changes,
+.window.app .body.with-changes.with-file-pane {
+  grid-template-columns: var(--rail-w) 1fr;
+}
+.window.app .body.with-changes #changes {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 40vw);
+  z-index: 6;
+  border-left: 1px solid var(--hairline-strong);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
+  background: var(--surface-1);
+}
+.window.app .body.with-changes.with-file-pane #changes {
+  width: min(520px, 48vw);
+}
+.window.app .panel .lane-row {
+  padding: 8px 8px 8px 10px;
+  column-gap: 10px;
+  min-height: 34px;
+}
+.window.app .panel .section-head {
+  padding: 10px 12px 6px;
+  letter-spacing: 0;
+}
+.window.app .panel .lane-row .name {
+  font-size: 13px;
+}
+.window.app .panel .lane-row .meta {
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
