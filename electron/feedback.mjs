@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -25,10 +26,13 @@ export function buildMeta(input) {
 }
 
 export async function writeFeedbackReport(baseDir, opts) {
-  const id = (opts.createdAt || new Date().toISOString()).replace(/:/g, '-');
-  const dir = path.join(baseDir, 'feedback', id);
+  const now = new Date().toISOString();
+  const id = `${now.replace(/:/g, '-')}-${crypto.randomBytes(3).toString('hex')}`;
+  const feedbackRoot = path.resolve(baseDir, 'feedback');
+  const dir = path.resolve(feedbackRoot, id);
+  if (!dir.startsWith(feedbackRoot + path.sep)) throw new Error('bad report path');
   fs.mkdirSync(dir, { recursive: true });
-  const meta = buildMeta(opts);
+  const meta = buildMeta({ ...opts, createdAt: opts.createdAt || now });
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta));
   fs.writeFileSync(path.join(dir, 'window.png'), opts.png);
   return dir;
