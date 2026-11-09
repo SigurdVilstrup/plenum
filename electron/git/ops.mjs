@@ -173,8 +173,12 @@ export async function pushLane(root, laneIndex) {
 export async function pullLane(root, laneIndex) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
+  const ref = lane.isPrimary ? board.teamBranch : lane.branch;
   try {
-    await git(['pull', '--ff-only'], lane.path);
+    // Explicit remote/branch — bare `git pull --ff-only` can no-op on CI when
+    // upstream tracking is missing or stale while origin/<team> is ahead.
+    await git(['fetch', 'origin', ref], lane.path);
+    await git(['merge', '--ff-only', `origin/${ref}`], lane.path);
   } catch (e) {
     if (lane.isPrimary) {
       throw new Error(`${e.message}\nPrimary only fast-forwards. Resolve divergence outside Plenum.`);
