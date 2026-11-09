@@ -10,7 +10,7 @@ const ALLOWED = new Set([
   'lane.stash', 'lane.stashPop',
   'lane.up', 'lane.down', 'lane.test', 'lane.status',
   'commit.changes',
-  'file.diff', 'file.history', 'file.blame',
+  'file.diff', 'file.history', 'file.blame', 'file.show',
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',
   'prefs.get', 'prefs.set', 'git.identity.get', 'git.identity.set',
   'feedback.save', 'app.version', 'os.editors',

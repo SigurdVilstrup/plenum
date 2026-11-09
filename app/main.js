@@ -2,7 +2,7 @@ import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
 import { authorshipPillHTML, authorIcon, authorLabel } from './lib/authorship-pill.js';
 import { shouldFreeze, evictOldest, markFrozen, WARM_MAX, WARM_REFRESH_MS } from './lib/warm-tabs.js';
-import { renderDiffBody } from './lib/file-pane.js';
+import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-pane.js';
 
 const api = window.overlook;
 const icon = (n, c = '') => {
@@ -48,7 +48,7 @@ const state = {
   conflictRoot: null,
   branchesOpen: false,
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
-  filePane: null, // { sha, path, mode: 'diff' } | null
+  filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
   changesPaintKey: '',
   changesCache: null,
@@ -1239,30 +1239,96 @@ function closeChanges() {
   el.body.classList.remove('with-changes', 'with-file-pane');
 }
 
-async function paintFileDiff(pane) {
-  el.body.classList.add('with-file-pane');
-  el.changes.innerHTML = `
-    <div class="changes-head file-pane-head">
-      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to files" aria-label="Back to files">${iconHTML('caret-right')}</button>
-      <div class="title">Diff View<small>${esc(pane.path)}</small></div>
-      <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
-    </div>
-    <div class="file-pane-diff" role="region" aria-label="Unified diff"><div class="fx-empty">Loading diff…</div></div>`;
+function jumpToCommitOnGraph(sha) {
+  if (!sha) return;
+  state.filePane = null;
+  state.changes = { kind: 'commit', sha };
+  state.changesPaintKey = '';
+  paint();
+  requestAnimationFrame(() => {
+    el.graph.querySelector('.active-commit')?.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function bindFilePaneChrome() {
   el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => { closeChanges(); paint(); });
   el.changes.querySelector('[data-file-pane-back]')?.addEventListener('click', () => {
     state.filePane = null;
     state.changesPaintKey = '';
     paintChanges();
   });
+  el.changes.querySelectorAll('[data-file-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.fileMode;
+      if (!mode || mode === state.filePane?.mode) return;
+      state.filePane = { ...state.filePane, mode };
+      state.changesPaintKey = '';
+      paintChanges();
+    });
+  });
+}
+
+function bindFilePaneJumps() {
+  el.changes.querySelectorAll('[data-jump-sha]').forEach((node) => {
+    const go = () => jumpToCommitOnGraph(node.dataset.jumpSha);
+    node.addEventListener('click', go);
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
+  });
+}
+
+function filePaneStill(pane) {
+  return state.filePane?.sha === pane.sha
+    && state.filePane?.path === pane.path
+    && state.filePane?.mode === pane.mode;
+}
+
+async function paintFilePane(pane) {
+  const mode = pane.mode === 'blame' || pane.mode === 'history' ? pane.mode : 'diff';
+  const title = mode === 'blame' ? 'Blame' : mode === 'history' ? 'History' : 'Diff View';
+  const modeBtn = (id, label) =>
+    `<button type="button" class="file-mode-btn${mode === id ? ' on' : ''}" data-file-mode="${id}" aria-pressed="${mode === id ? 'true' : 'false'}">${label}</button>`;
+  el.body.classList.add('with-file-pane');
+  el.changes.innerHTML = `
+    <div class="changes-head file-pane-head">
+      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to files" aria-label="Back to files">${iconHTML('caret-right')}</button>
+      <div class="title">${title}<small>${esc(pane.path)}</small></div>
+      <div class="file-pane-modes" role="group" aria-label="File view mode">
+        ${modeBtn('diff', 'Diff')}${modeBtn('blame', 'Blame')}${modeBtn('history', 'History')}
+      </div>
+      <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
+    </div>
+    <div class="file-pane-body" role="region" aria-label="${esc(title)}"><div class="fx-empty">Loading…</div></div>`;
+  bindFilePaneChrome();
+  const body = el.changes.querySelector('.file-pane-body');
   try {
-    const data = await invoke('file.diff', pane.sha, pane.path);
-    if (state.filePane?.sha !== pane.sha || state.filePane?.path !== pane.path) return;
-    const body = el.changes.querySelector('.file-pane-diff');
-    if (body) body.innerHTML = renderDiffBody(data.hunks);
+    if (mode === 'diff') {
+      const data = await invoke('file.diff', pane.sha, pane.path);
+      if (!filePaneStill(pane) || !body) return;
+      body.innerHTML = `<div class="file-pane-diff">${renderDiffBody(data.hunks)}</div>`;
+    } else if (mode === 'history') {
+      const history = await invoke('file.history', pane.path);
+      if (!filePaneStill(pane) || !body) return;
+      body.innerHTML = `<div class="file-history">${renderHistoryList(history, pane.sha)}</div>`;
+      bindFilePaneJumps();
+    } else {
+      const [history, blame, shown] = await Promise.all([
+        invoke('file.history', pane.path),
+        invoke('file.blame', pane.sha, pane.path),
+        invoke('file.show', pane.sha, pane.path),
+      ]);
+      if (!filePaneStill(pane) || !body) return;
+      body.innerHTML = `
+        <div class="file-pane-split">
+          <div class="file-history">${renderHistoryList(history, pane.sha)}</div>
+          ${renderBlameBody(shown.text, blame.blocks)}
+        </div>`;
+      bindFilePaneJumps();
+    }
   } catch {
-    if (state.filePane?.sha === pane.sha && state.filePane?.path === pane.path) {
-      const body = el.changes.querySelector('.file-pane-diff');
-      if (body) body.innerHTML = '<div class="fx-empty">Could not load diff</div>';
+    if (filePaneStill(pane) && body) {
+      body.innerHTML = `<div class="fx-empty">Could not load ${esc(title.toLowerCase())}</div>`;
     }
   }
 }
@@ -1326,7 +1392,7 @@ async function paintChanges() {
   el.body.classList.add('with-changes');
 
   if (view.kind === 'commit' && state.filePane?.sha === view.sha) {
-    await paintFileDiff(state.filePane);
+    await paintFilePane(state.filePane);
     return;
   }
   el.body.classList.remove('with-file-pane');

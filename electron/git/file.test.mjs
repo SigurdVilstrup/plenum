@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadFileDiff, loadFileHistory, loadFileBlame } from './file.mjs';
+import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow } from './file.mjs';
 
 function git(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
@@ -145,6 +145,23 @@ test('loadFileHistory/loadFileBlame: reject path traversal', async () => {
     const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     await assert.rejects(() => loadFileHistory(root, '../notes.txt'), /path/i);
     await assert.rejects(() => loadFileBlame(root, sha, '/etc/passwd'), /path/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('loadFileShow: returns file text at sha', async () => {
+  const root = tempRepo();
+  try {
+    fs.writeFileSync(path.join(root, 'notes.txt'), 'alpha\nbeta\n');
+    git(['add', 'notes.txt'], root);
+    git(['commit', '-m', 'notes'], root);
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const shown = await loadFileShow(root, sha, 'notes.txt');
+    assert.equal(shown.sha, sha);
+    assert.equal(shown.path, 'notes.txt');
+    assert.equal(shown.text, 'alpha\nbeta\n');
+    await assert.rejects(() => loadFileShow(root, sha, '../notes.txt'), /path/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -142,3 +142,14 @@ export async function loadFileBlame(repoPath, sha, filePath) {
   const porcelain = await git(['blame', '-p', full, '--', safe], cwd);
   return { sha: full, path: safe, blocks: parseBlamePorcelain(porcelain) };
 }
+
+/** Full file text at `sha:path` (`git show`). */
+export async function loadFileShow(repoPath, sha, filePath) {
+  const cwd = path.resolve(repoPath);
+  const id = String(sha || '').trim();
+  if (!/^[0-9a-f]{7,40}$/i.test(id)) throw new Error('Invalid commit.');
+  const safe = assertSafeRepoPath(filePath);
+  const full = (await git(['rev-parse', id], cwd)).trim();
+  const text = await git(['show', `${full}:${safe}`], cwd);
+  return { sha: full, path: safe, text: String(text ?? '') };
+}
