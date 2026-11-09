@@ -549,10 +549,12 @@ function paintPanel() {
 
   html += `<div class="panel-foot">
     <button class="lane-row" type="button" data-settings>${iconHTML('gear-six')}<span class="name">Settings</span><kbd>⌘,</kbd></button>
+    <button class="lane-row" type="button" data-feedback>${iconHTML('pencil-simple')}<span class="name">Feedback</span></button>
   </div>`;
 
   el.panel.innerHTML = html;
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
+  el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   el.panel.querySelectorAll('[data-lane]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.selectedLane = Number(btn.dataset.lane);
@@ -891,6 +893,7 @@ function openQuickStartSheet() {
     ['cloud-arrow-down', 'Behind', 'Commits the team branch has that this lane does not.'],
     ['sparkle', 'Authorship', 'Who wrote the newest commit, read from the author and agent trailers. Human gets no pill.'],
     ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .overlook/lane.yaml. Without that file it still shows on the board.'],
+    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the row under Settings. Point at UI optional; saved on this Mac.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
@@ -922,6 +925,134 @@ function openWarmSheet() {
     closeSheet();
     try { await setPref({ warmTabTtlMs: ms }); } catch { /* toasted */ }
   });
+}
+
+let feedbackDraft = { comment: '', target: null };
+
+function stopFeedbackPick() {
+  document.getElementById('feedback-pick-layer')?.remove();
+}
+
+function feedbackPickLabel(node) {
+  const aria = node.getAttribute('aria-label')?.trim();
+  if (aria) return aria.slice(0, 40);
+  const title = node.getAttribute('title')?.trim();
+  if (title) return title.slice(0, 40);
+  const text = (node.innerText || '').replace(/\s+/g, ' ').trim();
+  if (text) return text.length > 40 ? text.slice(0, 40) : text;
+  return node.tagName.toLowerCase();
+}
+
+function startFeedbackPick() {
+  stopFeedbackPick();
+  const layer = document.createElement('div');
+  layer.id = 'feedback-pick-layer';
+  layer.setAttribute('data-feedback-ignore', '');
+  const box = document.createElement('div');
+  box.className = 'feedback-pick-box';
+  layer.appendChild(box);
+  (document.querySelector('.window.app') || document.body).appendChild(layer);
+
+  const hitAt = (x, y) => {
+    layer.style.pointerEvents = 'none';
+    let n = document.elementFromPoint(x, y);
+    layer.style.pointerEvents = '';
+    while (n && n.closest?.('[data-feedback-ignore]')) {
+      n = n.closest('[data-feedback-ignore]').parentElement;
+    }
+    return n && n !== document.documentElement && n !== document.body ? n : null;
+  };
+
+  const placeBox = (node) => {
+    if (!node) {
+      box.style.display = 'none';
+      return;
+    }
+    const r = node.getBoundingClientRect();
+    box.style.display = 'block';
+    box.style.left = `${r.x}px`;
+    box.style.top = `${r.y}px`;
+    box.style.width = `${r.width}px`;
+    box.style.height = `${r.height}px`;
+  };
+
+  layer.addEventListener('mousemove', (e) => placeBox(hitAt(e.clientX, e.clientY)));
+  layer.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const node = hitAt(e.clientX, e.clientY);
+    stopFeedbackPick();
+    if (!node) {
+      openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target });
+      return;
+    }
+    const r = node.getBoundingClientRect();
+    openFeedbackSheet({
+      comment: feedbackDraft.comment,
+      target: { label: feedbackPickLabel(node), rect: { x: r.x, y: r.y, w: r.width, h: r.height } },
+    });
+  });
+}
+
+function openFeedbackSheet(seed = {}) {
+  const target = seed.target || null;
+  const comment = seed.comment ?? '';
+  const chip = target?.label
+    ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
+    : `<span class="feedback-target-chip muted">No element selected</span>`;
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
+      <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
+      <h1 id="feedback-title">What’s not working?</h1>
+      <label class="field">Comment<textarea name="comment" rows="4" required autofocus placeholder="What went wrong or felt off?">${esc(comment)}</textarea></label>
+      <div class="field">
+        <span>Target</span>
+        <div class="feedback-target-row">
+          ${chip}
+          <button class="btn" type="button" data-pick>Point at something</button>
+          ${target ? '<button class="btn" type="button" data-clear-target>Clear</button>' : ''}
+        </div>
+      </div>
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>A full-window screenshot of what is visible right now will be saved on this Mac. Nothing is uploaded.</span></p>
+      <div class="row-end">
+        <span class="hint-text">⌘↩</span>
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Send feedback</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  const ta = form.querySelector('[name=comment]');
+  const send = async () => {
+    const text = ta.value.trim();
+    if (!text) {
+      ta.focus();
+      return;
+    }
+    const draft = { comment: text, target };
+    closeSheet();
+    stopFeedbackPick();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    try {
+      const { dir } = await invoke('feedback.save', { comment: text, target });
+      const pretty = await prettyPath(dir).catch(() => dir);
+      toast(`Feedback saved locally · ${pretty}`, 'ok');
+    } catch (e) {
+      toast(e.message || 'Could not save feedback', 'bad');
+      openFeedbackSheet(draft);
+    }
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
+  bindCommitChord(ta, send);
+  form.querySelector('[data-pick]')?.addEventListener('click', () => {
+    feedbackDraft = { comment: ta.value, target };
+    closeSheet();
+    startFeedbackPick();
+  });
+  form.querySelector('[data-clear-target]')?.addEventListener('click', () => {
+    openFeedbackSheet({ comment: ta.value, target: null });
+  });
+  ta.focus();
+  if (comment) ta.setSelectionRange(comment.length, comment.length);
 }
 
 function openCreateLane() {
@@ -1690,6 +1821,7 @@ function paletteCommands() {
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
     { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStartSheet },
+    { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },
@@ -1736,7 +1868,11 @@ function closePalette() {
 
 function renderPalette(q) {
   const needle = q.trim().toLowerCase();
-  const items = paletteCommands().filter((c) => !needle || c.label.toLowerCase().includes(needle));
+  const items = paletteCommands().filter((c) => {
+    if (!needle) return true;
+    if (c.label.toLowerCase().includes(needle)) return true;
+    return (c.match || []).some((m) => m.toLowerCase().includes(needle) || needle.includes(m.toLowerCase()));
+  });
   if (paletteActive >= items.length) paletteActive = Math.max(0, items.length - 1);
   el.paletteResults.innerHTML = items.map((c, i) =>
     `<button class="item${i === paletteActive ? ' active' : ''}" type="button" data-i="${i}">${iconHTML('command', 'sm')}<span>${esc(c.label)}</span></button>`).join('') || '<div class="empty">No matches</div>';
@@ -1777,6 +1913,11 @@ document.addEventListener('keydown', (e) => {
     openSettings();
   }
   if (e.key === 'Escape') {
+    if (document.getElementById('feedback-pick-layer')) {
+      stopFeedbackPick();
+      openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target });
+      return;
+    }
     if (!el.paletteLayer.hidden) closePalette();
     else if (el.sheetLayer.classList.contains('open')) closeSheet();
     else if (state.settings.open) {
