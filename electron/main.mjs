@@ -11,6 +11,7 @@ import { doctor, acceptManifest } from './lane/doctor.mjs';
 import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
+import { paintHighlight, writeFeedbackReport } from './feedback.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -124,6 +125,39 @@ ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds))
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
 ipcMain.handle('prefs.set', (_e, partial) => setPrefs(partial, prefsDir()));
+
+// Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
+ipcMain.handle('feedback.save', async (_e, payload) => {
+  const comment = String(payload?.comment || '').trim();
+  if (!comment) throw new Error('Comment required.');
+  const target = payload?.target ?? null;
+  let rect = null;
+  if (target?.rect) {
+    const r = target.rect;
+    const nums = ['x', 'y', 'w', 'h'].map((k) => Number(r[k]));
+    if (nums.some((n) => !Number.isFinite(n))) throw new Error('Invalid target rect.');
+    rect = { x: nums[0], y: nums[1], w: nums[2], h: nums[3] };
+  }
+
+  let png = (await win.webContents.capturePage()).toPNG();
+  if (rect) {
+    const { width: imgW, height: imgH } = nativeImage.createFromBuffer(png).getSize();
+    const [cssW, cssH] = win.getContentSize();
+    png = paintHighlight(png, rect, { scaleX: imgW / cssW, scaleY: imgH / cssH });
+  }
+
+  const dir = await writeFeedbackReport(prefsDir(), {
+    comment,
+    target: target?.label
+      ? { label: String(target.label).slice(0, 200), rect }
+      : null,
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    repoPath: activePath(),
+    png,
+  });
+  return { dir };
+});
 
 ipcMain.handle('board.get', async (_e, root) => loadBoard(root || activePath()));
 ipcMain.handle('repo.refresh', async () => {

@@ -12,6 +12,7 @@ const ALLOWED = new Set([
   'commit.changes',
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',
   'prefs.get', 'prefs.set', 'git.identity.get', 'git.identity.set',
+  'feedback.save',
 ]);
 
 contextBridge.exposeInMainWorld('overlook', {
