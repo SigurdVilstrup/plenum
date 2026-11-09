@@ -64,6 +64,8 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
     assert.equal(lane.tool, 'Claude');
     assert.equal(board.lanes[0].readiness, 'protected');
     assert.ok(board.commits.some((c) => c.isWIP && c.lane === 1));
+    assert.equal(board.commits[0].isWIP, true);
+    assert.equal(board.commits[0].lane, 1);
     assert.equal(lane.runnable, false);
     assert.equal(board.lanes[0].runnable, false);
   } finally {

@@ -408,9 +408,11 @@ async function history(cwd, lanes, team, teamRef) {
   const cols = assignColumns(rows.map((r) => ({ id: r.id, parents: r.parents })));
   for (const row of rows) row.lane = cols.get(row.id) ?? row.lane;
 
+  // Pin WIP at the top (GitKraken-style) so dirty work is never buried mid-graph.
+  const wips = [];
   for (const lane of lanes) {
     if (lane.dirty > 0 && lane.head) {
-      const wip = {
+      wips.push({
         id: `wip-${lane.index}`,
         lane: lane.index,
         subject: `${lane.dirty} uncommitted`,
@@ -425,12 +427,10 @@ async function history(cwd, lanes, team, teamRef) {
         isTip: false,
         danger: lane.isPrimary,
         refs: [],
-      };
-      const at = rows.findIndex((r) => r.id === lane.head);
-      if (at >= 0) rows.splice(at, 0, wip);
-      else rows.unshift(wip);
+      });
     }
   }
+  if (wips.length) rows.unshift(...wips);
   return rows;
 }
 
