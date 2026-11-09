@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" data-chrome="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brand book — applications</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+:root{
+  --chrome-bg:#0c0d10;--chrome-surface:#15171c;--chrome-ink:#eef0f4;--chrome-muted:#9aa3b2;
+  --chrome-line:#2a2e38;--chrome-accent:#c9a227;
+  --font-ui:"IBM Plex Sans",system-ui,sans-serif;--font-mono:"IBM Plex Mono",monospace;
+}
+html[data-chrome="light"]{
+  --chrome-bg:#f3f1eb;--chrome-surface:#fff;--chrome-ink:#12141a;--chrome-muted:#5c6575;
+  --chrome-line:#d8dce5;--chrome-accent:#8a6a12;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-ui);background:var(--chrome-bg);color:var(--chrome-ink);line-height:1.45}
+.topbar{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:color-mix(in srgb,var(--chrome-bg) 90%,transparent);border-bottom:1px solid var(--chrome-line)}
+.topbar-inner{max-width:1180px;margin:0 auto;padding:10px 20px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.topbar h1{font-size:14px;margin:0;font-weight:600}
+.meta{color:var(--chrome-muted);font-size:12px}
+.btn{border:1px solid var(--chrome-line);background:var(--chrome-surface);color:var(--chrome-ink);border-radius:999px;padding:6px 12px;font:500 12px var(--font-ui);cursor:pointer}
+.btn:hover{border-color:var(--chrome-accent)}
+.btn.primary{border-color:var(--chrome-accent)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 80px}
+
+.picker{display:flex;gap:8px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.picker .nav{display:flex;gap:6px}
+.strip{display:flex;gap:6px;flex:1;overflow-x:auto;padding-bottom:4px}
+.pick{flex:0 0 auto;width:56px;border:1px solid var(--chrome-line);border-radius:10px;background:#000;padding:4px;cursor:pointer}
+.pick img{width:100%;aspect-ratio:1;object-fit:contain;display:block;border-radius:6px}
+.pick.on{border-color:var(--chrome-accent);outline:1px solid var(--chrome-accent)}
+.pick .lbl{font-size:9px;text-align:center;color:var(--chrome-muted);font-family:var(--font-mono);margin-top:3px;background:var(--chrome-surface);border-radius:4px;padding:2px}
+.current{font-size:13px;color:var(--chrome-muted)}
+.current strong{color:var(--chrome-ink)}
+.name-row{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.name-row .lab{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--chrome-muted);flex:0 0 auto}
+.name-strip{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.name-pick{border:1px solid var(--chrome-line);background:var(--chrome-surface);color:var(--chrome-ink);border-radius:999px;padding:5px 10px;font:500 12px var(--font-ui);cursor:pointer}
+.name-pick.on{border-color:var(--chrome-accent);background:color-mix(in srgb,var(--chrome-accent) 18%,var(--chrome-surface))}
+.name-pick.rec{font-weight:600}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{border:1px solid var(--chrome-line);border-radius:14px;background:var(--chrome-surface);overflow:hidden;display:flex;flex-direction:column}
+.panel.wide{grid-column:1/-1}
+.panel-h{padding:10px 14px;border-bottom:1px solid var(--chrome-line);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--chrome-muted);font-weight:600}
+.panel-b{padding:16px;flex:1}
+
+.browser{border:1px solid #333;border-radius:10px;overflow:hidden;background:#1a1c22}
+.browser-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#12141a;border-bottom:1px solid #2a2e38}
+.dots{display:flex;gap:5px}.dots i{width:8px;height:8px;border-radius:50%;background:#555;display:block}
+.dots.mac i:nth-child(1){background:#ff5f57}.dots.mac i:nth-child(2){background:#febc2e}.dots.mac i:nth-child(3){background:#28c840}
+.tabs{display:flex;gap:4px;flex:1;min-width:0}
+.tab{display:inline-flex;align-items:center;gap:6px;max-width:160px;padding:5px 9px;border-radius:7px 7px 0 0;background:#2a2c33;font-size:11px;color:#ddd;white-space:nowrap;overflow:hidden}
+.tab.active{background:#3a3d48}
+.tab .fi{width:14px;height:14px;border-radius:3px;overflow:hidden;background:#000;flex:0 0 auto}
+.tab .fi img{width:14px;height:14px;object-fit:cover;display:block}
+.tab .t{overflow:hidden;text-overflow:ellipsis}
+.url{margin-top:8px;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:#0e1014;border:1px solid #2a2e38;font-size:12px;color:#9aa3b2;font-family:var(--font-mono)}
+.url .fi{width:16px;height:16px;border-radius:3px;overflow:hidden;background:#000}
+.url .fi img{width:16px;height:16px;object-fit:cover;display:block}
+.browser-body{height:70px;background:linear-gradient(180deg,#0e1014,#151820)}
+
+.devices{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.devices{grid-template-columns:1fr}}
+.mac{background:#1c1c1e;border-radius:12px;padding:14px;border:1px solid #333}
+.mac-menu{display:flex;gap:10px;font-size:10px;color:#aaa;margin-bottom:12px;font-family:var(--font-mono)}
+.mac-desk{display:flex;gap:18px;align-items:flex-end;justify-content:center;min-height:100px;padding:10px}
+.mac-app{display:flex;flex-direction:column;align-items:center;gap:6px}
+.mac-icon{width:64px;height:64px;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 8px 20px rgba(0,0,0,.45)}
+.mac-icon img{width:100%;height:100%;object-fit:cover;display:block}
+.mac-name{font-size:10px;color:#ddd}
+.dock{margin-top:14px;display:flex;justify-content:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,.08);border-radius:14px;border:1px solid rgba(255,255,255,.1)}
+.dock .di{width:40px;height:40px;border-radius:9px;overflow:hidden;background:#222}
+.dock .di.our{background:#000;box-shadow:0 0 0 2px var(--chrome-accent)}
+.dock .di img{width:100%;height:100%;object-fit:cover;display:block}
+.dock .di.ph{background:linear-gradient(135deg,#444,#222)}
+
+.phone{width:100%;max-width:220px;margin:0 auto;background:#111;border-radius:28px;padding:10px;border:2px solid #333;box-shadow:0 16px 40px rgba(0,0,0,.4)}
+.phone-notch{width:40%;height:18px;background:#000;border-radius:0 0 10px 10px;margin:0 auto 10px}
+.phone-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:6px 4px 14px}
+.ph-app{display:flex;flex-direction:column;align-items:center;gap:3px}
+.ph-icon{width:100%;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#2a2a2e}
+.ph-icon.our{background:#000}
+.ph-icon img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-name{font-size:8px;color:#ccc;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph-dock{display:flex;justify-content:space-around;padding:8px;background:rgba(255,255,255,.12);border-radius:16px;margin-top:4px}
+.ph-dock .ph-icon{width:22%;border-radius:10px}
+
+/* open mac window */
+.mac-desktop{background:linear-gradient(160deg,#3a5a7a,#1a2a3a);border-radius:12px;padding:18px 16px 14px;border:1px solid #333;min-height:320px;position:relative}
+.mac-menubar{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.85);margin-bottom:14px;padding:0 4px;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.mac-menubar .l{display:flex;gap:12px;align-items:center}
+.mac-menubar .l strong{display:inline-flex;align-items:center;gap:6px}
+.mac-menubar .l img{width:14px;height:14px;border-radius:3px;object-fit:cover;background:#000}
+.mac-window{background:#1e1f24;border-radius:10px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08);max-width:720px;margin:0 auto}
+.mac-titlebar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#2a2b31;border-bottom:1px solid #3a3b42}
+.mac-titlebar .title{flex:1;text-align:center;font-size:12px;color:#c8c9ce;display:flex;align-items:center;justify-content:center;gap:7px}
+.mac-titlebar .title img{width:16px;height:16px;border-radius:4px;object-fit:cover;background:#000}
+.mac-toolbar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#24252b;border-bottom:1px solid #333;font-size:11px;color:#9aa3b2}
+.mac-toolbar .tool{padding:4px 8px;border-radius:6px;background:#32333a}
+.mac-toolbar .tool.on{background:#3d3e48;color:#eee}
+.mac-win-body{display:grid;grid-template-columns:150px 1fr;min-height:200px}
+.mac-win-side{border-right:1px solid #2f3038;padding:10px;background:#191a1f}
+.mac-win-side .brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#eee;margin-bottom:12px}
+.mac-win-side .brand img{width:20px;height:20px;border-radius:5px;object-fit:cover;background:#000}
+.mac-win-side .nav span{display:block;font-size:11px;padding:6px 8px;border-radius:6px;color:#8b919c;margin-bottom:2px}
+.mac-win-side .nav span.on{background:rgba(255,255,255,.06);color:#eee}
+.mac-win-main{padding:12px;background:#15161a}
+.mac-win-main h4{margin:0 0 10px;font-size:13px;color:#eee}
+.mac-win-main .row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:#1e1f25;margin-bottom:6px;font-size:12px;color:#c8c9ce}
+.mac-win-main .row i{width:8px;height:8px;border-radius:50%;background:var(--chrome-accent)}
+.mac-win-main .row .m{margin-left:auto;font-family:var(--font-mono);font-size:10px;color:#6b7280}
+
+.landing{border-radius:12px;overflow:hidden;border:1px solid var(--chrome-line);background:#0a0a0a;color:#f5f5f5}
+.landing-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #222}
+.landing-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:-.02em}
+.landing-brand img{width:28px;height:28px;border-radius:6px;object-fit:cover;background:#000}
+.landing-nav .links{display:flex;gap:14px;font-size:12px;color:#999}
+.landing-hero{padding:36px 18px 42px;text-align:center;background:radial-gradient(ellipse at 50% 0%,#1a1a1a,transparent 60%),#0a0a0a}
+.landing-hero .mark{width:72px;height:72px;margin:0 auto 16px;border-radius:16px;overflow:hidden;background:#000}
+.landing-hero .mark img{width:100%;height:100%;object-fit:cover;display:block}
+.landing-hero h3{margin:0 0 8px;font-size:28px;letter-spacing:-.03em}
+.landing-hero p{margin:0 auto;max-width:36ch;color:#999;font-size:13px}
+.landing-cta{display:inline-block;margin-top:16px;padding:8px 14px;border-radius:8px;background:#fff;color:#111;font-size:12px;font-weight:600}
+
+.product{display:grid;grid-template-columns:160px 1fr;min-height:200px;border:1px solid var(--chrome-line);border-radius:12px;overflow:hidden;background:#0e1014;color:#e8eaef}
+@media(max-width:600px){.product{grid-template-columns:1fr}}
+.prod-side{border-right:1px solid #252830;padding:12px;background:#12151c}
+.prod-logo{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-weight:700;font-size:13px}
+.prod-logo img{width:22px;height:22px;border-radius:5px;object-fit:cover;background:#000}
+.prod-nav{display:flex;flex-direction:column;gap:4px}
+.prod-nav span{font-size:11px;padding:6px 8px;border-radius:6px;color:#9aa3b2}
+.prod-nav span.on{background:rgba(201,162,39,.15);color:#eee}
+.prod-main{padding:14px}
+.prod-main .bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.prod-main .bar h4{margin:0;font-size:14px}
+.chip{font-size:10px;padding:3px 7px;border-radius:999px;border:1px solid #333;color:#9aa3b2}
+.lanes{display:flex;flex-direction:column;gap:6px}
+.lane{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:#171a22;font-size:12px}
+.lane i{width:8px;height:8px;border-radius:50%;background:var(--chrome-accent)}
+.lane .m{margin-left:auto;color:#6b7280;font-family:var(--font-mono);font-size:10px}
+
+.merch{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.merch{grid-template-columns:1fr}}
+.merch-shot{border-radius:12px;overflow:hidden;border:1px solid #333;background:#111}
+.merch-shot img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.merch-shot .cap{padding:8px 10px;font-size:11px;color:var(--chrome-muted);font-family:var(--font-mono);border-top:1px solid var(--chrome-line);background:var(--chrome-surface)}
+
+.footer-note{color:var(--chrome-muted);font-size:12px;border-top:1px solid var(--chrome-line);padding-top:16px;margin-top:28px}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <h1>Brand applications</h1>
+        <div class="meta">Finalists: 2a · 21a · 21b · 47a — lean 2a / 21a</div>
+      </div>
+      <button class="btn" id="chromeToggle" type="button">Toggle page chrome: light</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="picker">
+      <div class="nav">
+        <button class="btn" type="button" id="prev">← Prev</button>
+        <button class="btn primary" type="button" id="next">Next →</button>
+      </div>
+      <div class="strip" id="strip"></div>
+      <div class="current" id="currentLabel"></div>
+    </div>
+    <div class="name-row">
+      <div class="lab">Product name</div>
+      <div class="name-strip" id="nameStrip"></div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="panel-h">Browser favicon</div>
+        <div class="panel-b">
+          <div class="browser">
+            <div class="browser-bar">
+              <div class="dots"><i></i><i></i><i></i></div>
+              <div class="tabs">
+                <div class="tab active"><span class="fi"><img class="mark-img" alt="" /></span><span class="t mark-name">Mark</span></div>
+                <div class="tab"><span class="fi" style="background:#333"></span><span class="t">Docs</span></div>
+              </div>
+            </div>
+            <div class="panel-b" style="padding:10px">
+              <div class="url"><span class="fi"><img class="mark-img" alt="" /></span><span class="mark-host">app.example.sh</span></div>
+              <div class="browser-body"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h">App icons — Mac dock & iPhone</div>
+        <div class="panel-b">
+          <div class="devices">
+            <div class="mac">
+              <div class="mac-menu"><span></span><span>Finder</span><span>File</span><span>Edit</span></div>
+              <div class="mac-desk">
+                <div class="mac-app">
+                  <div class="mac-icon"><img class="mark-img" alt="" /></div>
+                  <div class="mac-name mark-name">Mark</div>
+                </div>
+              </div>
+              <div class="dock">
+                <div class="di ph"></div><div class="di ph"></div>
+                <div class="di our"><img class="mark-img" alt="" /></div>
+                <div class="di ph"></div><div class="di ph"></div>
+              </div>
+            </div>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-grid">
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Mail</div></div>
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Cal</div></div>
+                <div class="ph-app"><div class="ph-icon our"><img class="mark-img" alt="" /></div><div class="ph-name mark-name">Mark</div></div>
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Photos</div></div>
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Maps</div></div>
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Notes</div></div>
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Music</div></div>
+                <div class="ph-app"><div class="ph-icon"></div><div class="ph-name">Settings</div></div>
+              </div>
+              <div class="ph-dock">
+                <div class="ph-icon"></div><div class="ph-icon"></div><div class="ph-icon"></div><div class="ph-icon"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-h">Mac — open program window</div>
+        <div class="panel-b">
+          <div class="mac-desktop">
+            <div class="mac-menubar">
+              <div class="l">
+                <span></span>
+                <strong><img class="mark-img" alt="" /><span class="mark-name">Mark</span></strong>
+                <span>File</span><span>Edit</span><span>View</span><span>Window</span>
+              </div>
+              <div>Mon 9 Nov&nbsp;&nbsp;2:00</div>
+            </div>
+            <div class="mac-window">
+              <div class="mac-titlebar">
+                <div class="dots mac"><i></i><i></i><i></i></div>
+                <div class="title"><img class="mark-img" alt="" /><span class="mark-name">Mark</span> — Lane board</div>
+              </div>
+              <div class="mac-toolbar">
+                <span class="tool on">Lanes</span>
+                <span class="tool">Graph</span>
+                <span class="tool">Agents</span>
+                <span style="margin-left:auto;font-family:var(--font-mono);font-size:10px">~/code/product</span>
+              </div>
+              <div class="mac-win-body">
+                <aside class="mac-win-side">
+                  <div class="brand"><img class="mark-img" alt="" /><span class="mark-name">Mark</span></div>
+                  <div class="nav">
+                    <span class="on">All lanes</span>
+                    <span>Running</span>
+                    <span>Behind main</span>
+                    <span>Archives</span>
+                  </div>
+                </aside>
+                <div class="mac-win-main">
+                  <h4>Active lanes</h4>
+                  <div class="row"><i></i> feature/auth <span class="m">main −2</span></div>
+                  <div class="row"><i></i> fix/favicon <span class="m">main +1</span></div>
+                  <div class="row"><i></i> agent/docs <span class="m">clean</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-h">Landing page</div>
+        <div class="panel-b" style="padding:0">
+          <div class="landing">
+            <div class="landing-nav">
+              <div class="landing-brand"><img class="mark-img" alt="" /><span class="mark-name">Mark</span></div>
+              <div class="links"><span>Product</span><span>Docs</span><span>Pricing</span></div>
+            </div>
+            <div class="landing-hero">
+              <div class="mark"><img class="mark-img" alt="" /></div>
+              <h3><span class="mark-name">Mark</span></h3>
+              <p class="mark-tagline">Parallel lanes. Clear overview. Main stays safe.</p>
+              <div class="landing-cta">Open the board</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-h">In product (web)</div>
+        <div class="panel-b">
+          <div class="product">
+            <aside class="prod-side">
+              <div class="prod-logo"><img class="mark-img" alt="" /><span class="mark-name">Mark</span></div>
+              <div class="prod-nav">
+                <span class="on">Lanes</span>
+                <span>Graph</span>
+                <span>Agents</span>
+                <span>Settings</span>
+              </div>
+            </aside>
+            <div class="prod-main">
+              <div class="bar"><h4>Lane board</h4><span class="chip">3 running</span></div>
+              <div class="lanes">
+                <div class="lane"><i></i> feature/auth <span class="m">main −2</span></div>
+                <div class="lane"><i></i> fix/favicon <span class="m">main +1</span></div>
+                <div class="lane"><i></i> agent/docs <span class="m">clean</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-h">Merch — photoreal tee &amp; cap</div>
+        <div class="panel-b">
+          <div class="merch">
+            <div class="merch-shot">
+              <img id="merchTee" alt="T-shirt mock" />
+              <div class="cap">Studio tee · black print on light cotton</div>
+            </div>
+            <div class="merch-shot">
+              <img id="merchHat" alt="Cap mock" />
+              <div class="cap">Studio cap · white mark on black</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="footer-note">Marks: <code>brand-logos/v8-final5/</code> · Merch shots: <code>brand-logos/v8-merch/</code>. Arrow keys to switch. Refresh if the local server was just started.</p>
+  </div>
+
+<script>
+const DIR = "brand-logos/v8-final5/";
+const MERCH = "brand-logos/v8-merch/";
+const MARKS = [
+  { id: "2a", file: "v8-02a-orbit.png", label: "Orbit", lean: true },
+  { id: "21a", file: "v8-21a-hooks.png", label: "Hooks", lean: true },
+  { id: "21b", file: "v8-21b-hooks-angular.png", label: "Hooks angular" },
+  { id: "47a", file: "v8-47a-shard.png", label: "Shard" }
+];
+const NAMES = [
+  { id: "abreast", name: "Abreast", host: "abreast.sh", landing: "Parallel work, abreast of main.", recommended: true },
+  { id: "hardstand", name: "Hardstand", host: "hardstand.sh", landing: "Put every lane on the hardstand." },
+  { id: "splitrail", name: "Splitrail", host: "splitrail.sh", landing: "Split from main. Stay in view." },
+  { id: "plenum", name: "Plenum", host: "plenum.sh", landing: "Shared data is a fact. Show it." },
+  { id: "outboard", name: "Outboard", host: "outboard.sh", landing: "Work outboard of main." },
+  { id: "flightline", name: "Flightline", host: "flightline.sh", landing: "Every lane on the flightline." },
+  { id: "trunkside", name: "Trunkside", host: "trunkside.sh", landing: "Stay trunkside. Keep main clean." },
+  { id: "dualtrack", name: "Dualtrack", host: "dualtrack.sh", landing: "Dual track. One board." },
+  { id: "laneboard", name: "Laneboard", host: "laneboard.sh", landing: "Your lanes. One board." },
+  { id: "refline", name: "Refline", host: "refline.sh", landing: "Measure every lane against the refline." },
+  { id: "offtrunk", name: "Offtrunk", host: "offtrunk.sh", landing: "Keep it offtrunk until it’s ready." },
+  { id: "cleartrack", name: "Cleartrack", host: "cleartrack.sh", landing: "Clear track. Then run the lane." },
+  { id: "turnout", name: "Turnout", host: "turnout.sh", landing: "Throw the turnout. Open a lane." },
+  { id: "trackside", name: "Trackside", host: "trackside.sh", landing: "Trackside visibility for every lane." },
+  { id: "cordage", name: "Cordage", host: "cordage.sh", landing: "Many lines. One cordage." }
+];
+
+let markIdx = 0;
+let nameIdx = 0;
+function src(m) { return DIR + m.file; }
+
+function renderStrip() {
+  document.getElementById("strip").innerHTML = MARKS.map((m, i) => `
+    <button type="button" class="pick ${i === markIdx ? "on" : ""}" data-i="${i}" title="${m.label}">
+      <img src="${src(m)}" alt="${m.id}" />
+      <div class="lbl">${m.lean ? "★ " : ""}${m.id}</div>
+    </button>`).join("");
+  document.querySelectorAll(".pick").forEach(btn => {
+    btn.addEventListener("click", () => { markIdx = +btn.dataset.i; apply(); });
+  });
+}
+
+function renderNames() {
+  document.getElementById("nameStrip").innerHTML = NAMES.map((n, i) => `
+    <button type="button" class="name-pick ${i === nameIdx ? "on" : ""} ${n.recommended ? "rec" : ""}" data-i="${i}">
+      ${n.recommended ? "★ " : ""}${n.name}
+    </button>`).join("");
+  document.querySelectorAll(".name-pick").forEach(btn => {
+    btn.addEventListener("click", () => { nameIdx = +btn.dataset.i; apply(); });
+  });
+}
+
+function apply() {
+  const m = MARKS[markIdx];
+  const n = NAMES[nameIdx];
+  document.querySelectorAll(".mark-img").forEach(img => { img.src = src(m); img.alt = n.name; });
+  document.querySelectorAll(".mark-name").forEach(el => { el.textContent = n.name; });
+  document.querySelectorAll(".mark-host").forEach(el => { el.textContent = n.host; });
+  document.querySelectorAll(".mark-tagline").forEach(el => { el.textContent = n.landing; });
+  document.getElementById("merchTee").src = `${MERCH}tee-${m.id}.png`;
+  document.getElementById("merchHat").src = `${MERCH}hat-${m.id}.png`;
+  document.getElementById("currentLabel").innerHTML =
+    `Mark <strong>#${m.id}</strong> (${m.label}) · Name <strong>${n.name}</strong>`;
+  renderStrip();
+  renderNames();
+}
+
+document.getElementById("prev").addEventListener("click", () => {
+  markIdx = (markIdx + MARKS.length - 1) % MARKS.length; apply();
+});
+document.getElementById("next").addEventListener("click", () => {
+  markIdx = (markIdx + 1) % MARKS.length; apply();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") { markIdx = (markIdx + MARKS.length - 1) % MARKS.length; apply(); }
+  if (e.key === "ArrowRight") { markIdx = (markIdx + 1) % MARKS.length; apply(); }
+  if (e.key === "ArrowUp") { nameIdx = (nameIdx + NAMES.length - 1) % NAMES.length; apply(); e.preventDefault(); }
+  if (e.key === "ArrowDown") { nameIdx = (nameIdx + 1) % NAMES.length; apply(); e.preventDefault(); }
+});
+document.getElementById("chromeToggle").addEventListener("click", () => {
+  const html = document.documentElement;
+  const next = html.getAttribute("data-chrome") === "dark" ? "light" : "dark";
+  html.setAttribute("data-chrome", next);
+  document.getElementById("chromeToggle").textContent = `Toggle page chrome: ${next === "dark" ? "light" : "dark"}`;
+});
+apply();
+</script>
+</body>
+</html>

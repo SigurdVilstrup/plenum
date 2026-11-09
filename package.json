@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mac git client for parallel work — board, git verbs, and phase two runnable lanes",
-  "author": "Overlook",
+  "author": "Plenum",
   "main": "electron/main.mjs",
   "type": "module",
   "bin": {
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "app.overlook.desktop",
-    "productName": "Overlook",
+    "productName": "Plenum",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -59,7 +59,7 @@
       "identity": null
     },
     "dmg": {
-      "title": "Overlook"
+      "title": "Plenum"
     }
   },
   "devDependencies": {

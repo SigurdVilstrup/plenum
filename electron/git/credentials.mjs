@@ -56,7 +56,7 @@ export async function credentialHelper() {
   }
 }
 
-/** Status only: Overlook never reads or writes keys. */
+/** Status only: Plenum never reads or writes keys. */
 export function sshStatus() {
   return new Promise((resolve) => {
     execFile('ssh-add', ['-l'], { timeout: 3000 }, (err, stdout) => {

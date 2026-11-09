@@ -9,7 +9,7 @@ import { down, getProc } from '../lane/supervisor.mjs';
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
   if (!lane) throw new Error('Lane not found.');
-  if (lane.isPrimary) throw new Error('Overlook does not write in the protected checkout. Move this to a lane first.');
+  if (lane.isPrimary) throw new Error('Plenum does not write in the protected checkout. Move this to a lane first.');
   return lane;
 }
 
@@ -177,7 +177,7 @@ export async function pullLane(root, laneIndex) {
     await git(['pull', '--ff-only'], lane.path);
   } catch (e) {
     if (lane.isPrimary) {
-      throw new Error(`${e.message}\nPrimary only fast-forwards. Resolve divergence outside Overlook.`);
+      throw new Error(`${e.message}\nPrimary only fast-forwards. Resolve divergence outside Plenum.`);
     }
     throw new Error(`${e.message}\nTry Rebase on main instead.`);
   }

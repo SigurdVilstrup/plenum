@@ -71,7 +71,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
-    app.setName('Overlook');
+    app.setName('Plenum');
     const icon = appIcon();
     if (icon && app.dock) app.dock.setIcon(icon);
   }

@@ -18,7 +18,8 @@ if (!fs.existsSync(src)) {
 fs.rmSync(iconset, { recursive: true, force: true });
 fs.mkdirSync(iconset, { recursive: true });
 
-const sizes = [16, 32, 64, 128, 256, 512];
+// iconutil rejects 64×64 — Apple iconset is 16/32/128/256/512 (+ @2x)
+const sizes = [16, 32, 128, 256, 512];
 for (const s of sizes) {
   execFileSync('sips', ['-z', String(s), String(s), src, '--out', path.join(iconset, `icon_${s}x${s}.png`)]);
   execFileSync('sips', ['-z', String(s * 2), String(s * 2), src, '--out', path.join(iconset, `icon_${s}x${s}@2x.png`)]);

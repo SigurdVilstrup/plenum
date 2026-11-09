@@ -1,4 +1,4 @@
-# Overlook
+# Plenum
 
 Mac git client for parallel work. Phase one: board, lanes (worktrees), commit / push / pull / rebase / merge, conflict walk. Phase two: runnable lanes — `.overlook/lane.yaml`, Run / Stop / Test with port offsets, doctor, CLI, and local MCP.
 
@@ -31,11 +31,11 @@ Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup liv
 
 | Script | What |
 | --- | --- |
-| `npm run dev` | Vite HMR + Electron (Dock uses Overlook icon) |
+| `npm run dev` | Vite HMR + Electron (Dock uses Plenum icon) |
 | `npm test` | Board, lane supervisor, doctor, CLI, MCP |
 | `npm run smoke:init` | Fresh multi-worktree fixture with a local bare remote |
 | `npm start` | Production build + Electron |
-| `npm run pack` | Unsigned `Overlook.app` in `release/mac*` |
+| `npm run pack` | Unsigned `Plenum.app` in `release/mac*` |
 | `npm run dist` | Same + `.dmg` |
 | `npm run icons` | Rebuild `build/icon.icns` from `planning/assets/app-icon-1024.png` |
 | `npm run overlook -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
@@ -45,8 +45,8 @@ Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup liv
 Before `npm run pack`, bump with `npm run version:patch` (or `minor` / `major`). That updates `package.json` and tags `v*`.
 
 ```bash
-npm run pack          # → release/mac/Overlook.app (or mac-arm64)
-open release/mac*/Overlook.app
+npm run pack          # → release/mac/Plenum.app (or mac-arm64)
+open release/mac*/Plenum.app
 # optional: drag into /Applications
 ```
 

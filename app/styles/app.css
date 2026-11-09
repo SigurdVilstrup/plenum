@@ -1,4 +1,4 @@
-/* Hallmark · checked: 2026-11-09 · genre: modern-minimal (inferred) · shape: app screen · theme: Overlook (planning/DESIGN.md, locked)
+/* Hallmark · checked: 2026-11-09 · genre: modern-minimal (inferred) · shape: app screen · theme: Plenum (planning/DESIGN.md, locked)
  * floor: 47a left open, the real Electron titlebar and tab strip, not a drawn window · fixed: 6 (20, 34, 48 shadows and traffic lights, 54 eyebrow on two sheets, 63 neutral status dot, 6 link focus)
  * reflex left open: 38iii and 64 on the board, outside Settings, guards reject a waiver
  * built: the project · redesign: polish · v2.0.0 */
@@ -54,29 +54,25 @@ input, textarea, [contenteditable="true"] {
 }
 
 .window.app .titlebar .traffic.spacer {
-  width: 78px;
+  width: 88px;
   height: 52px;
   flex-shrink: 0;
   visibility: hidden;
   align-self: stretch;
 }
 
-.window.app .titlebar .appmark {
-  align-self: center;
-  margin-right: 8px;
-  margin-left: 0;
-}
-
 .window.app .titlebar .tabstrip {
   align-items: flex-end;
   padding-top: 14px;
+  padding-left: 6px;
   height: 100%;
   overflow: visible;
-  gap: 8px;
+  gap: 10px;
 }
 
 .window.app .titlebar .tab {
   height: 38px;
+  padding: 0 14px 0 14px;
   border-radius: 10px 10px 0 0;
   border: 1px solid transparent;
   border-bottom: 0;
@@ -129,6 +125,8 @@ input, textarea, [contenteditable="true"] {
 .window.app .title-actions {
   align-self: center;
   gap: 0;
+  padding-left: 10px;
+  padding-right: 14px;
 }
 
 .window.app .iconbtn.framed.primary {
