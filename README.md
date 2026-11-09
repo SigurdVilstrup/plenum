@@ -42,6 +42,8 @@ Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup liv
 
 ### Mac app
 
+Before `npm run pack`, bump with `npm run version:patch` (or `minor` / `major`). That updates `package.json` and tags `v*`.
+
 ```bash
 npm run pack          # → release/mac/Overlook.app (or mac-arm64)
 open release/mac*/Overlook.app
