@@ -9,3 +9,11 @@ test('overflow when more than max', () => {
     overflow: 1,
   });
 });
+
+test('pins current when beyond max', () => {
+  const refs = [{ name: 'a' }, { name: 'b' }, { name: 'c' }];
+  assert.deepEqual(visibleRefs(refs, { max: 2, currentBranch: 'c' }), {
+    shown: [{ name: 'c' }, { name: 'a' }],
+    overflow: 1,
+  });
+});

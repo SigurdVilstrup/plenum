@@ -112,12 +112,12 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
         </div>`;
       }
       const list = c.refs || [];
-      const { shown, overflow } = visibleRefs(list);
+      const { shown, overflow } = visibleRefs(list, { currentBranch });
       const refs = shown.map((r) => refPill(r, {
         running: r.worktree && !r.primary && runningLanes.has(c.lane),
         current: !!currentBranch && r.name === currentBranch,
       })).join('') + (overflow
-        ? `<span class="ref overflow" title="${esc(list.slice(shown.length).map((r) => r.name).join(', '))}">+${overflow}</span>`
+        ? `<span class="ref overflow" title="${esc(list.filter((r) => !shown.includes(r)).map((r) => r.name).join(', '))}">+${overflow}</span>`
         : '');
       const tip = tips.has(c.id);
       const kind = authorLabel[c.kind] ? c.kind : 'human';
