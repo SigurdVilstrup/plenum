@@ -689,10 +689,6 @@ a.iconbtn,
   cursor: pointer;
 }
 
-.row.active-commit {
-  background: var(--surface-2);
-}
-
 .section {
   padding: 10px 8px 6px;
 }
@@ -1169,6 +1165,11 @@ a.navitem.back {
 
 .row.selected-lane {
   background: var(--surface-1);
+}
+
+.row.active-commit {
+  background: color-mix(in srgb, var(--row-lane, var(--primary)) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--row-lane, var(--primary));
 }
 
 .row.dim {
