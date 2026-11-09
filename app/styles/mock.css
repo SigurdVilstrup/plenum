@@ -1273,6 +1273,22 @@ a.navitem.back {
   color: var(--ink-subtle);
 }
 
+.ref.current {
+  border-color: var(--ink-muted);
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.ref.current .icon {
+  color: var(--ink);
+}
+
+.ref.overflow {
+  padding: 0 5px;
+  color: var(--ink-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
 .row.wip {
   color: var(--warning);
   cursor: pointer;

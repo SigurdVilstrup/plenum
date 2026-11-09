@@ -1,6 +1,7 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
 import { authorshipPillHTML, authorIcon, authorLabel } from './authorship-pill.js';
+import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
 const COL_X0 = 14;
@@ -22,14 +23,26 @@ const icon = (name, cls = '') => {
   return `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${safe}"></use></svg>`;
 };
 
-const refPill = (r, running) => {
-  const cls = ['ref', r.primary && 'primary', r.remote && 'remote', r.tag && 'tag', running && 'running'].filter(Boolean).join(' ');
-  const ic = r.tag ? 'git-commit' : r.primary ? 'shield-check' : r.worktree ? 'tree-structure' : 'git-branch';
+const refPill = (r, { running = false, current = false } = {}) => {
+  const cls = [
+    'ref',
+    r.primary && 'primary',
+    r.remote && 'remote',
+    r.tag && 'tag',
+    running && 'running',
+    current && 'current',
+  ].filter(Boolean).join(' ');
+  const ic = current
+    ? 'check-circle'
+    : r.tag ? 'git-commit'
+      : r.primary ? 'shield-check'
+        : r.worktree ? 'tree-structure'
+          : 'git-branch';
   const dot = running ? '<i class="run-dot" title="Running"></i>' : '';
   return `<span class="${cls}">${icon(ic)}${esc(r.name)}${dot}</span>`;
 };
 
-export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set() }) {
+export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set(), currentBranch = null }) {
   const rowsEl = root.querySelector('.rows');
   const scrollTop = rowsEl.scrollTop;
   const index = new Map(commits.map((c, i) => [c.id, i]));
@@ -98,7 +111,14 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
           <span></span><span></span><span></span>
         </div>`;
       }
-      const refs = (c.refs || []).map((r) => refPill(r, r.worktree && !r.primary && runningLanes.has(c.lane))).join('');
+      const list = c.refs || [];
+      const { shown, overflow } = visibleRefs(list);
+      const refs = shown.map((r) => refPill(r, {
+        running: r.worktree && !r.primary && runningLanes.has(c.lane),
+        current: !!currentBranch && r.name === currentBranch,
+      })).join('') + (overflow
+        ? `<span class="ref overflow" title="${esc(list.slice(shown.length).map((r) => r.name).join(', '))}">+${overflow}</span>`
+        : '');
       const tip = tips.has(c.id);
       const kind = authorLabel[c.kind] ? c.kind : 'human';
       const pill = tip ? authorshipPillHTML(kind, c.tool, icon) : '';

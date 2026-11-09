@@ -283,6 +283,7 @@ function paint() {
     selectedLane: state.selectedLane,
     selectedCommit,
     runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
+    currentBranch: laneByIndex(state.selectedLane)?.branch || null,
   });
   if (state.changes) paintChanges();
 }
