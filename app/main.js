@@ -61,6 +61,7 @@ const state = {
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, repoPath: null },
   appVersion: '',
+  editors: [],
 };
 
 const el = {
@@ -410,9 +411,23 @@ function openCtxMenu(x, y, tab, anchor) {
 
 function openRename(tab, anchor) {
   document.querySelector('.rename-pop')?.remove();
+  // Rebuild this tab as an inline rename field (mock: .tab.renaming).
+  const btn = el.tabstrip.querySelector(`.tab[data-id="${CSS.escape(tab.id)}"]`);
+  if (!btn) return;
+  let chosen = tab.icon || 'folder-simple';
+  let saving = false;
+  const wrap = document.createElement('div');
+  wrap.className = 'tab renaming';
+  wrap.setAttribute('aria-label', 'Renaming repository tab');
+  wrap.dataset.id = tab.id;
+  wrap.appendChild(icon(chosen, 'sm'));
+  const input = document.createElement('input');
+  input.value = tab.title;
+  input.setAttribute('aria-label', 'Repository display name');
+  wrap.appendChild(input);
+
   const pop = document.createElement('div');
   pop.className = 'rename-pop';
-  let chosen = tab.icon || 'folder-simple';
   const grid = document.createElement('div');
   grid.className = 'icon-grid inline';
   const paintIcons = () => {
@@ -422,56 +437,58 @@ function openRename(tab, anchor) {
       b.type = 'button';
       if (name === chosen) b.classList.add('on');
       b.appendChild(icon(name, 'sm'));
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus on input
       b.addEventListener('click', () => {
         chosen = name;
+        wrap.replaceChildren(icon(chosen, 'sm'), input);
         paintIcons();
+        input.focus();
       });
       grid.appendChild(b);
     }
   };
   paintIcons();
-  const input = document.createElement('input');
-  input.value = tab.title;
-  input.setAttribute('aria-label', 'Rename tab');
-  const save = document.createElement('button');
-  save.type = 'button';
-  save.className = 'iconbtn';
-  save.setAttribute('aria-label', 'Save');
-  save.appendChild(icon('check-circle'));
-  const doSave = async () => {
-    let store = await invoke('tabs.rename', tab.id, input.value);
-    if (chosen !== (tab.icon || 'folder-simple')) {
-      store = await invoke('tabs.setIcon', tab.id, chosen);
-    }
-    applyStore(store);
+  pop.appendChild(grid);
+  document.body.appendChild(pop);
+  const placePop = () => {
+    const r = wrap.getBoundingClientRect();
+    pop.style.position = 'fixed';
+    pop.style.left = `${r.left}px`;
+    pop.style.top = `${r.bottom + 6}px`;
+    pop.style.zIndex = '40';
+  };
+
+  const finish = async (commit) => {
+    if (saving) return;
+    saving = true;
+    document.removeEventListener('mousedown', off);
     pop.remove();
+    if (!commit) {
+      paintTabs();
+      return;
+    }
+    try {
+      const iconArg = chosen !== (tab.icon || 'folder-simple') ? chosen : undefined;
+      const store = await invoke('tabs.rename', tab.id, input.value, iconArg);
+      applyStore(store);
+    } catch { /* toasted */ }
     paintTabs();
   };
-  save.addEventListener('click', doSave);
+  const off = (ev) => {
+    if (wrap.contains(ev.target) || pop.contains(ev.target)) return;
+    finish(true);
+  };
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); doSave(); }
-    if (e.key === 'Escape') pop.remove();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
   });
-  const row = document.createElement('div');
-  row.className = 'rename-row';
-  row.append(input, save);
-  pop.append(grid, row);
-  document.body.appendChild(pop);
-  const r = anchor.getBoundingClientRect();
-  pop.style.position = 'fixed';
-  pop.style.left = `${r.left}px`;
-  pop.style.top = `${r.bottom + 6}px`;
-  pop.style.zIndex = '40';
+  btn.replaceWith(wrap);
+  placePop();
   input.focus();
   input.select();
-  const off = (ev) => {
-    if (!pop.contains(ev.target)) {
-      pop.remove();
-      document.removeEventListener('mousedown', off);
-    }
-  };
   setTimeout(() => document.addEventListener('mousedown', off), 0);
 }
+
 
 function paintPanel() {
   const b = state.board;
@@ -502,7 +519,7 @@ function paintPanel() {
     const meta = l.readiness === 'safe'
       ? `<span class="meta ok">merged</span>`
       : l.behind > 0
-        ? `<span class="meta ${l.behind >= 5 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind}</span>`
+        ? `<span class="meta ${l.behind >= 3 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind} behind</span>`
         : `<span class="meta"></span>`;
     const folder = l.folder ? `<span class="folder">${esc(l.folder)}</span>` : '';
     return `<button class="lane-row${enter}${l.index === selected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${l.index === selected}">
@@ -537,7 +554,7 @@ function paintPanel() {
 
   const branches = b.branches || [];
   const branchBody = branches.length
-    ? branches.map((br) => `<div class="lane-row static"><span class="name">${esc(br.name)}</span></div>`).join('')
+    ? branches.map((br) => `<div class="lane-row static" title="${esc(br.name)}">${iconHTML('git-branch', 'sm')}<span class="name">${esc(br.name)}</span></div>`).join('')
     : `<div class="empty-note">None</div>`;
   html += `<div class="section">
     <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}">
@@ -1513,6 +1530,16 @@ const SETTINGS_PAGES = {
     const shown = (local ? id.local : id?.global) || { name: '', email: '' };
     const fallback = local ? id.global : { name: '', email: '' };
     const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
+    const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', custom: 'folder-simple' };
+    const editorOpts = (state.editors.length ? state.editors : [
+      { id: 'cursor', label: 'Cursor', available: true },
+      { id: 'vscode', label: 'VS Code', available: true },
+      { id: 'zed', label: 'Zed', available: true },
+      { id: 'custom', label: 'Other app…', available: true },
+    ]).filter((e) => e.available || e.id === p.editor)
+      .map((e) => [e.id, e.label]);
+    const editorIcon = EDITOR_ICON[p.editor] || 'cursor';
+
     const external = [['internal', 'Internal (coming soon)']];
     return `<h1>General</h1><p class="lede">How Overlook opens tools and folders on this Mac.</p>
       <div class="group-head">About</div>
@@ -1528,7 +1555,7 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Open with</div>
       <div class="list">
-        ${settingsRow('cursor', 'Editor', '', '', selectHTML('editor', [['cursor', 'Cursor'], ['vscode', 'VS Code'], ['zed', 'Zed'], ['custom', 'Other app…']], p.editor, 'Editor'), 'App used for Open in editor and after you create a lane.')}
+        ${settingsRow(editorIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'App used for Open in editor and after you create a lane. Missing installs are hidden.')}
         ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Overlook launches when Editor is Other app.') : ''}
         ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create lane also opens that worktree in your editor.')}
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal app opens a lane folder from the palette.')}
@@ -1963,16 +1990,23 @@ async function selectTab(id) {
   state.store = { ...state.store, activeId: id };
   paintTabs();
   const warm = state.warmTabs.get(id);
+  const tab = state.store.tabs.find((t) => t.id === id);
   let usedWarm = false;
   if (warm?.board) {
     usedWarm = true;
     applyBoard(warm.board, { selectLane: warm.selectedLane });
     if (warm.timerId) { clearInterval(warm.timerId); warm.timerId = null; }
+  } else {
+    // Cold tab: show skeleton instead of leaving the previous board painted (stutter).
+    state.board = null;
+    setLoading(true, 'Opening repository…', tab?.path || '');
+    paint();
   }
   try {
     const res = await invoke('tabs.select', id);
     applyStore(res.store);
     if (!usedWarm) {
+      setLoading(false);
       if (res.board) applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
       else {
         state.board = null;
@@ -1996,7 +2030,10 @@ async function selectTab(id) {
       refresh().catch(() => {});
     }
   } catch {
-    if (!usedWarm) paint();
+    if (!usedWarm) {
+      setLoading(false);
+      paint();
+    }
   }
 }
 
@@ -2018,6 +2055,9 @@ async function boot() {
   try {
     state.appVersion = await invoke('app.version');
   } catch { state.appVersion = ''; }
+  try {
+    state.editors = await invoke('os.editors');
+  } catch { state.editors = []; }
   const store = await invoke('tabs.list');
   applyStore(store);
   if (store.activeId) {

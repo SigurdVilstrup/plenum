@@ -71,12 +71,13 @@ export function closeTab(id) {
   return data;
 }
 
-export function renameTab(id, title) {
+export function renameTab(id, title, icon) {
   const data = read();
   const tab = data.tabs.find((t) => t.id === id);
   if (!tab) throw new Error('Tab not found.');
   const trimmed = String(title || '').trim();
   tab.title = trimmed || path.basename(tab.path);
+  if (icon != null) tab.icon = ICONS.includes(icon) ? icon : 'folder-simple';
   write(data);
   return data;
 }

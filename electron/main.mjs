@@ -125,13 +125,14 @@ ipcMain.handle('tabs.close', async (_e, id) => {
   const board = tab ? await loadBoard(tab.path) : null;
   return { store, board };
 });
-ipcMain.handle('tabs.rename', (_e, id, title) => tabs.renameTab(id, title));
+ipcMain.handle('tabs.rename', (_e, id, title, icon) => tabs.renameTab(id, title, icon));
 ipcMain.handle('tabs.setIcon', (_e, id, icon) => tabs.setIcon(id, icon));
 ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds));
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
 ipcMain.handle('prefs.set', (_e, partial) => setPrefs(partial, prefsDir()));
 ipcMain.handle('app.version', () => app.getVersion());
+ipcMain.handle('os.editors', () => listEditors());
 
 // Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
 ipcMain.handle('feedback.save', async (_e, payload) => {
@@ -234,10 +235,40 @@ ipcMain.handle('os.openExternal', (_e, url) => {
 
 const home = process.env.HOME || '';
 const EDITORS = {
-  cursor: { cli: ['/usr/local/bin/cursor', '/opt/homebrew/bin/cursor', path.join(home, '.local/bin/cursor')], open: ['-b', 'com.todesktop.230313mzl4w4u92'] },
-  vscode: { cli: ['/usr/local/bin/code', '/opt/homebrew/bin/code'], open: ['-a', 'Visual Studio Code'] },
-  zed: { cli: ['/usr/local/bin/zed', '/opt/homebrew/bin/zed'], open: ['-a', 'Zed'] },
+  cursor: {
+    label: 'Cursor',
+    cli: ['/usr/local/bin/cursor', '/opt/homebrew/bin/cursor', path.join(home, '.local/bin/cursor')],
+    apps: [path.join(home, 'Applications/Cursor.app'), '/Applications/Cursor.app'],
+    open: ['-b', 'com.todesktop.230313mzl4w4u92'],
+  },
+  vscode: {
+    label: 'VS Code',
+    cli: ['/usr/local/bin/code', '/opt/homebrew/bin/code'],
+    apps: [path.join(home, 'Applications/Visual Studio Code.app'), '/Applications/Visual Studio Code.app'],
+    open: ['-a', 'Visual Studio Code'],
+  },
+  zed: {
+    label: 'Zed',
+    cli: ['/usr/local/bin/zed', '/opt/homebrew/bin/zed'],
+    apps: [path.join(home, 'Applications/Zed.app'), '/Applications/Zed.app'],
+    open: ['-a', 'Zed'],
+  },
 };
+
+function editorAvailable(e) {
+  return e.cli.some((p) => fs.existsSync(p)) || e.apps.some((p) => fs.existsSync(p));
+}
+
+function listEditors() {
+  return [
+    ...Object.entries(EDITORS).map(([id, e]) => ({
+      id,
+      label: e.label,
+      available: editorAvailable(e),
+    })),
+    { id: 'custom', label: 'Other app…', available: true },
+  ];
+}
 
 function launch(cmd, args) {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
