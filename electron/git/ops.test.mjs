@@ -30,6 +30,27 @@ async function fixture() {
   return { root, bare };
 }
 
+
+test('createLane existing: attaches worktree to current branch', async () => {
+  const { root } = await fixture();
+  sh(['branch', 'eng/legacy'], root);
+  fs.writeFileSync(path.join(root, 'legacy.txt'), 'x');
+  // commit on eng/legacy via temporary checkout? branch tip is same as main until we commit on it
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-leg-'));
+  fs.rmSync(tmp, { recursive: true, force: true });
+  sh(['worktree', 'add', tmp, 'eng/legacy'], root);
+  fs.writeFileSync(path.join(tmp, 'legacy.txt'), 'x');
+  sh(['add', 'legacy.txt'], tmp);
+  sh(['commit', '-m', 'legacy tip'], tmp);
+  sh(['worktree', 'remove', tmp], root);
+
+  const board = await ops.createLane(root, { existing: true, branch: 'eng/legacy' });
+  const lane = board.lanes.find((l) => l.branch === 'eng/legacy');
+  assert.ok(lane);
+  assert.equal(lane.name, 'eng/legacy');
+  assert.ok(!board.branches.some((b) => b.name === 'eng/legacy'));
+});
+
 test('create commit push rebase force-with-lease merge remove', async () => {
   const { root } = await fixture();
   let board = await ops.createLane(root, { name: 'one', branch: 'feat/one' });

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { git } from './run.mjs';
+import { git, gitOk } from './run.mjs';
 import { loadBoard } from './board.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from '../lane/manifest.mjs';
 import { down, getProc } from '../lane/supervisor.mjs';
@@ -23,13 +23,36 @@ function assertFeatureName(name) {
 }
 
 /** `lanesFolder`: relative to the primary checkout, or absolute. */
-export async function createLane(root, { name, branch, lanesFolder }) {
+export async function createLane(root, { name, branch, lanesFolder, existing = false }) {
   const board = await loadBoard(root);
   const primary = board.lanes[0];
-  const feature = assertFeatureName(name);
-  const branchName = (branch || `feat/${feature}`).trim();
-  if (!branchName || branchName.startsWith('-') || branchName.includes('..')) {
-    throw new Error('Invalid branch name.');
+  let branchName = (branch || '').trim();
+  let feature;
+  if (existing) {
+    if (!branchName) throw new Error('Branch required.');
+    // origin/foo → ensure local foo tracks it, then use foo
+    if (branchName.startsWith('origin/')) {
+      const local = branchName.slice('origin/'.length);
+      if (!local) throw new Error('Invalid branch name.');
+      if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${local}`], primary.path))) {
+        await git(['branch', '--track', local, branchName], primary.path);
+      }
+      branchName = local;
+    }
+    if (branchName.startsWith('-') || branchName.includes('..')) throw new Error('Invalid branch name.');
+    if (board.lanes.some((l) => l.branch === branchName)) {
+      throw new Error(`Branch ${branchName} already has a lane.`);
+    }
+    if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], primary.path))) {
+      throw new Error(`Branch ${branchName} not found.`);
+    }
+    feature = assertFeatureName(name || branchName.split('/').pop());
+  } else {
+    feature = assertFeatureName(name);
+    branchName = (branchName || `feat/${feature}`).trim();
+    if (!branchName || branchName.startsWith('-') || branchName.includes('..')) {
+      throw new Error('Invalid branch name.');
+    }
   }
   const lanesDir = path.resolve(primary.path, String(lanesFolder || '').trim() || '.worktrees');
   if (lanesDir === path.resolve(primary.path)) throw new Error('Lanes folder cannot be the checkout itself.');
@@ -41,13 +64,17 @@ export async function createLane(root, { name, branch, lanesFolder }) {
   fs.mkdirSync(path.dirname(exclude), { recursive: true });
   const rel = path.relative(primary.path, lanesDir);
   const stamp = `${rel}/`;
-  const existing = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
+  const excludeText = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
   // Only a folder inside the checkout needs hiding from `git status`.
-  if (!rel.startsWith('..') && !path.isAbsolute(rel) && !existing.split(/\r?\n/).includes(stamp)) {
-    fs.writeFileSync(exclude, `${existing}${existing && !existing.endsWith('\n') ? '\n' : ''}${stamp}\n`);
+  if (!rel.startsWith('..') && !path.isAbsolute(rel) && !excludeText.split(/\r?\n/).includes(stamp)) {
+    fs.writeFileSync(exclude, `${excludeText}${excludeText && !excludeText.endsWith('\n') ? '\n' : ''}${stamp}\n`);
   }
   const base = board.teamRef;
-  await git(['worktree', 'add', '-b', branchName, folder, base], primary.path);
+  if (existing) {
+    await git(['worktree', 'add', folder, branchName], primary.path);
+  } else {
+    await git(['worktree', 'add', '-b', branchName, folder, base], primary.path);
+  }
 
   try {
     const manifest = await loadManifest(path.join(primary.path, '.overlook', 'lane.yaml'));
@@ -79,7 +106,7 @@ export async function createLane(root, { name, branch, lanesFolder }) {
     }
   } catch (err) {
     await git(['worktree', 'remove', '--force', folder], primary.path).catch(() => {});
-    await git(['branch', '-D', branchName], primary.path).catch(() => {});
+    if (!existing) await git(['branch', '-D', branchName], primary.path).catch(() => {});
     throw err;
   }
   return loadBoard(root);

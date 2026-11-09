@@ -579,7 +579,7 @@ function paintPanel() {
 
   const branches = b.branches || [];
   const branchBody = branches.length
-    ? branches.map((br) => `<div class="lane-row static" title="${esc(br.name)}">${iconHTML('git-branch', 'sm')}<span class="name">${esc(br.name)}</span></div>`).join('')
+    ? branches.map((br) => `<div class="lane-row static" title="${esc(br.name)}">${iconHTML('git-branch', 'sm')}<span class="name">${esc(br.name)}</span><button class="btn" type="button" data-open-as-lane="${esc(br.name)}" title="Create a lane on ${esc(br.name)}">Open as lane</button></div>`).join('')
     : `<div class="empty-note">None</div>`;
   html += `<div class="section">
     <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}">
@@ -615,6 +615,12 @@ function paintPanel() {
   el.panel.querySelector('[data-branches]')?.addEventListener('click', () => {
     state.branchesOpen = !state.branchesOpen;
     paint();
+  });
+  el.panel.querySelectorAll('[data-open-as-lane]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLaneFromBranch(btn.dataset.openAsLane);
+    });
   });
 }
 
@@ -1098,6 +1104,19 @@ function openFeedbackSheet(seed = {}) {
   if (comment) ta.setSelectionRange(comment.length, comment.length);
 }
 
+
+async function openLaneFromBranch(branch) {
+  const name = String(branch || '').trim();
+  if (!name) return;
+  try {
+    const board = await invoke('lane.create', { existing: true, branch: name });
+    const created = board.lanes.find((l) => l.branch === name) || board.lanes[board.lanes.length - 1];
+    applyBoard(board, { selectLane: created?.index, enterLane: created?.index });
+    toast(`Lane ${created?.name || name} opened`, 'ok');
+    if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
+  } catch { /* toasted */ }
+}
+
 function openCreateLane() {
   const team = state.board.teamRef;
   openSheet(`
@@ -1112,6 +1131,7 @@ function openCreateLane() {
         ${iconHTML('shield-check')}
         <div><strong>Team step.</strong> Base is current <span class="mono">${esc(team)}</span>. If main moves later, this lane shows as behind on the board.</div>
       </div>
+      <p class="lede" style="margin:0">Already have a branch? Open <strong>Branches without a lane</strong> → <strong>Open as lane</strong>.</p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn primary" type="submit">${iconHTML('arrow-square-out', 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>
