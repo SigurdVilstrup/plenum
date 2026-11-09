@@ -499,7 +499,7 @@ function paintPanel() {
     ? `${iconHTML('warning-circle')}`
     : `${iconHTML('shield-check')}`;
   let html = `<div class="section">
-    <div class="section-head" title="The checkout on the team branch. Overlook watches it and never works in it.">Protected</div>
+    <div class="section-head" title="The checkout on the team branch. Plenum watches it and never works in it.">Protected</div>
     <button class="lane-row ${selected === 0 ? 'selected' : ''}" type="button" data-lane="0">
       <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
       <span class="name">${esc(primary.name)}</span>
@@ -631,7 +631,7 @@ function laneSetupLink() {
 
 function runActionsHTML(l) {
   if (l.isPrimary) {
-    return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Overlook. Run the stack from a lane.</span>${laneSetupLink()}`;
+    return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Plenum. Run the stack from a lane.</span>${laneSetupLink()}`;
   }
   if (l.readiness === 'safe' && !l.running) {
     return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
@@ -905,9 +905,9 @@ el.sheetLayer.addEventListener('click', (e) => {
 
 function openQuickStartSheet() {
   const rows = [
-    ['git-branch', 'Overlook, not a normal client', 'Git underneath, plain repo. The board shows every worktree against the team at once, with the verbs per lane.'],
+    ['git-branch', 'Plenum, not a normal client', 'Git underneath, plain repo. The board shows every worktree against the team at once, with the verbs per lane.'],
     ['tree-structure', 'Lane', 'A git worktree on its own branch. Several features in progress, side by side.'],
-    ['shield-check', 'Protected main', 'The checkout on the team branch. Overlook watches it and never works in it.'],
+    ['shield-check', 'Protected main', 'The checkout on the team branch. Plenum watches it and never works in it.'],
     ['cloud-arrow-down', 'Behind', 'Commits the team branch has that this lane does not.'],
     ['sparkle', 'Authorship', 'Who wrote the newest commit, read from the author and agent trailers. Human gets no pill.'],
     ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .overlook/lane.yaml. Without that file it still shows on the board.'],
@@ -1139,7 +1139,7 @@ function openRemoveSheet(lane) {
       </div>
       <div class="check">
         ${iconHTML('shield-check')}
-        <div>One lane at a time. Overlook never removes a lane with uncommitted work or unmerged commits.</div>
+        <div>One lane at a time. Plenum never removes a lane with uncommitted work or unmerged commits.</div>
       </div>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
@@ -1525,10 +1525,6 @@ const settingsPlaceholder = (title, lede) => `<h1>${title}</h1><p class="lede">$
 const SETTINGS_PAGES = {
   general: () => {
     const p = state.prefs;
-    const id = state.identity;
-    const local = state.identityScope === 'local' && id?.local;
-    const shown = (local ? id.local : id?.global) || { name: '', email: '' };
-    const fallback = local ? id.global : { name: '', email: '' };
     const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
     const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', custom: 'folder-simple' };
     const editorOpts = (state.editors.length ? state.editors : [
@@ -1541,7 +1537,7 @@ const SETTINGS_PAGES = {
     const editorIcon = EDITOR_ICON[p.editor] || 'cursor';
 
     const external = [['internal', 'Internal (coming soon)']];
-    return `<h1>General</h1><p class="lede">How Overlook opens tools and folders on this Mac.</p>
+    return `<h1>General</h1><p class="lede">How Plenum opens tools and folders on this Mac.</p>
       <div class="group-head">About</div>
       <div class="list">
         ${settingsRow(
@@ -1556,15 +1552,15 @@ const SETTINGS_PAGES = {
       <div class="group-head">Open with</div>
       <div class="list">
         ${settingsRow(editorIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'App used for Open in editor and after you create a lane. Missing installs are hidden.')}
-        ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Overlook launches when Editor is Other app.') : ''}
+        ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Plenum launches when Editor is Other app.') : ''}
         ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create lane also opens that worktree in your editor.')}
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal app opens a lane folder from the palette.')}
-        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Overlook launches when Terminal is Other app.') : ''}
+        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Plenum launches when Terminal is Other app.') : ''}
       </div>
       <div class="group-head">Diff and merge<small>Built-in view is not ready. These picks wait for it.</small></div>
       <div class="list">
-        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'), 'Where file diffs will open once Overlook has a diff view. External tools come later.')}
-        ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'), 'Where conflict merges will open once Overlook has a merge view. External tools come later.')}
+        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'), 'Where file diffs will open once Plenum has a diff view. External tools come later.')}
+        ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'), 'Where conflict merges will open once Plenum has a merge view. External tools come later.')}
       </div>
       <div class="group-head">Folders</div>
       <div class="list">
@@ -1573,34 +1569,39 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Tabs</div>
       <div class="list">
-        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list when Overlook starts, so you begin empty.')}
+        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list when Plenum starts, so you begin empty.')}
         ${settingsRow('clock', 'Tab warm time', '', 'How long a left tab stays hot', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }), 'Within this window, switching back to a tab paints the last board instantly while git refreshes in the background. After it freezes you still get one instant paint, then a full reload.')}
       </div>
-      <div class="group-head">Git identity<small>Writes user.name / user.email in git config. Not Overlook prefs.</small></div>
-      <div class="list">
-        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repo to set a local identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'Global hits ~/.gitconfig. This repository writes only the open repo’s local config.')}
-        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on commits Overlook (and git) create.')}
-        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`, 'Author email on commits. Matches what remotes and hosting expect.')}
-      </div>`;
+`;
   },
   appearance: () => {
     const p = state.prefs;
     return `<h1>Appearance</h1><p class="lede">Theme, size, and type. Lives on this Mac only.</p>
       <div class="list">
         ${settingsRow('sun', 'Theme', '', 'System tracks macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Theme' }), 'System follows light/dark from macOS. Light and Dark stay put.')}
-        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole Overlook window. 100% is the design size.')}
-        ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Overlook. Switch and the window should change immediately.')}
+        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole Plenum window. 100% is the design size.')}
+        ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and the window should change immediately.')}
       </div>`;
   },
   accounts: () => {
     const a = state.accounts;
+    const id = state.identity;
+    const local = state.identityScope === 'local' && id?.local;
+    const shown = (local ? id.local : id?.global) || { name: '', email: '' };
+    const fallback = local ? id.global : { name: '', email: '' };
     const helper = a?.helper?.length ? a.helper.join(', ') : '';
     const where = /osxkeychain/.test(helper) ? 'Keychain' : helper ? `credential helper (${esc(helper)})` : '';
-    const saved = (a?.hosts || []).map((h) => `<div class="list-row" title="Host and username Overlook remembers. The token itself stays in ${where || 'your git credential helper'}.">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
+    const saved = (a?.hosts || []).map((h) => `<div class="list-row" title="Host and username Plenum remembers. The token itself stays in ${where || 'your git credential helper'}.">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
       || `<div class="list-row" title="Add a host below so https push/pull can use a token without prompting every time.">${iconHTML('key')}<div class="name">None yet</div><div class="detail">https remotes will keep asking until you save one.</div><span></span><span></span></div>`;
     const field = (name, ph, type = 'text') => `<input class="input" name="${name}" type="${type}" placeholder="${ph}" aria-label="${ph}" autocomplete="off" required />`;
     const ssh = !a ? '' : a.ssh.state === 'keys' ? `${a.ssh.count} key${a.ssh.count === 1 ? '' : 's'} in ssh-agent` : a.ssh.state === 'none' ? 'ssh-agent has no keys' : 'No ssh-agent running';
-    return `<h1>Accounts</h1><p class="lede">https credentials for push and pull. Tokens go to git’s helper${where ? ` (${where})` : ''}. Overlook stores host + username only.</p>
+    return `<h1>Accounts</h1><p class="lede">Who commits as, and how https remotes authenticate. Tokens go to git’s helper${where ? ` (${where})` : ''}. Host + username only are remembered here.</p>
+      <div class="group-head">Git identity<small>Writes user.name / user.email in git config. Not app prefs.</small></div>
+      <div class="list">
+        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repo to set a local identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'Global hits ~/.gitconfig. This repository writes only the open repo’s local config.')}
+        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on commits git creates.')}
+        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`, 'Author email on commits. Matches what remotes and hosting expect.')}
+      </div>
       <div class="group-head">HTTPS</div>
       <div class="list">${saved}</div>
       <div class="group-head">Add<small>Use a personal access token with repo scope, not your password.</small></div>
@@ -1608,8 +1609,8 @@ const SETTINGS_PAGES = {
         <form class="list-row acct" data-acct="github" title="Saves github.com credentials through git credential approve.">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
         <form class="list-row acct" data-acct="https" title="Any https git host. Host is the hostname only, no https://.">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
       </div>
-      <div class="group-head">SSH<small>Overlook does not manage keys. Git uses ssh-agent and ~/.ssh/config.</small></div>
-      <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`, 'Status only. Add or unlock keys outside Overlook.')}</div>`;
+      <div class="group-head">SSH<small>Plenum does not manage keys. Git uses ssh-agent and ~/.ssh/config.</small></div>
+      <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`, 'Status only. Add or unlock keys outside Plenum.')}</div>`;
   },
   repositories: () => {
     const tabs = state.store.tabs;
@@ -1679,7 +1680,7 @@ const SETTINGS_PAGES = {
       <div class="agents-stub">
         <div class="group-head">Local MCP</div>
         <div class="list">
-          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">overlook mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at overlook mcp. Overlook does not host an HTTP MCP port yet.')}
+          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">overlook mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at overlook mcp. Plenum does not host an HTTP MCP port yet.')}
           ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appVersion || '…')}</span>`, 'Install the overlook binary on your PATH for shells and scripts.')}
         </div>
         <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
@@ -1787,7 +1788,7 @@ function bindAccounts(root) {
 
 async function loadIdentity() {
   try { state.identity = await invoke('git.identity.get'); } catch { return; }
-  if (state.settings.open && state.settings.page === 'general') renderSettings();
+  if (state.settings.open && state.settings.page === 'accounts') renderSettings();
 }
 
 function bindIdentity(root) {
@@ -1824,8 +1825,7 @@ function openSettings(page = state.settings.page) {
   state.settings.page = page;
   paint();
   renderSettings();
-  if (page === 'general') loadIdentity();
-  if (page === 'accounts') loadAccounts();
+  if (page === 'accounts') { loadIdentity(); loadAccounts(); }
   if (page === 'repositories') loadRepos();
   if (page === 'setup') loadSetup(state.settings.setupRoot || state.board?.root);
 }
@@ -1844,8 +1844,7 @@ function renderSettings() {
     <div class="heading">Settings</div>${nav}`;
   el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
-  if (page === 'general') bindIdentity(el.settingsBody);
-  if (page === 'accounts') bindAccounts(el.settingsBody);
+  if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
   bindPrefs(el.settingsBody);
