@@ -72,6 +72,49 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
   }
 });
 
+
+test('loadBoard: unpushed tracks origin/branch, not team ahead', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-bare-')) + '.git';
+  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  fs.rmSync(bare, { recursive: true, force: true });
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'Tester'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'hello');
+    git(['add', 'README'], root);
+    git(['commit', '-m', 'init'], root);
+    git(['init', '--bare', '-b', 'main', bare]);
+    git(['remote', 'add', 'origin', bare], root);
+    git(['push', '-u', 'origin', 'main'], root);
+
+    git(['worktree', 'add', '-b', 'feat/push', wt], root);
+    git(['commit', '--allow-empty', '-m', 'lane tip'], wt);
+
+    let board = await loadBoard(root);
+    let lane = board.lanes[1];
+    assert.equal(lane.ahead, 1);
+    assert.equal(lane.unpushed, 1, 'never-pushed lane tip counts as unpushed');
+
+    git(['push', '-u', 'origin', 'HEAD'], wt);
+    // main moves ahead on remote/local while feature stays put
+    fs.writeFileSync(path.join(root, 'main.txt'), 'm');
+    git(['add', 'main.txt'], root);
+    git(['commit', '-m', 'main moves'], root);
+
+    board = await loadBoard(root);
+    lane = board.lanes[1];
+    assert.ok(lane.ahead >= 1, 'feature tip still ahead of teamRef');
+    assert.equal(lane.unpushed, 0, 'Push must clear after origin/feat matches HEAD');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
+
 test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
   const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);

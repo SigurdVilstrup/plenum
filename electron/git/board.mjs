@@ -107,6 +107,15 @@ async function countRange(range, cwd) {
   }
 }
 
+/** Commits on HEAD not yet on origin/<branch> (Push affordance). Falls back to teamRef..HEAD before first push. */
+async function countUnpushed(branch, teamRef, cwd) {
+  if (!branch) return 0;
+  if (await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`], cwd)) {
+    return countRange(`origin/${branch}..HEAD`, cwd);
+  }
+  return countRange(`${teamRef}..HEAD`, cwd);
+}
+
 /** Parse `git status --porcelain` into path + XY code. */
 export function parseDirty(text) {
   if (!text) return [];
@@ -409,6 +418,7 @@ export async function loadBoard(repoPath) {
     const dirty = dirtyFiles.length;
     const behind = hasCommit && tree.head ? await countRange(`HEAD..${teamRef}`, tree.path) : 0;
     const ahead = hasCommit && tree.head ? await countRange(`${teamRef}..HEAD`, tree.path) : 0;
+    const unpushed = hasCommit && tree.head ? await countUnpushed(branch, teamRef, tree.path) : 0;
     const tip = tree.head ? await tipInfo(tree.path) : null;
     const clean = dirty === 0;
     // Local or origin team tip for "merged"; origin for behind/ahead.
@@ -431,6 +441,7 @@ export async function loadBoard(repoPath) {
       isPrimary: index === 0,
       behind,
       ahead,
+      unpushed,
       dirty,
       dirtyFiles,
       onTeamBranch: onTeam,
