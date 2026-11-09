@@ -24,7 +24,7 @@ async function fixture() {
   fs.writeFileSync(path.join(root, 'a.txt'), 'base\n');
   sh(['add', 'a.txt'], root);
   sh(['commit', '-m', 'base'], root);
-  sh(['init', '--bare', bare]);
+  sh(['init', '--bare', '-b', 'main', bare]);
   sh(['remote', 'add', 'origin', bare], root);
   sh(['push', '-u', 'origin', 'main'], root);
   return { root, bare };
@@ -112,29 +112,30 @@ test('primary push after merge publishes to origin', async () => {
 
 
 test('primary commit push pull', async () => {
-  const { root } = await fixture();
+  const { root, bare } = await fixture();
   fs.writeFileSync(path.join(root, 'on-main.txt'), 'm');
   let board = await ops.commitLane(root, 0, 'main commit');
   assert.equal(board.lanes[0].dirty, 0);
   assert.ok(board.lanes[0].ahead >= 1);
   board = await ops.pushLane(root, 0);
   assert.equal(board.lanes[0].ahead, 0);
-  // Advance remote via a second clone tip: commit locally then reset? Simpler: make another commit on a bare via worktree.
+  // Advance remote via a worktree on the bare — avoids a second clone, which
+  // can end up with unrelated histories on newer git (CI runners ship 2.56).
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-other-'));
-  await git(['clone', (await git(['remote', 'get-url', 'origin'], root)).trim(), other]);
+  fs.rmSync(other, { recursive: true, force: true });
+  await git(['--git-dir', bare, 'worktree', 'add', other, 'main']);
   await git(['config', 'user.email', 't@e.com'], other);
   await git(['config', 'user.name', 'T'], other);
   await git(['config', 'commit.gpgsign', 'false'], other);
   fs.writeFileSync(path.join(other, 'remote.txt'), 'r');
   await git(['add', 'remote.txt'], other);
   await git(['commit', '-m', 'remote tip'], other);
-  await git(['push'], other);
+  await git(['--git-dir', bare, 'worktree', 'remove', other, '--force']);
   await git(['fetch'], root);
   board = await loadBoard(root);
   assert.ok(board.lanes[0].behind >= 1);
   board = await ops.pullLane(root, 0);
   assert.equal(board.lanes[0].behind, 0);
-  fs.rmSync(other, { recursive: true, force: true });
 });
 
 test('stash and pop uncommitted', async () => {
