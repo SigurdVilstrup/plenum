@@ -936,7 +936,7 @@ function feedbackPickLabel(node) {
   if (aria) return aria.slice(0, 40);
   const title = node.getAttribute('title')?.trim();
   if (title) return title.slice(0, 40);
-  const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+  const text = (node.innerText || '').replace(/\s+/g, ' ').trim();
   if (text) return text.length > 40 ? text.slice(0, 40) : text;
   return node.tagName.toLowerCase();
 }
@@ -1011,7 +1011,7 @@ function openFeedbackSheet(seed = {}) {
           ${target ? '<button class="btn" type="button" data-clear-target>Clear</button>' : ''}
         </div>
       </div>
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}A <strong>full-window screenshot of what is visible right now</strong> will be saved on this Mac. Nothing is uploaded.</p>
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>A full-window screenshot of what is visible right now will be saved on this Mac. Nothing is uploaded.</span></p>
       <div class="row-end">
         <span class="hint-text">⌘↩</span>
         <button class="btn" type="button" data-close>Cancel</button>

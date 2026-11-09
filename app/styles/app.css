@@ -521,7 +521,7 @@ button.env-link {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid var(--hairline);
   background: var(--surface-2);
@@ -539,7 +539,7 @@ button.env-link {
 .feedback-warn {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 8px;
   margin: 0 0 16px;
   font-size: 12px;
   line-height: 1.45;
