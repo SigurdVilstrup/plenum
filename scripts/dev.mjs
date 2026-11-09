@@ -1,6 +1,8 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'vite';
 import electronPath from 'electron';
+
+spawnSync(process.execPath, ['scripts/stamp-build-info.mjs'], { stdio: 'inherit' });
 
 const server = await createServer({
   configFile: 'vite.config.js',
