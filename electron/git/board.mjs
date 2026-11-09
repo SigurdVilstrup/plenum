@@ -454,12 +454,27 @@ export async function loadBoard(repoPath) {
     stashCount = (await git(['stash', 'list'], top)).split(/\n/).filter(Boolean).length;
   } catch { /* empty */ }
 
+  const services = manifest?.services
+    ? Object.entries(manifest.services).map(([name, s]) => ({
+      name,
+      mode: s?.mode || 'shared',
+    }))
+    : [];
+
   return {
     repoName: path.basename(trees[0].path),
     root: trees[0].path,
     teamBranch: team,
     teamRef,
     hasManifest: Boolean(manifest),
+    manifestSummary: manifest
+      ? {
+        run: manifest.run || '',
+        test: manifest.test || '',
+        offset: manifest.ports?.offset ?? 0,
+        services,
+      }
+      : null,
     readAt: Date.now(),
     stashCount,
     lanes,

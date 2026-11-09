@@ -497,7 +497,12 @@ button.env-link {
   .lane-row .mark { transition: none; }
 }
 
+.body.settings-open {
+  grid-template-columns: 1fr;
+}
+
 #settings {
   grid-column: 1 / -1;
   min-height: 0;
+  width: 100%;
 }

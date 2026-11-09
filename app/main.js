@@ -59,7 +59,7 @@ const state = {
   setup: null,
   identityScope: 'global',
   warmTtlMs: 120000,
-  settings: { open: false, page: 'general', setupRoot: null },
+  settings: { open: false, page: 'general', setupRoot: null, repoPath: null },
 };
 
 const el = {
@@ -93,7 +93,9 @@ function applyTheme() {
 
 function applyPrefs() {
   applyTheme();
-  document.documentElement.dataset.font = state.prefs.fontPack || 'system';
+  const pack = state.prefs.fontPack || 'system';
+  if (pack === 'system') delete document.documentElement.dataset.font;
+  else document.documentElement.dataset.font = pack;
   api.setZoom(state.prefs.zoom || 1);
   if (state.prefs.warmTabTtlMs) state.warmTtlMs = state.prefs.warmTabTtlMs;
 }
@@ -248,6 +250,7 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
 function paint() {
   paintTabs();
   el.settings.hidden = !state.settings.open;
+  el.body.classList.toggle('settings-open', state.settings.open);
   if (state.settings.open) {
     // Settings owns the body; the board repaints on close.
     for (const n of [el.empty, el.loading, el.panel, el.main, el.changes]) n.hidden = true;
@@ -1365,8 +1368,8 @@ const selectHTML = (key, options, cur, label) =>
 const switchHTML = (key, on, label) =>
   `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${!!on}" aria-label="${esc(label)}" data-pref="${key}"></button>`;
 
-const settingsRow = (ic, name, small, detail, control = '') =>
-  `<div class="list-row">${iconHTML(ic)}<div class="name">${name}${small ? `<small>${small}</small>` : ''}</div><div class="detail">${detail || ''}</div>${control}<span></span></div>`;
+const settingsRow = (ic, name, small, detail, control = '', tip = '') =>
+  `<div class="list-row"${tip ? ` title="${esc(tip)}"` : ''}>${iconHTML(ic)}<div class="name">${name}${small ? `<small>${small}</small>` : ''}</div><div class="detail">${detail || ''}</div>${control}<span></span></div>`;
 
 const settingsPlaceholder = (title, lede) => `<h1>${title}</h1><p class="lede">${lede}</p>`;
 
@@ -1378,82 +1381,103 @@ const SETTINGS_PAGES = {
     const shown = (local ? id.local : id?.global) || { name: '', email: '' };
     const fallback = local ? id.global : { name: '', email: '' };
     const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
-    const external = [['internal', 'Internal (coming soon)']]; // external tools are not wired up yet
-    return `<h1>General</h1><p class="lede">Editor, terminal, folders and tab behavior. Saved on this Mac.</p>
+    const external = [['internal', 'Internal (coming soon)']];
+    return `<h1>General</h1><p class="lede">How Overlook opens tools and folders on this Mac.</p>
       <div class="group-head">Open with</div>
       <div class="list">
-        ${settingsRow('cursor', 'Editor', '', '', selectHTML('editor', [['cursor', 'Cursor'], ['vscode', 'VS Code'], ['zed', 'Zed'], ['custom', 'Other app…']], p.editor, 'Editor'))}
-        ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'An .app bundle or an executable', custom('editorPath', '/Applications/Zed.app')) : ''}
-        ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'After Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'))}
-        ${settingsRow('terminal-window', 'Terminal', '', 'Palette: Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'))}
-        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'An .app bundle or an executable', custom('terminalPath', '/Applications/Ghostty.app')) : ''}
+        ${settingsRow('cursor', 'Editor', '', '', selectHTML('editor', [['cursor', 'Cursor'], ['vscode', 'VS Code'], ['zed', 'Zed'], ['custom', 'Other app…']], p.editor, 'Editor'), 'App used for Open in editor and after you create a lane.')}
+        ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Overlook launches when Editor is Other app.') : ''}
+        ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create lane also opens that worktree in your editor.')}
+        ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal app opens a lane folder from the palette.')}
+        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Overlook launches when Terminal is Other app.') : ''}
       </div>
-      <div class="group-head">Diff and merge<small>Overlook has no diff or merge view yet. Choices land with it.</small></div>
+      <div class="group-head">Diff and merge<small>Built-in view is not ready. These picks wait for it.</small></div>
       <div class="list">
-        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'))}
-        ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'))}
+        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'), 'Where file diffs will open once Overlook has a diff view. External tools come later.')}
+        ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'), 'Where conflict merges will open once Overlook has a merge view. External tools come later.')}
       </div>
       <div class="group-head">Folders</div>
       <div class="list">
-        ${settingsRow('folder-simple', 'Clone path', 'Where Open Repository starts', '', custom('cloneDefaultPath', '~/Dev'))}
-        ${settingsRow('tree-structure', 'Lanes folder', 'Per repository override under Repositories', 'Relative to the checkout, or absolute', custom('defaultLanesFolder', '.worktrees'))}
+        ${settingsRow('folder-simple', 'Clone path', 'Open Repository starts here', '', custom('cloneDefaultPath', '~/Dev'), 'Folder the Open Repository picker jumps to first. Use ~/… or an absolute path.')}
+        ${settingsRow('tree-structure', 'Lanes folder', 'Default for new repos', 'Override per repo under Repositories', custom('defaultLanesFolder', '.worktrees'), 'Where Create lane puts worktrees when a repo has no override. Relative paths sit inside the checkout.')}
       </div>
       <div class="group-head">Tabs</div>
       <div class="list">
-        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Open repositories come back on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'))}
-        ${settingsRow('clock', 'Tab warm time', '', 'A tab you left keeps refreshing, so coming back is instant', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }))}
+        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list when Overlook starts, so you begin empty.')}
+        ${settingsRow('clock', 'Tab warm time', '', 'How long a left tab stays hot', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }), 'Within this window, switching back to a tab paints the last board instantly while git refreshes in the background. After it freezes you still get one instant paint, then a full reload.')}
       </div>
-      <div class="group-head">Git identity<small>Written to git config, not to Overlook's prefs.</small></div>
+      <div class="group-head">Git identity<small>Writes user.name / user.email in git config. Not Overlook prefs.</small></div>
       <div class="list">
-        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repository for a per-repository identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }))}
-        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`)}
-        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`)}
+        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repo to set a local identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'Global hits ~/.gitconfig. This repository writes only the open repo’s local config.')}
+        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on commits Overlook (and git) create.')}
+        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`, 'Author email on commits. Matches what remotes and hosting expect.')}
       </div>`;
   },
   appearance: () => {
     const p = state.prefs;
-    return `<h1>Appearance</h1><p class="lede">Theme, zoom and fonts. Saved on this Mac.</p>
+    return `<h1>Appearance</h1><p class="lede">Theme, size, and type. Lives on this Mac only.</p>
       <div class="list">
-        ${settingsRow('sun', 'Theme', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Theme' }))}
-        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }))}
-        ${settingsRow('list', 'Font', '', 'Inter, JetBrains Mono and IBM Plex use the copy installed on this Mac, else the system font', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }))}
+        ${settingsRow('sun', 'Theme', '', 'System tracks macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Theme' }), 'System follows light/dark from macOS. Light and Dark stay put.')}
+        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole Overlook window. 100% is the design size.')}
+        ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Overlook. Switch and the window should change immediately.')}
       </div>`;
   },
   accounts: () => {
     const a = state.accounts;
     const helper = a?.helper?.length ? a.helper.join(', ') : '';
     const where = /osxkeychain/.test(helper) ? 'Keychain' : helper ? `credential helper (${esc(helper)})` : '';
-    const saved = (a?.hosts || []).map((h) => `<div class="list-row">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token saved in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
-      || `<div class="list-row">${iconHTML('key')}<div class="name">None yet</div><div class="detail">Push and pull over https asks nothing until you add one.</div><span></span><span></span></div>`;
+    const saved = (a?.hosts || []).map((h) => `<div class="list-row" title="Host and username Overlook remembers. The token itself stays in ${where || 'your git credential helper'}.">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
+      || `<div class="list-row" title="Add a host below so https push/pull can use a token without prompting every time.">${iconHTML('key')}<div class="name">None yet</div><div class="detail">https remotes will keep asking until you save one.</div><span></span><span></span></div>`;
     const field = (name, ph, type = 'text') => `<input class="input" name="${name}" type="${type}" placeholder="${ph}" aria-label="${ph}" autocomplete="off" required />`;
     const ssh = !a ? '' : a.ssh.state === 'keys' ? `${a.ssh.count} key${a.ssh.count === 1 ? '' : 's'} in ssh-agent` : a.ssh.state === 'none' ? 'ssh-agent has no keys' : 'No ssh-agent running';
-    return `<h1>Accounts</h1><p class="lede">How Overlook pushes and pulls over https. A token goes to git's credential helper${where ? ` (${where})` : ''}. Overlook keeps the host and username, never the token.</p>
-      <div class="group-head">HTTPS credentials</div>
+    return `<h1>Accounts</h1><p class="lede">https credentials for push and pull. Tokens go to git’s helper${where ? ` (${where})` : ''}. Overlook stores host + username only.</p>
+      <div class="group-head">HTTPS</div>
       <div class="list">${saved}</div>
-      <div class="group-head">Add<small>Use a personal access token with repo access, not your password.</small></div>
+      <div class="group-head">Add<small>Use a personal access token with repo scope, not your password.</small></div>
       <div class="list">
-        <form class="list-row acct" data-acct="github">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
-        <form class="list-row acct" data-acct="https">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+        <form class="list-row acct" data-acct="github" title="Saves github.com credentials through git credential approve.">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+        <form class="list-row acct" data-acct="https" title="Any https git host. Host is the hostname only, no https://.">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
       </div>
-      <div class="group-head">SSH<small>Overlook never touches keys. Git uses your ssh-agent and <span class="mono">~/.ssh/config</span>.</small></div>
-      <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`)}</div>`;
+      <div class="group-head">SSH<small>Overlook does not manage keys. Git uses ssh-agent and ~/.ssh/config.</small></div>
+      <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`, 'Status only. Add or unlock keys outside Overlook.')}</div>`;
   },
   repositories: () => {
-    const head = `<h1>Repositories</h1><p class="lede">Per repository: the team branch, where lanes live, and how a lane runs. Lane setup is a file in the repo, <span class="mono">.overlook/lane.yaml</span>, shared by the team and every agent.</p>`;
-    if (!state.store.tabs.length) return `${head}<div class="list">${settingsRow('folder-simple', 'No repositories open', '', 'Open one to see its settings.')}</div>`;
-    return head + state.store.tabs.map((t) => {
-      const b = state.repoBoards.get(t.path);
-      const root = b?.root || t.path;
-      const folder = state.prefs.repoOverrides?.[root]?.lanesFolder || '';
-      const setup = !b ? '<span class="status"><i></i>Checking…</span>'
-        : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
-      return `<div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
-        <div class="list">
-          ${settingsRow('shield-check', 'Team branch', 'What behind is measured against', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '')}
-          ${settingsRow('tree-structure', 'Lanes folder', 'Where new lanes are created', `Empty uses <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`)}
-          ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.overlook/lane.yaml' : 'No <span class="mono">.overlook/lane.yaml</span> yet', b?.hasManifest ? 'Lanes can start from the board.' : 'Lanes show on the board but cannot start yet.', `${setup}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run lane setup' : 'Lane setup…'}</button>`)}
-        </div>`;
-    }).join('');
+    const tabs = state.store.tabs;
+    const head = `<h1>Repositories</h1><p class="lede">One open tab at a time. Team branch, lanes folder, and whether the repo can run.</p>`;
+    if (!tabs.length) return `${head}<div class="list">${settingsRow('folder-simple', 'No repositories open', '', 'Open one from the empty state or ⌘P.', '', 'Settings here are per open tab. Close a tab and it leaves this list.')}</div>`;
+    const activePath = state.settings.repoPath
+      && tabs.some((t) => t.path === state.settings.repoPath)
+      ? state.settings.repoPath
+      : (tabs.find((t) => t.id === state.store.activeId)?.path || tabs[0].path);
+    state.settings.repoPath = activePath;
+    const t = tabs.find((x) => x.path === activePath) || tabs[0];
+    const b = state.repoBoards.get(t.path);
+    const root = b?.root || t.path;
+    const folder = state.prefs.repoOverrides?.[root]?.lanesFolder || '';
+    const m = b?.manifestSummary;
+    const setupStatus = !b ? '<span class="status"><i></i>Loading…</span>'
+      : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
+    const runDetail = m?.run
+      ? `run <span class="mono">${esc(m.run)}</span>${m.test ? ` · test <span class="mono">${esc(m.test)}</span>` : ''} · ports <span class="mono">+${esc(m.offset)}</span>`
+      : (b?.hasManifest ? 'Manifest present.' : 'No .overlook/lane.yaml yet — lanes show on the board but cannot start.');
+    const svc = (m?.services || []).map((s) => `${esc(s.name)} (${esc(s.mode)})`).join(', ');
+    const picker = `<div class="repo-picker" role="tablist" aria-label="Open repositories">${tabs.map((tab) => {
+      const on = tab.path === activePath;
+      const bb = state.repoBoards.get(tab.path);
+      const tip = bb?.hasManifest ? 'Has lane.yaml' : bb ? 'No lane.yaml yet' : 'Loading board…';
+      return `<button class="option${on ? ' on' : ''}" type="button" role="tab" aria-selected="${on}" data-repo-path="${esc(tab.path)}" title="${esc(tip)}"><span>${esc(tab.title)}</span><span class="mono">${esc(bb?.displayRoot || tab.path)}</span></button>`;
+    }).join('')}</div>`;
+    const edit = b?.hasManifest
+      ? `<button class="btn" type="button" data-edit-manifest="${esc(root)}" title="Open .overlook/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button>`
+      : '';
+    return `${head}${picker}
+      <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
+      <div class="list">
+        ${settingsRow('shield-check', 'Team branch', 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', '', 'Detected from the remote default / origin. Behind on the board is measured against this ref.')}
+        ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'Override only for this repo. Relative paths are under the checkout; absolute paths are allowed.')}
+        ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.overlook/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Run the doctor and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .overlook/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
+        ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared means one instance for every lane; snapshot seeds a copy before Run.')}
+      </div>`;
   },
   setup: () => {
     const s = state.setup;
@@ -1462,42 +1486,42 @@ const SETTINGS_PAGES = {
       ? '<div class="finding">' + iconHTML('terminal-window', 'sm') + '<div>Reading the repo…</div></div>'
       : s.findings.length
         ? s.findings.map((f) => `<div class="finding">${iconHTML('terminal-window', 'sm')}<div>${esc(f)}</div></div>`).join('')
-        : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious found in this repo.</div></div>`;
+        : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious turned up.</div></div>`;
     return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repositories</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
       <h1>Lane setup</h1>
-      <p class="lede">Why a second checkout cannot start today, and the <span class="mono">.overlook/lane.yaml</span> that fixes it. Nothing is written until you say so.</p>
+      <p class="lede">Why a second checkout cannot start, and the <span class="mono">.overlook/lane.yaml</span> that fixes it. Nothing is written until you hit Write.</p>
       <div class="cols">
         <div><div class="col-head">What the repo does today</div>${findings}</div>
         <div><div class="col-head">Proposed <span class="mono">.overlook/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
       </div>
-      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Agents can run this too: <span class="mono">repo.doctor</span> over MCP, or <span class="mono">overlook doctor</span> in a shell.</span>
+      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">overlook doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
         <div class="row-end">
-          <button class="btn" type="button" data-copy-doctor>Copy as <span class="mono">overlook doctor</span></button>
-          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command"'}>${iconHTML('files', 'sm')}Write <span class="mono">.overlook/lane.yaml</span></button>
+          <button class="btn" type="button" data-copy-doctor title="Copy an overlook doctor command for this repo">Copy CLI</button>
+          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.overlook/lane.yaml</span></button>
         </div>
       </div>`;
   },
   agents: () => {
-    const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled></button>`;
-    const ask = (label) => `<select class="select" aria-label="${label}" disabled><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
+    const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled title="Not wired yet — preview only."></button>`;
+    const ask = (label) => `<select class="select" aria-label="${label}" disabled title="Not wired yet — preview only."><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
     return `<h1>Agents</h1>
-      <p class="lede">Later. Agents already reach lanes through <span class="mono">overlook mcp</span> over stdio and the <span class="mono">overlook</span> CLI. These controls are a preview: they are off, and agents are not limited by them yet.</p>
+      <p class="lede">Preview. Agents already reach lanes through <span class="mono">overlook mcp</span> (stdio) and the <span class="mono">overlook</span> CLI. These switches do nothing yet.</p>
       <div class="agents-stub">
-        <div class="group-head">Local MCP server</div>
+        <div class="group-head">Local MCP</div>
         <div class="list">
-          ${settingsRow('broadcast', 'Server', 'Stdio only for now', '<span class="mono">overlook mcp</span>', `<span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}`)}
-          ${settingsRow('terminal-window', 'CLI', 'Same verbs, same binary', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', '<span class="status"><i></i>0.1.0</span>')}
+          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">overlook mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at overlook mcp. Overlook does not host an HTTP MCP port yet.')}
+          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', '<span class="status"><i></i>0.1.0</span>', 'Install the overlook binary on your PATH for shells and scripts.')}
         </div>
-        <div class="group-head">Connected clients<small>Overlook will read each tool's MCP config and write the two lines for you.</small></div>
+        <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
         <div class="list">
-          ${['Cursor', 'Claude Code', 'Codex'].map((n) => settingsRow('plugs-connected', n, '', 'Not detected yet', `<span class="status"><i></i>Later</span><button class="btn" type="button" disabled>Add</button>`)).join('')}
+          ${['Cursor', 'Claude Code', 'Codex'].map((n) => settingsRow('plugs-connected', n, '', 'Not detected yet', `<span class="status"><i></i>Later</span><button class="btn" type="button" disabled title="Coming later">Add</button>`, `Will read and write this client’s MCP config when the Agents page ships for real.`)).join('')}
         </div>
-        <div class="group-head">What agents may do<small>Reads are always allowed. Commit, push and merge stay with whoever is in the lane.</small></div>
+        <div class="group-head">What agents may do<small>Reads stay open. Commit / push / merge stay with whoever is in the lane.</small></div>
         <div class="list">
-          ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'))}
-          ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'))}
-          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'))}
-          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'))}
+          ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Allow agents to run the repo’s own start/stop/test commands with lane ports.')}
+          ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Allow agents to create worktrees from the team branch.')}
+          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Same safety guard as the app: refuse when work would be lost.')}
+          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .overlook/lane.yaml is a team decision — keep this on Ask until you trust it.')}
         </div>
       </div>`;
   },
@@ -1550,8 +1574,16 @@ async function loadRepos() {
 }
 
 function bindRepos(root) {
+  root.querySelectorAll('[data-repo-path]').forEach((b) => b.addEventListener('click', () => {
+    state.settings.repoPath = b.dataset.repoPath;
+    renderSettings();
+  }));
   root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => {
     openLaneSetup(b.dataset.setupRoot);
+  }));
+  root.querySelectorAll('[data-edit-manifest]').forEach((b) => b.addEventListener('click', () => {
+    const file = `${b.dataset.editManifest}/.overlook/lane.yaml`;
+    invoke('os.openEditor', file).catch(() => {});
   }));
   root.querySelectorAll('[data-lanes-root]').forEach((n) => n.addEventListener('change', () => {
     const ov = { ...state.prefs.repoOverrides };

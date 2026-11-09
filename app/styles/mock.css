@@ -52,14 +52,57 @@
   --row-h: 30px;
 }
 
+@font-face {
+  font-family: 'Overlook Inter';
+  src: url('../fonts/inter-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Overlook Inter';
+  src: url('../fonts/inter-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Overlook JetBrains Mono';
+  src: url('../fonts/jetbrains-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Overlook Plex Sans';
+  src: url('../fonts/ibm-plex-sans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Overlook Plex Sans';
+  src: url('../fonts/ibm-plex-sans-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Overlook Plex Mono';
+  src: url('../fonts/ibm-plex-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 html[data-font='inter-jetbrains'] {
-  --font: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font: 'Overlook Inter', Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: 'Overlook JetBrains Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 html[data-font='ibm-plex'] {
-  --font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font: 'Overlook Plex Sans', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: 'Overlook Plex Mono', 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 [data-theme='light'] {
@@ -854,7 +897,42 @@ a.navitem.back {
   display: flex;
 }
 .settings-body {
-  max-width: 900px;
+  max-width: none;
+  width: 100%;
+}
+
+.repo-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+
+.repo-picker .option {
+  max-width: min(320px, 100%);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.repo-picker .option .mono {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--ink-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+.list-row .row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .option-row {
@@ -1385,12 +1463,15 @@ a.navitem.back {
 /* Settings */
 .settings {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 260px 1fr;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .settings-nav {
+  width: 260px;
   border-right: 1px solid var(--hairline);
   background: var(--surface-1);
   padding: 10px 8px;
@@ -1437,8 +1518,10 @@ a.navitem {
 }
 
 .settings-body {
-  padding: 24px 32px 32px;
+  padding: 24px 32px 40px;
   overflow: auto;
+  min-width: 0;
+  width: 100%;
 }
 
 .settings-body h1 {
