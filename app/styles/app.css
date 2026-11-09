@@ -559,3 +559,14 @@ button.env-link {
   flex-shrink: 0;
   margin-top: 1px;
 }
+
+/* Unpushed tip commits (not on origin/<branch>) */
+.row.unpushed .sha {
+  color: var(--warn, #c47a00);
+}
+.row.unpushed .sha::after {
+  content: "↑";
+  margin-left: 0.25em;
+  font-size: 0.85em;
+  opacity: 0.85;
+}

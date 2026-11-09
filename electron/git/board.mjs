@@ -409,6 +409,16 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
   const cols = assignColumns(rows.map((r) => ({ id: r.id, parents: r.parents })));
   for (const row of rows) row.lane = cols.get(row.id) ?? row.lane;
 
+  // Mark commits not yet on origin/<branch> for graph chrome (#19).
+  for (const lane of lanes) {
+    if (!lane.branch) continue;
+    if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${lane.branch}`], cwd))) continue;
+    const pending = await shaSet(['rev-list', `origin/${lane.branch}..${lane.branch}`], cwd);
+    for (const row of rows) {
+      if (pending.has(row.id)) row.unpushed = true;
+    }
+  }
+
   // Pin WIP at the top (GitKraken-style) so dirty work is never buried mid-graph.
   const wips = [];
   for (const lane of lanes) {
