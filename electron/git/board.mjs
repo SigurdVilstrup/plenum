@@ -5,6 +5,7 @@ import { git, gitOk } from './run.mjs';
 import { loadManifest } from '../lane/manifest.mjs';
 import { laneStatus } from '../lane/status.mjs';
 import { getProc, getLastTest } from '../lane/supervisor.mjs';
+import { assignColumns } from './graph-columns.mjs';
 
 const AGENT_TOOLS = [
   ['claude', 'Claude'],
@@ -305,14 +306,15 @@ async function history(cwd, lanes, team, teamRef) {
     primaryOnly = await shaSet(['rev-list', lanes[0].branch, '--not', teamRef], cwd);
   }
 
-  // ponytail: first matching lane wins; upgrade is git log --graph columns. Window is 120.
-  function column(sha) {
-    if (teamSet.has(sha)) return 0;
+  // Membership only: which commits appear. Visual columns come from assignColumns below.
+  // Window is 120 until paint proves larger is fine.
+  function belongs(sha) {
+    if (teamSet.has(sha)) return true;
     for (const lane of lanes) {
-      if (lane.index > 0 && laneSets.get(lane.index)?.has(sha)) return lane.index;
+      if (lane.index > 0 && laneSets.get(lane.index)?.has(sha)) return true;
     }
-    if (primaryOnly.has(sha)) return 0;
-    return null;
+    if (primaryOnly.has(sha)) return true;
+    return false;
   }
 
   const heads = new Set(lanes.map((l) => l.head).filter(Boolean));
@@ -324,8 +326,7 @@ async function history(cwd, lanes, team, teamRef) {
     const parts = record.split('\x1f');
     if (parts.length < 7) continue;
     const [sha, parentsRaw, name, email, when, decoration, subject, body = ''] = parts;
-    const lane = column(sha);
-    if (lane == null) continue;
+    if (!belongs(sha)) continue;
     const parents = parentsRaw ? parentsRaw.split(' ').filter(Boolean) : [];
     const who = classifyAuthorship(name, email, body);
     const refs = pills(decoration, team, primaryBranch, laneBranches);
@@ -333,7 +334,7 @@ async function history(cwd, lanes, team, teamRef) {
     const at = parseInt(when, 10) || 0;
     rows.push({
       id: sha,
-      lane,
+      lane: 0,
       subject,
       author: name,
       kind: who.kind,
@@ -348,6 +349,11 @@ async function history(cwd, lanes, team, teamRef) {
       refs,
     });
   }
+
+  // ponytail: packing cols are topology slots, not worktree indices. Tips usually
+  // left-pack onto 0..k matching panel colors; remap packing→worktree if they diverge.
+  const cols = assignColumns(rows.map((r) => ({ id: r.id, parents: r.parents })));
+  for (const row of rows) row.lane = cols.get(row.id) ?? row.lane;
 
   for (const lane of lanes) {
     if (lane.dirty > 0 && lane.head) {

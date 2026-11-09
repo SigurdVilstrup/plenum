@@ -111,6 +111,41 @@ test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
   }
 });
 
+test('loadBoard: merge packs feature tip onto a side column', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
+  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'Tester'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'hello');
+    git(['add', 'README'], root);
+    git(['commit', '-m', 'init'], root);
+    git(['worktree', 'add', '-b', 'feat/one', wt], root);
+    fs.writeFileSync(path.join(wt, 'feat.txt'), 'side');
+    git(['add', 'feat.txt'], wt);
+    git(['commit', '-m', 'feature tip'], wt);
+    fs.writeFileSync(path.join(root, 'main.txt'), 'main-side');
+    git(['add', 'main.txt'], root);
+    git(['commit', '-m', 'main tip'], root);
+    git(['merge', 'feat/one', '--no-ff', '-m', 'merge feature'], root);
+
+    const board = await loadBoard(root);
+    const merge = board.commits.find((c) => c.isMerge);
+    assert.ok(merge, 'expected a merge commit');
+    assert.equal(merge.lane, 0);
+    const featHead = board.lanes[1].head;
+    const feat = board.commits.find((c) => c.id === featHead);
+    assert.ok(feat, 'expected feature tip in history');
+    assert.equal(feat.lane, 1);
+    assert.notEqual(feat.lane, merge.lane);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
 test('loadBoard: bad lane.yaml still loads board as not runnable', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
   const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
