@@ -132,7 +132,10 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       const sha = esc(String(c.id || '').slice(0, 7));
       const on = selectedCommit === c.id ? ' active-commit' : '';
       const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
-      return `<div class="row clickable${sel}${on}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="Show commit changes">
+      const whenTitle = c.at
+        ? `${new Date(c.at * 1000).toISOString()} · Show commit changes`
+        : 'Show commit changes';
+      return `<div class="row clickable${sel}${on}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="${esc(whenTitle)}">
         <span></span>
         <span class="msg">${refs}<span class="text">${esc(c.subject)}</span>${bandEl}</span>
         <span class="who">${who}</span>

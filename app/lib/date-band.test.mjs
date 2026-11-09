@@ -9,7 +9,9 @@ const sec = (y, m, d, h = 12) => Math.floor(new Date(y, m, d, h).getTime() / 100
 test('first row of a day returns a label', () => {
   assert.equal(dateBandLabel(sec(2026, 10, 9), null, NOW), 'today');
   assert.equal(dateBandLabel(sec(2026, 10, 8), null, NOW), 'yesterday');
-  assert.equal(dateBandLabel(sec(2026, 10, 7), null, NOW), '2 days ago');
+  const older = dateBandLabel(sec(2026, 10, 7), null, NOW);
+  assert.match(older, /2026/);
+  assert.doesNotMatch(older, /ago/);
 });
 
 test('same calendar day as prev returns null', () => {
@@ -21,7 +23,8 @@ test('same calendar day as prev returns null', () => {
 test('day change returns a new label', () => {
   const yesterday = sec(2026, 10, 8);
   const twoDays = sec(2026, 10, 7);
-  assert.equal(dateBandLabel(twoDays, yesterday, NOW), '2 days ago');
+  const label = dateBandLabel(twoDays, yesterday, NOW);
+  assert.match(label, /2026/);
 });
 
 test('missing at skips the band', () => {
@@ -30,7 +33,7 @@ test('missing at skips the band', () => {
   assert.equal(dateBandLabel(0, null, NOW), null);
 });
 
-test('week and month style match board ago roughly', () => {
-  assert.equal(dateBandLabel(sec(2026, 9, 26), null, NOW), '2w'); // 14 days
-  assert.equal(dateBandLabel(sec(2026, 8, 9), null, NOW), '2mo'); // ~61 days
+test('older bands use calendar dates', () => {
+  assert.match(dateBandLabel(sec(2026, 9, 26), null, NOW), /2026/);
+  assert.match(dateBandLabel(sec(2026, 8, 9), null, NOW), /2026/);
 });

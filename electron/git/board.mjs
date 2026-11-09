@@ -172,8 +172,9 @@ export async function loadCommitChanges(repoPath, sha) {
   const cwd = path.resolve(repoPath);
   const id = String(sha || '').trim();
   if (!/^[0-9a-f]{7,40}$/i.test(id)) throw new Error('Invalid commit.');
-  const metaRaw = (await git(['log', '-1', '--format=%H%x1f%h%x1f%s%x1f%an', id], cwd)).trim();
-  const [full, short, subject, author] = metaRaw.split('\x1f');
+  const metaRaw = (await git(['log', '-1', '--format=%H%x1f%h%x1f%s%x1f%an%x1f%ct', id], cwd)).trim();
+  const [full, short, subject, author, ct] = metaRaw.split('\x1f');
+  const authoredAt = parseInt(ct, 10) || 0;
   let statusMap = new Map();
   try {
     const ns = await git(['diff-tree', '--no-commit-id', '--name-status', '-r', '-m', '--root', full], cwd);
@@ -193,7 +194,7 @@ export async function loadCommitChanges(repoPath, sha) {
     const s = stats.get(file) || { added: 0, deleted: 0 };
     return { path: file, code, added: s.added, deleted: s.deleted };
   });
-  return { sha: full, short, subject, author, files };
+  return { sha: full, short, subject, author, authoredAt, authoredAtUtc: formatWhenUtc(authoredAt), files };
 }
 
 /** ponytail: cherry misses rewritten squash; upgrade is host PR API.
@@ -232,15 +233,31 @@ async function shaSet(args, cwd) {
   }
 }
 
-function ago(unix) {
-  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - unix);
-  if (seconds < 45) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  const days = Math.floor(seconds / 86400);
-  if (days < 14) return `${days}d`;
-  if (days < 60) return `${Math.floor(days / 7)}w`;
-  return `${Math.floor(days / 30)}mo`;
+function dayStartMs(ms) {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** Relative only for today/yesterday; calendar date after that. */
+export function formatWhen(unix, now = Date.now()) {
+  const at = Number(unix);
+  if (!Number.isFinite(at) || at <= 0) return '';
+  const ms = at * 1000;
+  const days = Math.round((dayStartMs(now) - dayStartMs(ms)) / 86400000);
+  if (days <= 0) {
+    const seconds = Math.max(0, Math.floor(now / 1000) - at);
+    if (seconds < 45) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h`;
+  }
+  if (days === 1) return 'yesterday';
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+export function formatWhenUtc(unix) {
+  const at = Number(unix);
+  if (!Number.isFinite(at) || at <= 0) return '';
+  return `${new Date(at * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
 }
 
 export function displayPath(p) {
@@ -348,7 +365,7 @@ async function history(cwd, lanes, team, teamRef) {
       author: name,
       kind: who.kind,
       tool: who.tool,
-      when: ago(at),
+      when: formatWhen(at),
       at,
       parents,
       isWIP: false,
