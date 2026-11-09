@@ -107,6 +107,9 @@ function applyPrefs() {
 async function setPref(partial, render = true) {
   state.prefs = await invoke('prefs.set', partial);
   applyPrefs();
+  // Debounce so rapid field edits coalesce to one acknowledgment.
+  clearTimeout(setPref._toast);
+  setPref._toast = setTimeout(() => toast('Saved', 'ok'), 320);
   if (!render) return;
   const top = el.settingsBody.scrollTop;
   renderSettings();
@@ -1466,7 +1469,7 @@ async function paintChanges() {
       const rootPath = state.board?.root || '';
       el.changes.innerHTML = `
         <div class="changes-head">
-          <div class="title">${esc(data.subject || 'Commit')}<small>${esc(data.short)} · ${files.length} · ${esc(data.author || '')}</small></div>
+          <div class="title">${esc(data.subject || 'Commit')}<small>${esc(data.short)} · ${files.length} · ${esc(data.author || '')}${data.authoredAtUtc ? ` · ${esc(data.authoredAtUtc)}` : ''}</small></div>
           <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
         </div>
         <div class="changes-tree" role="tree">
