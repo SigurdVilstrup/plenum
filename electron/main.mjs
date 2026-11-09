@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, screen, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -12,7 +12,7 @@ import { doctor, acceptManifest } from './lane/doctor.mjs';
 import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
-import { paintHighlight, writeFeedbackReport } from './feedback.mjs';
+import { paintHighlight, writeFeedbackReport, collectFeedbackEnv } from './feedback.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -152,13 +152,23 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
     png = paintHighlight(png, rect, { scaleX: imgW / cssW, scaleY: imgH / cssH });
   }
 
+  const env = collectFeedbackEnv({
+    getVersion: () => app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    getSystemVersion: () => process.getSystemVersion(),
+    electronVersion: process.versions.electron,
+    locale: app.getLocale(),
+    getAllDisplays: () => screen.getAllDisplays(),
+    primaryDisplayId: screen.getPrimaryDisplay().id,
+    getContentSize: () => win.getContentSize(),
+  });
   const dir = await writeFeedbackReport(prefsDir(), {
     comment,
     target: target?.label
       ? { label: String(target.label).slice(0, 200), rect }
       : null,
-    appVersion: app.getVersion(),
-    platform: process.platform,
+    ...env,
     repoPath: activePath(),
     png,
   });

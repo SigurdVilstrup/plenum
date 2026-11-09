@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildMeta, writeFeedbackReport } from './feedback.mjs';
+import { buildMeta, collectFeedbackEnv, writeFeedbackReport } from './feedback.mjs';
 
 test('buildMeta shapes v1 report', () => {
   const meta = buildMeta({
@@ -24,6 +24,52 @@ test('buildMeta shapes v1 report', () => {
 
   assert.equal(buildMeta({ comment: '', appVersion: '1', platform: 'darwin' }).target, null);
   assert.equal(buildMeta({ comment: '', target: null, appVersion: '1', platform: 'darwin' }).target, null);
+});
+
+test('buildMeta passes through env fields', () => {
+  const meta = buildMeta({
+    comment: 'x',
+    appVersion: '0.1.0',
+    platform: 'darwin',
+    arch: 'arm64',
+    osVersion: '25.3.0',
+    electronVersion: '39.0.0',
+    locale: 'en-US',
+    screens: [{ width: 1512, height: 982, scaleFactor: 2, primary: true }],
+    windowSize: { width: 1280, height: 800 },
+    repoPath: null,
+    createdAt: '2026-11-09T00:00:00.000Z',
+  });
+  assert.equal(meta.arch, 'arm64');
+  assert.equal(meta.osVersion, '25.3.0');
+  assert.equal(meta.electronVersion, '39.0.0');
+  assert.equal(meta.locale, 'en-US');
+  assert.deepEqual(meta.screens, [{ width: 1512, height: 982, scaleFactor: 2, primary: true }]);
+  assert.deepEqual(meta.windowSize, { width: 1280, height: 800 });
+});
+
+test('collectFeedbackEnv shapes display + window facts', () => {
+  const env = collectFeedbackEnv({
+    getVersion: () => '0.1.0',
+    platform: 'darwin',
+    arch: 'arm64',
+    getSystemVersion: () => '25.3.0',
+    electronVersion: '39.0.0',
+    locale: 'en-US',
+    getAllDisplays: () => [
+      { bounds: { width: 1512, height: 982 }, scaleFactor: 2, id: 1 },
+      { bounds: { width: 1920, height: 1080 }, scaleFactor: 1, id: 2 },
+    ],
+    primaryDisplayId: 1,
+    getContentSize: () => [1280, 800],
+  });
+  assert.equal(env.appVersion, '0.1.0');
+  assert.equal(env.platform, 'darwin');
+  assert.equal(env.arch, 'arm64');
+  assert.equal(env.osVersion, '25.3.0');
+  assert.equal(env.screens[0].primary, true);
+  assert.equal(env.screens[1].primary, false);
+  assert.deepEqual(env.windowSize, { width: 1280, height: 800 });
 });
 
 const tinyPng = Buffer.from(

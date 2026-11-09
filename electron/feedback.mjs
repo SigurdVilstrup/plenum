@@ -60,7 +60,35 @@ export function buildMeta(input) {
     target,
     appVersion: input.appVersion,
     platform: input.platform,
+    arch: input.arch,
+    osVersion: input.osVersion,
+    electronVersion: input.electronVersion,
+    locale: input.locale,
+    screens: input.screens,
+    windowSize: input.windowSize,
     repoPath: input.repoPath ?? null,
+  };
+}
+
+export function collectFeedbackEnv(deps) {
+  const primaryId = deps.primaryDisplayId;
+  return {
+    appVersion: String(deps.getVersion()),
+    platform: deps.platform,
+    arch: deps.arch,
+    osVersion: String(deps.getSystemVersion()),
+    electronVersion: String(deps.electronVersion),
+    locale: String(deps.locale || ''),
+    screens: (deps.getAllDisplays() || []).map((d) => ({
+      width: Number(d.bounds?.width) || 0,
+      height: Number(d.bounds?.height) || 0,
+      scaleFactor: Number(d.scaleFactor) || 1,
+      primary: d.id === primaryId,
+    })),
+    windowSize: {
+      width: Number(deps.getContentSize()?.[0]) || 0,
+      height: Number(deps.getContentSize()?.[1]) || 0,
+    },
   };
 }
 
