@@ -54,24 +54,29 @@ input, textarea, [contenteditable="true"] {
 }
 
 .window.app .titlebar .traffic.spacer {
-  width: 88px;
-  height: 52px;
+  width: 74px;
+  height: 40px;
   flex-shrink: 0;
   visibility: hidden;
   align-self: stretch;
 }
 
+.window.app .titlebar .appmark {
+  align-self: center;
+  -webkit-app-region: drag;
+}
+
 .window.app .titlebar .tabstrip {
   align-items: flex-end;
-  padding-top: 14px;
-  padding-left: 6px;
+  padding-top: 6px;
+  padding-left: 2px;
   height: 100%;
   overflow: visible;
   gap: 10px;
 }
 
 .window.app .titlebar .tab {
-  height: 38px;
+  height: 34px;
   padding: 0 14px 0 14px;
   border-radius: 10px 10px 0 0;
   border: 1px solid transparent;
@@ -204,7 +209,7 @@ input, textarea, [contenteditable="true"] {
 .loading-screen,
 .empty-screen {
   position: absolute;
-  inset: 52px 0 0 0;
+  inset: 40px 0 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -501,11 +506,11 @@ button.env-link {
 
 .tab .close { display: none !important; }
 
-/* Graph fixed; Commit slightly tighter; Author = icons; When roomy for one-line dates */
+/* Graph | avatar | Commit (flex, ellipsis only when tight) | SHA | When */
 .window.app .graph-cols,
 .window.app .row {
-  grid-template-columns: 136px minmax(0, 1fr) 40px 64px 110px;
-  gap: 10px;
+  grid-template-columns: 136px 22px minmax(0, 1fr) 64px 110px;
+  gap: 8px;
 }
 .window.app .row .time {
   white-space: nowrap;
@@ -514,14 +519,32 @@ button.env-link {
 }
 .window.app .row .who {
   justify-content: center;
-  gap: 4px;
+  align-self: center;
 }
-.window.app .row .who .icon {
-  width: 16px;
-  height: 16px;
+.window.app .row .avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: color-mix(in srgb, hsl(var(--avatar-hue, 210) 42% 28%) 80%, var(--ink));
+  background: color-mix(in srgb, hsl(var(--avatar-hue, 210) 48% 58%) 28%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, hsl(var(--avatar-hue, 210) 40% 50%) 35%, var(--hairline));
+}
+.window.app .row .avatar.assisted {
+  color: var(--assisted);
+  border-color: color-mix(in srgb, var(--assisted) 40%, var(--hairline));
+}
+.window.app .row .avatar.agent {
+  color: var(--agent);
+  border-color: color-mix(in srgb, var(--agent) 40%, var(--hairline));
 }
 .window.app .row .msg {
-  max-width: 52ch;
+  min-width: 0; /* allow ellipsis only when the flex column is actually tight */
 }
 
 .window.app .rows > svg {

@@ -1,6 +1,7 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
-import { authorIcon, authorLabel } from './authorship-pill.js';
+import { authorLabel } from './authorship-pill.js';
+import { authorHue, authorInitial } from './author-avatar.js';
 import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
@@ -118,12 +119,13 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       const hint = c.danger ? 'on primary' : 'Review';
       parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Show uncommitted changes">
           <span></span>
+          <span class="who"></span>
           <span class="msg">
             <span class="wip-label">Working tree</span>
             <span class="wip-count">${esc(count)}</span>
             <span class="wip-hint">${esc(hint)}</span>
           </span>
-          <span></span><span></span>
+          <span></span>
           <span class="time">now</span>
         </div>`);
       return;
@@ -139,7 +141,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const tip = tips.has(c.id);
     const kind = authorLabel[c.kind] ? c.kind : 'human';
     const whoTitle = [c.author, tip && (c.tool || authorLabel[kind])].filter(Boolean).join(' · ');
-    const who = icon(authorIcon[kind], kind);
+    const hue = authorHue(c.email || c.author);
+    const who = `<span class="avatar ${kind}" style="--avatar-hue:${hue}" aria-hidden="true">${esc(authorInitial(c.author))}</span>`;
     const sha = esc(String(c.id || '').slice(0, 7));
     const on = selectedCommit === c.id ? ' active-commit' : '';
     const unpushed = c.unpushed ? ' unpushed' : '';
@@ -149,8 +152,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       : (c.unpushed ? 'Not on remote · Show commit changes' : 'Show commit changes');
     parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="${esc(whenTitle)}">
         <span></span>
-        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
         <span class="who" title="${esc(whoTitle)}">${who}</span>
+        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
         <span class="sha">${sha}</span>
         <span class="time">${esc(c.when)}</span>
       </div>`);

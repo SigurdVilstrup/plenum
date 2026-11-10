@@ -503,6 +503,7 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
       lane: 0,
       subject,
       author: name,
+      email,
       kind: who.kind,
       tool: who.tool,
       when: formatWhen(at),
