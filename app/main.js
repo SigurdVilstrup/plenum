@@ -58,6 +58,8 @@ const state = {
   opsByTab: new Map(),
   conflictRoot: null,
   branchesOpen: true,
+  /** Session expand/collapse for branch path folders (#21). */
+  collapsedBranchFolders: new Set(),
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
@@ -751,35 +753,7 @@ function paintPanel() {
 
   const branches = b.branches || [];
   const branchBody = branches.length
-    ? branches.map((br) => {
-      const where = br.isPrimary
-        ? 'primary'
-        : br.hasLane
-          ? 'lane'
-          : br.remote
-            ? 'remote-only'
-            : 'local';
-      const rel = [];
-      if (br.behind) rel.push(`${br.behind}↓`);
-      if (br.ahead) rel.push(`${br.ahead}↑`);
-      const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '');
-      const vs = b.teamBranch || 'team';
-      const title = [
-        br.name,
-        where,
-        'Click to check out in the selected worktree · right-click for more',
-        br.upstream ? `tracks ${br.upstream}` : '',
-        br.behind || br.ahead ? `vs ${vs}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
-      ].filter(Boolean).join(' · ');
-      const current = laneByIndex(selected);
-      const isSelected = (br.hasLane && br.laneIndex === selected)
-        || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
-      return `<button class="lane-row branch-row${isSelected ? ' selected' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}">
-        ${iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm')}
-        <span class="name">${esc(br.name)}</span>
-        <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}"${rel.length ? ` title="vs ${esc(vs)}"` : ''}>${esc(relTxt)}</span>
-      </button>`;
-    }).join('')
+    ? renderBranchListHTML(branches, b, selected)
     : `<div class="empty-note">None</div>`;
   const vsLabel = b.teamBranch ? ` · vs ${esc(b.teamBranch)}` : '';
   html += `<div class="section">
@@ -817,6 +791,15 @@ function paintPanel() {
     state.branchesOpen = !state.branchesOpen;
     paint();
   });
+  el.panel.querySelectorAll('[data-branch-folder]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.branchFolder;
+      if (state.collapsedBranchFolders.has(key)) state.collapsedBranchFolders.delete(key);
+      else state.collapsedBranchFolders.add(key);
+      paint();
+    });
+  });
   el.panel.querySelectorAll('[data-branch-name]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -828,6 +811,81 @@ function paintPanel() {
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
     });
   });
+}
+
+/** Group `a/b/c` into expandable folders when a prefix has 2+ branches (#21). */
+function groupBranchesByPrefix(branches) {
+  const counts = new Map();
+  for (const br of branches) {
+    const short = br.short || String(br.name || '').replace(/^origin\//, '');
+    const i = short.indexOf('/');
+    if (i > 0) counts.set(short.slice(0, i), (counts.get(short.slice(0, i)) || 0) + 1);
+  }
+  const singles = [];
+  const folders = new Map();
+  for (const br of branches) {
+    const short = br.short || String(br.name || '').replace(/^origin\//, '');
+    const i = short.indexOf('/');
+    if (i > 0) {
+      const folder = short.slice(0, i);
+      if ((counts.get(folder) || 0) >= 2) {
+        if (!folders.has(folder)) folders.set(folder, []);
+        folders.get(folder).push({ br, label: short.slice(i + 1) });
+        continue;
+      }
+    }
+    singles.push({ br, label: br.name });
+  }
+  return { singles, folders };
+}
+
+function branchRowHTML(br, label, board, selectedLane) {
+  const where = br.isPrimary
+    ? 'primary'
+    : br.hasLane
+      ? 'lane'
+      : br.remote
+        ? 'remote-only'
+        : 'local';
+  const rel = [];
+  if (br.behind) rel.push(`${br.behind}↓`);
+  if (br.ahead) rel.push(`${br.ahead}↑`);
+  const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '');
+  const vs = board.teamBranch || 'team';
+  const title = [
+    br.name,
+    where,
+    'Click to check out in the selected worktree · right-click for more',
+    br.upstream ? `tracks ${br.upstream}` : '',
+    br.behind || br.ahead ? `vs ${vs}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
+  ].filter(Boolean).join(' · ');
+  const current = laneByIndex(selectedLane);
+  const isSelected = (br.hasLane && br.laneIndex === selectedLane)
+    || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
+  return `<button class="lane-row branch-row${isSelected ? ' selected' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}">
+    ${iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm')}
+    <span class="name">${esc(label)}</span>
+    <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}"${rel.length ? ` title="vs ${esc(vs)}"` : ''}>${esc(relTxt)}</span>
+  </button>`;
+}
+
+function renderBranchListHTML(branches, board, selectedLane) {
+  const { singles, folders } = groupBranchesByPrefix(branches);
+  const parts = singles.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane));
+  const keys = [...folders.keys()].sort((a, b) => a.localeCompare(b));
+  for (const key of keys) {
+    const items = folders.get(key);
+    const open = !state.collapsedBranchFolders.has(key);
+    parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(key)}" aria-expanded="${open}">
+      <span class="mark">${iconHTML('caret-right', 'sm')}</span>
+      <span class="name">${esc(key)}/</span>
+      <span class="meta">${items.length}</span>
+    </button>`);
+    if (open) {
+      parts.push(`<div class="branch-folder-kids">${items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane)).join('')}</div>`);
+    }
+  }
+  return parts.join('');
 }
 
 function gitActionsHTML(l) {
@@ -1381,6 +1439,21 @@ function dismissCtxMenus() {
   document.querySelector('.ctx-menu')?.remove();
 }
 
+async function updateBranchRow(name) {
+  const br = branchByName(name);
+  if (!br) return;
+  const tabId = beginOp('branch-update');
+  if (!tabId) return;
+  const root = state.board?.root;
+  try {
+    const board = await invoke('branch.update', ...pin({ branch: br.name }));
+    if (settleBoard(tabId, root, board)) {
+      toast(br.remote ? `Fetched ${br.name}` : `Updated ${br.short || br.name} from origin`, 'ok');
+    }
+  } catch { /* toasted */ }
+  finally { endOp(tabId, 'branch-update'); }
+}
+
 async function checkoutBranchRow(name) {
   const br = branchByName(name);
   if (!br) return;
@@ -1388,18 +1461,35 @@ async function checkoutBranchRow(name) {
   if (br.hasLane) {
     state.selectedLane = br.laneIndex;
     paint();
+    const holder = laneByIndex(br.laneIndex);
+    toast(holder?.isPrimary ? `Selected primary (${br.short || br.name})` : `Selected lane ${holder?.name || br.short || br.name}`, 'ok');
     return;
   }
-  const lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
+  let lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
   if (!lane) return;
-  const tabId = state.store.activeId;
+  // Primary stays on the protected tip — feature tips check out in a lane (#23).
+  const team = state.board?.teamBranch;
+  const isTeam = br.isTeam || br.short === team || br.name === team;
+  if (lane.isPrimary && !isTeam) {
+    const alt = (state.board?.lanes || []).find((l) => !l.isPrimary);
+    if (alt) {
+      lane = alt;
+      state.selectedLane = alt.index;
+    } else {
+      toast('Opening as a lane — primary stays protected', 'ok');
+      return openLaneFromBranch(br.name);
+    }
+  }
+  const tabId = beginOp('checkout');
+  if (!tabId) return;
   const root = state.board?.root;
   try {
     const board = await invoke('branch.checkout', ...pin({ branch: br.name, laneIndex: lane.index }));
     if (settleBoard(tabId, root, board, { selectLane: lane.index })) {
-      toast(`Checked out ${br.short || br.name}`, 'ok');
+      toast(`Checked out ${br.short || br.name}${lane.isPrimary ? '' : ` in ${lane.name}`}`, 'ok');
     }
   } catch { /* toasted */ }
+  finally { endOp(tabId, 'checkout'); }
 }
 
 function openBranchCtxMenu(x, y, name) {
@@ -1425,6 +1515,9 @@ function openBranchCtxMenu(x, y, name) {
     menu.appendChild(btn);
   };
   add('Check out', () => checkoutBranchRow(br.name));
+  if (!br.hasLane) {
+    add(br.remote ? 'Fetch tip' : 'Update from remote', () => updateBranchRow(br.name));
+  }
   if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
   if (canRename) add('Rename…', () => openRenameBranchSheet(br));
   if (canDelete) add('Delete…', () => openDeleteBranchSheet(br), true);
@@ -2322,7 +2415,7 @@ const SETTINGS_PAGES = {
     return `${head}${picker}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
-        ${settingsRow('shield-check', 'Team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? `<input class="input mono" data-team-root="${esc(root)}" value="${esc(b.teamBranch)}" placeholder="main" aria-label="Team branch for ${esc(t.title)}" />` : '', 'Integration branch for behind / create lane / merge. Blank + Save clears override and re-detects from origin. Stored as local git config overlook.teamBranch.')}
+        ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Pick the integration tip for ↓↑ / create lane / merge. Auto re-detects from origin/HEAD. Stored as local git config overlook.teamBranch.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'Override only for this repo. Relative paths are under the checkout; absolute paths are allowed.')}
         ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.overlook/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Run the doctor and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .overlook/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared means one instance for every lane; snapshot seeds a copy before Run.')}
@@ -2422,6 +2515,26 @@ async function loadRepos() {
   if (state.settings.open && state.settings.page === 'repositories') renderSettings();
 }
 
+/** Select of local short names + Auto (re-detect) for #43. */
+function teamBranchControlHTML(board, root, title) {
+  const cur = board.teamBranch || '';
+  const names = new Set();
+  for (const br of board.branches || []) {
+    const short = br.short || String(br.name || '').replace(/^origin\//, '');
+    if (short) names.add(short);
+  }
+  if (cur) names.add(cur);
+  const opts = [`<option value="">Auto (detect)</option>`]
+    .concat([...names].sort((a, b) => a.localeCompare(b)).map((n) => (
+      `<option value="${esc(n)}"${n === cur && board.teamBranchSource === 'override' ? ' selected' : ''}>${esc(n)}</option>`
+    )));
+  // When detected (not override), show current as selected visual via Auto label — keep Auto selected.
+  if (board.teamBranchSource !== 'override') {
+    opts[0] = `<option value="" selected>Auto · ${esc(cur || 'detect')}</option>`;
+  }
+  return `<select class="select mono" data-team-root="${esc(root)}" aria-label="Protected branch for ${esc(title)}">${opts.join('')}</select>`;
+}
+
 function bindRepos(root) {
   root.querySelectorAll('[data-repo-path]').forEach((b) => b.addEventListener('click', () => {
     state.settings.repoPath = b.dataset.repoPath;
@@ -2448,7 +2561,7 @@ function bindRepos(root) {
       board.displayRoot = await prettyPath(board.root);
       state.repoBoards.set(rootPath, board);
       if (board.root === state.board?.root) applyBoard(board);
-      toast(n.value.trim() ? `Team branch → ${board.teamBranch}` : 'Team branch re-detected', 'ok');
+      toast(n.value.trim() ? `Protected branch → ${board.teamBranch}` : 'Protected branch re-detected', 'ok');
       renderSettings();
     } catch { /* toasted */ }
   }));

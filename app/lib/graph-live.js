@@ -102,50 +102,53 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
   </svg>`;
 
   let prevAt = null;
-  const rows = commits
-    .map((c) => {
-      const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
-      const band = dateBandLabel(c.at, prevAt);
-      if (c.at) prevAt = c.at;
-      const bandEl = band ? `<span class="date-band">${esc(band)}</span>` : '';
-      if (c.isWIP) {
-        const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
-        const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
-        return `<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Show uncommitted changes">
+  const parts = [];
+  for (const c of commits) {
+    const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
+    const band = dateBandLabel(c.at, prevAt);
+    if (c.at) prevAt = c.at;
+    // Sticky day/month dividers while scrolling (#35) — not inline chips in the subject.
+    if (band && !c.isWIP) {
+      parts.push(`<div class="date-divider" role="presentation"><span>${esc(band)}</span></div>`);
+    }
+    if (c.isWIP) {
+      const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
+      const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
+      parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Show uncommitted changes">
           <span></span>
           <span class="msg">${icon(c.danger ? 'warning-circle' : 'circle-dashed', 'sm')}<span class="text">${esc(c.subject)}</span></span>
           <span></span><span></span><span></span>
-        </div>`;
-      }
-      const list = c.refs || [];
-      const { shown, overflow } = visibleRefs(list, { currentBranch });
-      const refs = shown.map((r) => refPill(r, {
-        running: r.worktree && !r.primary && runningLanes.has(c.lane),
-        current: !!currentBranch && r.name === currentBranch,
-      })).join('') + (overflow
-        ? `<span class="ref overflow" title="${esc(list.filter((r) => !shown.includes(r)).map((r) => r.name).join(', '))}">+${overflow}</span>`
-        : '');
-      const tip = tips.has(c.id);
-      const kind = authorLabel[c.kind] ? c.kind : 'human';
-      const pill = tip ? authorshipPillHTML(kind, c.tool, icon) : '';
-      const who = `${icon(authorIcon[kind], kind)}<span>${esc(c.author)}</span>${pill}`;
-      const sha = esc(String(c.id || '').slice(0, 7));
-      const on = selectedCommit === c.id ? ' active-commit' : '';
-      const unpushed = c.unpushed ? ' unpushed' : '';
-      const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
-      const whenTitle = c.at
-        ? `${new Date(c.at * 1000).toISOString()}${c.unpushed ? ' · not on remote' : ''} · Show commit changes`
-        : (c.unpushed ? 'Not on remote · Show commit changes' : 'Show commit changes');
-      return `<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="${esc(whenTitle)}">
+        </div>`);
+      continue;
+    }
+    const list = c.refs || [];
+    const { shown, overflow } = visibleRefs(list, { currentBranch });
+    const refs = shown.map((r) => refPill(r, {
+      running: r.worktree && !r.primary && runningLanes.has(c.lane),
+      current: !!currentBranch && r.name === currentBranch,
+    })).join('') + (overflow
+      ? `<span class="ref overflow" title="${esc(list.filter((r) => !shown.includes(r)).map((r) => r.name).join(', '))}">+${overflow}</span>`
+      : '');
+    const tip = tips.has(c.id);
+    const kind = authorLabel[c.kind] ? c.kind : 'human';
+    const pill = tip ? authorshipPillHTML(kind, c.tool, icon) : '';
+    const who = `${icon(authorIcon[kind], kind)}<span>${esc(c.author)}</span>${pill}`;
+    const sha = esc(String(c.id || '').slice(0, 7));
+    const on = selectedCommit === c.id ? ' active-commit' : '';
+    const unpushed = c.unpushed ? ' unpushed' : '';
+    const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
+    const whenTitle = c.at
+      ? `${new Date(c.at * 1000).toISOString()}${c.unpushed ? ' · not on remote' : ''} · Show commit changes`
+      : (c.unpushed ? 'Not on remote · Show commit changes' : 'Show commit changes');
+    parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="${esc(whenTitle)}">
         <span></span>
-        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span>${bandEl}</span>
+        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
         <span class="who">${who}</span>
         <span class="sha">${sha}</span>
         <span class="time">${esc(c.when)}</span>
-      </div>`;
-    })
-    .join('');
+      </div>`);
+  }
 
-  rowsEl.innerHTML = svg + rows;
+  rowsEl.innerHTML = svg + parts.join('');
   rowsEl.scrollTop = scrollTop;
 }

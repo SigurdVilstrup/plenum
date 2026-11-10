@@ -268,6 +268,42 @@ async function ensureLocalBranch(cwd, branch) {
   return name;
 }
 
+/**
+ * Fast-forward a local branch tip from origin without checking it out (#40).
+ * Remote-only names (`origin/foo`) just refresh the remote-tracking tip via fetch.
+ */
+export async function updateBranchFromRemote(root, { branch } = {}) {
+  const board = await loadBoard(root);
+  let name = assertBranchName(branch);
+  if (name.startsWith('origin/')) {
+    const short = name.slice('origin/'.length);
+    if (!short) throw new Error('Invalid branch name.');
+    await git(['fetch', 'origin', short], board.root);
+    return loadBoard(root);
+  }
+  const holder = board.lanes.find((l) => l.branch === name);
+  if (holder) {
+    throw new Error(`${name} is checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Use Pull there.`);
+  }
+  if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
+    throw new Error(`Local branch ${name} not found.`);
+  }
+  if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], board.root))) {
+    throw new Error(`No origin/${name}. Fetch or set upstream first.`);
+  }
+  // `src:dst` without + is fast-forward only — refuses diverge.
+  try {
+    await git(['fetch', 'origin', `${name}:${name}`], board.root);
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/non-fast-forward|rejected|failed to update/i.test(msg)) {
+      throw new Error(`${name} has diverged from origin/${name}. Check out and pull/rebase.`);
+    }
+    throw e;
+  }
+  return loadBoard(root);
+}
+
 /** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate. */
 export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   const board = await loadBoard(root);

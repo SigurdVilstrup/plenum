@@ -388,3 +388,34 @@ test('rename delete checkout rebase onto', async () => {
   board = await ops.checkoutBranch(root, { branch: 'main', laneIndex: 0 });
   assert.equal(board.lanes[0].branch, 'main');
 });
+
+test('updateBranchFromRemote fast-forwards a free local tip', async () => {
+  const { root, bare } = await fixture();
+  sh(['branch', 'feat/sync'], root);
+  sh(['push', '-u', 'origin', 'feat/sync'], root);
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-sync-'));
+  fs.rmSync(other, { recursive: true, force: true });
+  sh(['clone', bare, other]);
+  sh(['config', 'user.email', 't@e.com'], other);
+  sh(['config', 'user.name', 'T'], other);
+  sh(['config', 'commit.gpgsign', 'false'], other);
+  sh(['checkout', 'feat/sync'], other);
+  fs.writeFileSync(path.join(other, 'sync.txt'), 'ahead');
+  sh(['add', 'sync.txt'], other);
+  sh(['commit', '-m', 'remote ahead'], other);
+  sh(['push'], other);
+
+  const before = (await git(['rev-parse', 'feat/sync'], root)).trim();
+  const remote = (await git(['ls-remote', 'origin', 'refs/heads/feat/sync'], root)).trim().split(/\s+/)[0];
+  assert.notEqual(before, remote);
+
+  await ops.updateBranchFromRemote(root, { branch: 'feat/sync' });
+  const after = (await git(['rev-parse', 'feat/sync'], root)).trim();
+  assert.equal(after, remote);
+
+  // Checked-out tip must refuse — use Pull on that worktree.
+  await assert.rejects(
+    () => ops.updateBranchFromRemote(root, { branch: 'main' }),
+    /checked out/,
+  );
+});
