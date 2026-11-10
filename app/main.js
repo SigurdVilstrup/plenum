@@ -110,6 +110,8 @@ const el = {
   sheetLayer: document.getElementById('sheet-layer'),
   toast: document.getElementById('toast'),
   appVersion: document.getElementById('app-version'),
+  searchbtn: document.querySelector('.titlebar .searchbtn'),
+  titlebar: document.querySelector('.titlebar'),
 };
 
 function applyTheme() {
@@ -550,6 +552,23 @@ async function applyTabOrder(fromId, overId, after) {
   paintTabs();
 }
 
+function tabstripOverflows() {
+  return el.tabstrip.scrollWidth > el.tabstrip.clientWidth + 1;
+}
+
+/** Collapse the palette label when open tabs need the room; expand when they don't. */
+function syncSearchCollapse() {
+  const btn = el.searchbtn;
+  if (!btn) return;
+  if (tabstripOverflows()) {
+    btn.classList.add('compact');
+    return;
+  }
+  if (!btn.classList.contains('compact')) return;
+  btn.classList.remove('compact');
+  if (tabstripOverflows()) btn.classList.add('compact');
+}
+
 function paintTabs() {
   const frag = document.createDocumentFragment();
   for (const t of state.store.tabs) {
@@ -617,6 +636,7 @@ function paintTabs() {
   add.addEventListener('click', openRepo);
   frag.appendChild(add);
   el.tabstrip.replaceChildren(frag);
+  requestAnimationFrame(syncSearchCollapse);
 }
 
 function openCtxMenu(x, y, tab, anchor) {
@@ -897,8 +917,7 @@ function paintPanel() {
 }
 
 function branchMetaHTML(br) {
-  if (br.isTeam) return `<span class="metas"><span class="meta">team</span></span>`;
-  // Branch list: vs upstream only (pull/push). Vs-team lives on lanes / header, not here.
+  // Branch list: vs upstream only (pull/push). No “team” badge — protected tip is Settings / lane header.
   if (!br.upstream) return `<span class="metas"></span>`;
   const bits = [];
   if (br.upstreamBehind) bits.push(`${br.upstreamBehind}↓`);
@@ -3003,6 +3022,13 @@ async function boot() {
     state.appInfo = { version: '', commit: '', committedAt: '' };
   }
   paintVersion();
+  if (typeof ResizeObserver !== 'undefined' && el.titlebar) {
+    const ro = new ResizeObserver(() => syncSearchCollapse());
+    ro.observe(el.titlebar);
+    ro.observe(el.tabstrip);
+  } else {
+    window.addEventListener('resize', syncSearchCollapse);
+  }
   try {
     state.editors = await invoke('os.editors');
   } catch { state.editors = []; }
