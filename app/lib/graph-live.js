@@ -40,7 +40,12 @@ const refPill = (r, { running = false, current = false } = {}) => {
         : r.worktree ? 'tree-structure'
           : 'git-branch';
   const dot = running ? '<i class="run-dot" title="Running"></i>' : '';
-  return `<span class="${cls}">${icon(ic)}${esc(r.name)}${dot}</span>`;
+  const body = `${icon(ic)}${esc(r.name)}${dot}`;
+  if (r.tag) return `<span class="${cls}">${body}</span>`;
+  const title = current
+    ? `${esc(r.name)} · checked out here`
+    : `${esc(r.name)} · Right-click → Switch branch`;
+  return `<button type="button" class="${cls}" data-branch-name="${esc(r.name)}" title="${title}">${body}</button>`;
 };
 
 /** Uniform row centers — no day-divider gaps. */

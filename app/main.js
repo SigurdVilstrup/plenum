@@ -601,8 +601,6 @@ function syncTabScrollFades() {
   const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
   const canLeft = scroller.scrollLeft > 2;
   const canRight = max > 2 && scroller.scrollLeft < max - 2;
-  scroller.classList.toggle('fade-left', canLeft);
-  scroller.classList.toggle('fade-right', canRight);
   if (el.tabScrollPrev) el.tabScrollPrev.hidden = !canLeft;
   if (el.tabScrollNext) el.tabScrollNext.hidden = !canRight;
   el.tabstrip?.classList.toggle('has-scroll', canLeft || canRight);
@@ -958,7 +956,12 @@ function paintPanel() {
   el.panel.querySelectorAll('[data-branch-name]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      checkoutBranchRow(btn.dataset.branchName);
+      // Already a lane → select it. Checkout / switch is right-click only.
+      const br = branchByName(btn.dataset.branchName);
+      if (br?.hasLane) {
+        state.selectedLane = br.laneIndex;
+        paint();
+      }
     });
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -993,7 +996,7 @@ function branchRowHTML(br, label, board, selectedLane) {
   const title = [
     br.name,
     isCurrent ? 'checked out here' : where,
-    isCurrent ? '' : 'Click to check out in the selected worktree · right-click for more',
+    br.hasLane ? 'Click to select this worktree' : 'Right-click → Switch branch',
     br.upstream ? `tracks ${br.upstream}` : 'no upstream',
     br.upstreamBehind || br.upstreamAhead
       ? `vs ${br.upstream}: ${br.upstreamBehind || 0} behind, ${br.upstreamAhead || 0} ahead`
@@ -1674,7 +1677,7 @@ function openBranchCtxMenu(x, y, name) {
     });
     menu.appendChild(btn);
   };
-  add('Checkout', () => checkoutBranchRow(br.name));
+  add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
   if (!br.hasLane) {
     add(br.remote ? 'Fetch' : 'Pull from remote', () => updateBranchRow(br.name));
   }
@@ -3128,6 +3131,17 @@ async function boot() {
 }
 
 el.graph.addEventListener('click', (e) => {
+  const ref = e.target.closest('[data-branch-name]');
+  if (ref && el.graph.contains(ref)) {
+    e.stopPropagation();
+    // Graph ref pills: select existing lane on click; switch via right-click menu.
+    const br = branchByName(ref.dataset.branchName);
+    if (br?.hasLane) {
+      state.selectedLane = br.laneIndex;
+      paint();
+    }
+    return;
+  }
   const wip = e.target.closest('[data-wip-lane]');
   if (wip && el.graph.contains(wip)) {
     const lane = laneByIndex(Number(wip.dataset.wipLane));
@@ -3150,8 +3164,16 @@ el.graph.addEventListener('click', (e) => {
     paint();
   }
 });
+el.graph.addEventListener('contextmenu', (e) => {
+  const ref = e.target.closest('[data-branch-name]');
+  if (!ref || !el.graph.contains(ref)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openBranchCtxMenu(e.clientX, e.clientY, ref.dataset.branchName);
+});
 el.graph.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
+  if (e.target.closest('[data-branch-name]')) return;
   const row = e.target.closest('[data-wip-lane], [data-commit]');
   if (!row || !el.graph.contains(row)) return;
   e.preventDefault();
