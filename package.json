@@ -1,6 +1,6 @@
 {
   "name": "plenum",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Mac git client for parallel work — board, git verbs, and phase two runnable lanes",
   "author": "Plenum",
