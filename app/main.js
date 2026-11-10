@@ -763,12 +763,13 @@ function paintPanel() {
       if (br.behind) rel.push(`${br.behind}↓`);
       if (br.ahead) rel.push(`${br.ahead}↑`);
       const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '');
+      const vs = b.teamBranch || 'team';
       const title = [
         br.name,
         where,
         'Click to check out in the selected worktree · right-click for more',
         br.upstream ? `tracks ${br.upstream}` : '',
-        br.behind || br.ahead ? `vs ${b.teamBranch}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
+        br.behind || br.ahead ? `vs ${vs}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
       ].filter(Boolean).join(' · ');
       const current = laneByIndex(selected);
       const isSelected = (br.hasLane && br.laneIndex === selected)
@@ -776,25 +777,26 @@ function paintPanel() {
       return `<button class="lane-row branch-row${isSelected ? ' selected' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}">
         ${iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm')}
         <span class="name">${esc(br.name)}</span>
-        <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}">${esc(relTxt)}</span>
+        <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}"${rel.length ? ` title="vs ${esc(vs)}"` : ''}>${esc(relTxt)}</span>
       </button>`;
     }).join('')
     : `<div class="empty-note">None</div>`;
+  const vsLabel = b.teamBranch ? ` · vs ${esc(b.teamBranch)}` : '';
   html += `<div class="section">
-    <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}">
+    <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Ahead/behind chips compare to the protected branch${b.teamBranch ? ` (${esc(b.teamBranch)})` : ''}">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
-      <span class="meta">${branches.length}</span>
+      <span class="meta">${branches.length}${vsLabel}</span>
     </button>
     <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${branchBody}</div>
   </div>`;
 
-  html += `<div class="panel-foot">
+  const foot = `<div class="panel-foot">
     <button class="lane-row" type="button" data-settings>${iconHTML('gear-six')}<span class="name">Settings</span><kbd>⌘,</kbd></button>
     <button class="lane-row" type="button" data-feedback>${iconHTML('pencil-simple')}<span class="name">Feedback</span></button>
   </div>`;
 
-  el.panel.innerHTML = html;
+  el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${foot}`;
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
   el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   el.panel.querySelectorAll('[data-lane]').forEach((btn) => {
@@ -865,9 +867,8 @@ function laneSetupLink() {
 }
 
 function runActionsHTML(l) {
-  if (l.isPrimary) {
-    return `<span class="env-note">${iconHTML('shield-check', 'sm')}Never started by Plenum. Run the stack from a lane.</span>${laneSetupLink()}`;
-  }
+  // Primary never runs the stack — keep lane setup in Settings, not a permanent banner (#27).
+  if (l.isPrimary) return '';
   if (l.readiness === 'safe' && !l.running) {
     return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
   }
@@ -917,8 +918,9 @@ function paintHeader() {
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
         ${editorBtnHTML()}
       </div>
-    </div>
-    <div class="env-row">${runActionsHTML(l)}</div>`;
+    </div>`;
+    const primaryEnv = runActionsHTML(l);
+    if (primaryEnv) html += `<div class="env-row">${primaryEnv}</div>`;
   } else {
     const behind = l.readiness === 'safe'
       ? `<span class="fact ok">${iconHTML('check-circle', 'sm')}<strong>merged</strong> into ${esc(b.teamBranch)}</span>`

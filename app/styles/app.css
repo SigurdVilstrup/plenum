@@ -592,36 +592,39 @@ button.env-link {
   overflow: auto;
 }
 
-/* #7 — left rail density + calm fold-out (overlay changes, stable graph) */
+/* #7 — left rail density; #26 — changes claim a column (don’t cover Push/Pull) */
 :root {
   --rail-w: 300px;
+  --changes-w: min(380px, 40vw);
 }
 .window.app .body {
   grid-template-columns: var(--rail-w) 1fr;
   position: relative;
 }
-.window.app .body.with-changes {
-  grid-template-columns: var(--rail-w) 1fr;
-}
+.window.app .body.with-changes,
 .window.app .body.with-changes.with-file-pane {
-  grid-template-columns: var(--rail-w) 1fr min(380px, 40vw);
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--changes-w);
 }
 .window.app .body.with-changes #changes {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(380px, 40vw);
-  z-index: 6;
-  border-left: 1px solid var(--hairline-strong);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
-  background: var(--surface-1);
-}
-.window.app .body.with-changes.with-file-pane #changes {
   position: static;
   width: auto;
   z-index: auto;
   box-shadow: none;
+  border-left: 1px solid var(--hairline-strong);
+  background: var(--surface-1);
+  min-width: 0;
+}
+.window.app .panel {
+  min-height: 0;
+}
+.window.app .panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.window.app .panel .panel-foot {
+  flex-shrink: 0;
 }
 .window.app .panel .lane-row {
   padding: 8px 8px 8px 10px;
@@ -640,23 +643,28 @@ button.env-link {
   color: var(--ink-tertiary);
 }
 
-/* #14 / #18 — branch overview */
+/* #14 / #18 / #20 / #22 — branch overview: scroll + compact */
 .branch-list {
   padding: 2px 0 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .branch-list[hidden] {
   display: none !important;
 }
 
-.branch-row {
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  column-gap: 8px;
-  min-height: 28px;
-  padding: 4px 6px 4px 8px;
+.window.app .panel .branch-row {
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  column-gap: 6px;
+  min-height: 22px;
+  padding: 1px 6px 1px 8px;
 }
-.branch-row .name {
+.window.app .panel .branch-row .name {
   font-size: 12px;
+}
+.window.app .panel .branch-row .meta {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
