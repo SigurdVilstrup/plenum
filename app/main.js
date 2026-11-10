@@ -927,6 +927,13 @@ function paintPanel() {
       state.selectedLane = Number(btn.dataset.lane);
       paint();
     });
+    btn.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('[data-act="down"]')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const lane = laneByIndex(Number(btn.dataset.lane));
+      if (lane) openLaneCtxMenu(e.clientX, e.clientY, lane);
+    });
   });
   el.panel.querySelectorAll('.run-row [data-act="down"]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -1655,12 +1662,18 @@ async function checkoutBranchRow(name) {
   finally { endOp(tabId, 'checkout'); }
 }
 
-function openBranchCtxMenu(x, y, name) {
-  const br = branchByName(name);
-  if (!br) return;
-  const lane = laneByIndex(state.selectedLane);
-  const canRename = !br.remote && !br.isTeam && !br.isPrimary;
-  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
+function attachCtxMenu(menu) {
+  document.body.appendChild(menu);
+  const off = (ev) => {
+    if (!menu.contains(ev.target)) {
+      menu.remove();
+      document.removeEventListener('mousedown', off);
+    }
+  };
+  setTimeout(() => document.addEventListener('mousedown', off), 0);
+}
+
+function ctxMenuAt(x, y) {
   dismissCtxMenus();
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
@@ -1677,6 +1690,38 @@ function openBranchCtxMenu(x, y, name) {
     });
     menu.appendChild(btn);
   };
+  return { menu, add };
+}
+
+function openLaneCtxMenu(x, y, lane) {
+  if (!lane) return;
+  const { menu, add } = ctxMenuAt(x, y);
+  if (lane.index !== state.selectedLane) {
+    add('Select', () => {
+      state.selectedLane = lane.index;
+      paint();
+    });
+  }
+  add('Reveal in Finder', () => handleAction('reveal', lane));
+  add(`Open in ${editorName()}`, () => handleAction('editor', lane));
+  add('Pull from remote', () => handleAction('pull', lane));
+  if (lane.unpushed) add('Push to remote', () => handleAction('push', lane));
+  if (!lane.isPrimary) {
+    if (lane.running) add('Stop', () => handleAction('down', lane));
+    else if (lane.runnable && lane.readiness !== 'safe') add('Run', () => handleAction('up', lane));
+    if (lane.ahead && !lane.dirty) add('Merge into main…', () => handleAction('merge', lane));
+    if (lane.readiness === 'safe') add('Remove lane…', () => handleAction('remove', lane), true);
+  }
+  attachCtxMenu(menu);
+}
+
+function openBranchCtxMenu(x, y, name) {
+  const br = branchByName(name);
+  if (!br) return;
+  const lane = laneByIndex(state.selectedLane);
+  const canRename = !br.remote && !br.isTeam && !br.isPrimary;
+  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
+  const { menu, add } = ctxMenuAt(x, y);
   add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
   if (!br.hasLane) {
     add(br.remote ? 'Fetch' : 'Pull from remote', () => updateBranchRow(br.name));
@@ -1689,14 +1734,7 @@ function openBranchCtxMenu(x, y, name) {
     add(`Rebase ${lane.name} onto this`, () => runConflictable('lane.rebase', lane, br.name, 'rebase',
       `Rebased ${lane.name} onto ${br.name}`));
   }
-  document.body.appendChild(menu);
-  const off = (ev) => {
-    if (!menu.contains(ev.target)) {
-      menu.remove();
-      document.removeEventListener('mousedown', off);
-    }
-  };
-  setTimeout(() => document.addEventListener('mousedown', off), 0);
+  attachCtxMenu(menu);
 }
 
 function openRenameBranchSheet(br) {
