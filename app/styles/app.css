@@ -89,7 +89,7 @@ input, textarea, [contenteditable="true"] {
   min-width: 0;
   align-items: flex-end;
   padding-top: 6px;
-  padding-left: 2px;
+  padding-left: 10px;
   height: 100%;
   overflow: visible;
   gap: 4px;
