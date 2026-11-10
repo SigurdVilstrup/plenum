@@ -1,6 +1,6 @@
 {
   "name": "overlook",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "Mac git client for parallel work — board, git verbs, and phase two runnable lanes",
   "author": "Plenum",
