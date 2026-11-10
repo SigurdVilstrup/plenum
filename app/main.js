@@ -47,7 +47,6 @@ const state = {
   busy: false,
   conflictRoot: null,
   branchesOpen: true,
-  branchFilter: 'all',
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
@@ -78,6 +77,7 @@ const el = {
   panel: document.getElementById('panel'),
   main: document.getElementById('main'),
   changes: document.getElementById('changes'),
+  fileStage: document.getElementById('file-stage'),
   settings: document.getElementById('settings'),
   settingsNav: document.getElementById('settings-nav'),
   settingsBody: document.getElementById('settings-body'),
@@ -416,7 +416,7 @@ function paintTabs() {
 }
 
 function openCtxMenu(x, y, tab, anchor) {
-  document.querySelector('.ctx-menu')?.remove();
+  dismissCtxMenus();
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.style.left = `${x}px`;
@@ -594,66 +594,43 @@ function paintPanel() {
   }
 
   const branches = b.branches || [];
-  const filter = state.branchFilter || 'all';
-  const visible = branches.filter((br) => {
-    if (filter === 'lanes') return br.hasLane;
-    if (filter === 'local') return !br.remote;
-    if (filter === 'remote') return br.remote;
-    if (filter === 'free') return !br.hasLane;
-    return true;
-  });
-  const branchBody = visible.length
-    ? visible.map((br) => {
+  const branchBody = branches.length
+    ? branches.map((br) => {
       const where = br.isPrimary
         ? 'primary'
         : br.hasLane
           ? 'lane'
           : br.remote
-            ? 'remote'
+            ? 'remote-only'
             : 'local';
       const rel = [];
       if (br.behind) rel.push(`${br.behind}↓`);
       if (br.ahead) rel.push(`${br.ahead}↑`);
-      const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '·');
+      const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '');
       const title = [
         br.name,
         where,
+        'Click to check out in the selected worktree · right-click for more',
         br.upstream ? `tracks ${br.upstream}` : '',
         br.behind || br.ahead ? `vs ${b.teamBranch}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
       ].filter(Boolean).join(' · ');
-      const actions = [];
-      if (br.hasLane) {
-        actions.push(`<button class="btn" type="button" data-branch-select="${br.laneIndex}" title="Select lane">Select</button>`);
-      } else if (!br.isTeam) {
-        actions.push(`<button class="btn" type="button" data-open-as-lane="${esc(br.name)}" title="Create a lane on ${esc(br.name)}">Open as lane</button>`);
-      }
-      actions.push(`<button class="iconbtn" type="button" data-branch-more="${esc(br.name)}" aria-label="Branch actions">${iconHTML('list', 'sm')}</button>`);
-      return `<div class="lane-row branch-row" title="${esc(title)}" data-branch-name="${esc(br.name)}">
+      const current = laneByIndex(selected);
+      const isSelected = (br.hasLane && br.laneIndex === selected)
+        || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
+      return `<button class="lane-row branch-row${isSelected ? ' selected' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}">
         ${iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm')}
-        <span class="name">${esc(br.short || br.name)}</span>
+        <span class="name">${esc(br.name)}</span>
         <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}">${esc(relTxt)}</span>
-        <span class="branch-where">${esc(where)}</span>
-        <span class="branch-acts">${actions.join('')}</span>
-      </div>`;
+      </button>`;
     }).join('')
     : `<div class="empty-note">None</div>`;
-  const filters = [
-    ['all', 'All'],
-    ['lanes', 'Lanes'],
-    ['local', 'Local'],
-    ['remote', 'Remote'],
-    ['free', 'No lane'],
-  ].map(([id, label]) => `<button class="chip${filter === id ? ' on' : ''}" type="button" data-branch-filter="${id}">${label}</button>`).join('');
   html += `<div class="section">
     <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
       <span class="meta">${branches.length}</span>
     </button>
-    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>
-      <div class="branch-filters">${filters}</div>
-      ${branchBody}
-    </div>
+    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${branchBody}</div>
   </div>`;
 
   html += `<div class="panel-foot">
@@ -682,30 +659,15 @@ function paintPanel() {
     state.branchesOpen = !state.branchesOpen;
     paint();
   });
-  el.panel.querySelectorAll('[data-open-as-lane]').forEach((btn) => {
+  el.panel.querySelectorAll('[data-branch-name]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      openLaneFromBranch(btn.dataset.openAsLane);
+      checkoutBranchRow(btn.dataset.branchName);
     });
-  });
-  el.panel.querySelectorAll('[data-branch-filter]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      state.branchFilter = btn.dataset.branchFilter;
-      paint();
-    });
-  });
-  el.panel.querySelectorAll('[data-branch-select]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      state.selectedLane = Number(btn.dataset.branchSelect);
-      paint();
-    });
-  });
-  el.panel.querySelectorAll('[data-branch-more]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openBranchActions(btn.dataset.branchMore);
+      openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
     });
   });
 }
@@ -1254,68 +1216,66 @@ function branchByName(name) {
   return (state.board?.branches || []).find((b) => b.name === name || b.short === name);
 }
 
-function openBranchActions(name) {
+function dismissCtxMenus() {
+  document.querySelector('.ctx-menu')?.remove();
+}
+
+async function checkoutBranchRow(name) {
   const br = branchByName(name);
   if (!br) return;
-  const team = state.board?.teamBranch || 'main';
+  // Already checked out somewhere → select that worktree (no second checkout).
+  if (br.hasLane) {
+    state.selectedLane = br.laneIndex;
+    paint();
+    return;
+  }
+  const lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
+  if (!lane) return;
+  try {
+    const board = await invoke('branch.checkout', { branch: br.name, laneIndex: lane.index });
+    applyBoard(board, { selectLane: lane.index });
+    toast(`Checked out ${br.short || br.name}`, 'ok');
+  } catch { /* toasted */ }
+}
+
+function openBranchCtxMenu(x, y, name) {
+  const br = branchByName(name);
+  if (!br) return;
   const lane = laneByIndex(state.selectedLane);
-  const canCheckout = lane && !lane.isPrimary && !br.hasLane;
   const canRename = !br.remote && !br.isTeam && !br.isPrimary;
   const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
-  openSheet(`
-    <form class="modal" role="dialog" aria-labelledby="branch-act-title">
-      <div class="eyebrow">${iconHTML('git-branch', 'sm')}Branch</div>
-      <h1 id="branch-act-title">${esc(br.name)}</h1>
-      <p>${br.hasLane ? 'Checked out in a worktree.' : br.remote ? 'Remote-only tip.' : 'Local branch without a lane.'}
-      ${br.behind || br.ahead ? ` vs ${esc(team)}: ${br.behind || 0} behind, ${br.ahead || 0} ahead.` : ''}</p>
-      <div class="list">
-        ${br.hasLane ? `<button class="list-row compact choice" type="button" data-act="select">Select lane</button>` : ''}
-        ${!br.hasLane && !br.isTeam ? `<button class="list-row compact choice" type="button" data-act="open-lane">Open as lane</button>` : ''}
-        ${canCheckout ? `<button class="list-row compact choice" type="button" data-act="checkout">Check out in ${esc(lane.name)}</button>` : ''}
-        ${canRename ? `<button class="list-row compact choice" type="button" data-act="rename">Rename…</button>` : ''}
-        ${canDelete ? `<button class="list-row compact choice" type="button" data-act="delete">Delete…</button>` : ''}
-        ${lane && !lane.isPrimary ? `<button class="list-row compact choice" type="button" data-act="rebase-onto">Rebase ${esc(lane.name)} onto this</button>` : ''}
-      </div>
-      <div class="row-end"><button class="btn" type="button" data-close>Close</button></div>
-    </form>`);
-  const form = el.sheetLayer.querySelector('form');
-  form.querySelectorAll('[data-act]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const act = btn.dataset.act;
-      if (act === 'select') {
-        closeSheet();
-        state.selectedLane = br.laneIndex;
-        paint();
-        return;
-      }
-      if (act === 'open-lane') {
-        closeSheet();
-        return openLaneFromBranch(br.name);
-      }
-      if (act === 'checkout') {
-        closeSheet();
-        try {
-          const board = await invoke('branch.checkout', { branch: br.name, laneIndex: lane.index });
-          applyBoard(board, { selectLane: lane.index });
-          toast(`Checked out ${br.short || br.name} in ${lane.name}`, 'ok');
-        } catch { /* toasted */ }
-        return;
-      }
-      if (act === 'rename') {
-        closeSheet();
-        return openRenameBranchSheet(br);
-      }
-      if (act === 'delete') {
-        closeSheet();
-        return openDeleteBranchSheet(br);
-      }
-      if (act === 'rebase-onto') {
-        closeSheet();
-        return runConflictable('lane.rebase', lane, br.name, 'rebase',
-          `Rebased ${lane.name} onto ${br.name}`);
-      }
+  dismissCtxMenus();
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  const add = (label, run, danger = false) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    if (danger) btn.className = 'danger';
+    btn.addEventListener('click', () => {
+      menu.remove();
+      run();
     });
-  });
+    menu.appendChild(btn);
+  };
+  add('Check out', () => checkoutBranchRow(br.name));
+  if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
+  if (canRename) add('Rename…', () => openRenameBranchSheet(br));
+  if (canDelete) add('Delete…', () => openDeleteBranchSheet(br), true);
+  if (lane && !lane.isPrimary) {
+    add(`Rebase ${lane.name} onto this`, () => runConflictable('lane.rebase', lane, br.name, 'rebase',
+      `Rebased ${lane.name} onto ${br.name}`));
+  }
+  document.body.appendChild(menu);
+  const off = (ev) => {
+    if (!menu.contains(ev.target)) {
+      menu.remove();
+      document.removeEventListener('mousedown', off);
+    }
+  };
+  setTimeout(() => document.addEventListener('mousedown', off), 0);
 }
 
 function openRenameBranchSheet(br) {
@@ -1424,7 +1384,7 @@ function openCreateLane() {
         ${iconHTML('shield-check')}
         <div><strong>Team step.</strong> Base is current <span class="mono">${esc(team)}</span>. If main moves later, this lane shows as behind on the board.</div>
       </div>
-      <p class="lede" style="margin:0">Already have a branch? Open <strong>Branches without a lane</strong> → <strong>Open as lane</strong>.</p>
+      <p class="lede" style="margin:0">Already have a branch? Click it to check out, or right-click → <strong>Open as lane</strong>.</p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn primary" type="submit">${iconHTML('arrow-square-out', 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>
@@ -1544,7 +1504,8 @@ function renderDirtyTree(node, depth = 0, prefix = '') {
   }
   for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) {
     const kind = dirtyKind(f.code);
-    html += `<button class="fx-file" type="button" style="${pad}" data-file="${esc(f.path)}" title="${esc(f.path)}">
+    const on = state.filePane?.path === f.path ? ' on' : '';
+    html += `<button class="fx-file${on}" type="button" style="${pad}" data-file="${esc(f.path)}" title="${esc(f.path)}"${on ? ' aria-current="true"' : ''}>
       ${iconHTML('files', 'sm')}<span class="name">${esc(f.name)}</span>${formatStat(f)}<span class="mark ${kind}">${dirtyMark(f.code)}</span>
     </button>`;
   }
@@ -1555,30 +1516,46 @@ function changesKey(view) {
   if (!view) return '';
   const fold = [...state.collapsedDirs].join(',');
   const pane = state.filePane;
-  const paneKey = pane ? `${pane.sha}:${pane.path}:${pane.mode}` : '';
+  const paneKey = pane ? `${pane.sha}:${pane.path}` : '';
   if (view.kind === 'wip') {
     const lane = laneByIndex(view.laneIndex);
     const files = lane?.dirtyFiles || [];
-    return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}`;
+    return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}:${paneKey}`;
   }
   return `c:${view.sha}:${fold}:${paneKey}`;
 }
 
+function clearFileStage() {
+  state.filePane = null;
+  el.fileStage.hidden = true;
+  el.fileStage.innerHTML = '';
+  el.body.classList.remove('with-file-pane');
+}
+
+function activeFilePane() {
+  const view = state.changes;
+  const pane = state.filePane;
+  if (!view || !pane) return null;
+  if (view.kind === 'commit' && pane.sha === view.sha) return pane;
+  if (view.kind === 'wip' && pane.sha === 'WORKTREE') return pane;
+  return null;
+}
+
 function closeChanges() {
   state.changes = null;
-  state.filePane = null;
   state.changesPaintKey = '';
   state.changesCache = null;
   el.changes.hidden = true;
   el.changes.innerHTML = '';
-  el.body.classList.remove('with-changes', 'with-file-pane');
+  el.body.classList.remove('with-changes');
+  clearFileStage();
 }
 
 function jumpToCommitOnGraph(sha) {
   if (!sha) return;
   const hit = state.board?.commits?.find((c) => c.id === sha || c.id.startsWith(sha));
   if (hit) state.selectedLane = hit.lane;
-  state.filePane = null;
+  clearFileStage();
   state.changes = { kind: 'commit', sha: hit?.id || sha };
   state.changesPaintKey = '';
   paint();
@@ -1588,26 +1565,24 @@ function jumpToCommitOnGraph(sha) {
 }
 
 function bindFilePaneChrome() {
-  el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => { closeChanges(); paint(); });
-  el.changes.querySelector('[data-file-pane-back]')?.addEventListener('click', () => {
-    state.filePane = null;
+  el.fileStage.querySelector('[data-file-pane-back]')?.addEventListener('click', () => {
+    clearFileStage();
     state.changesPaintKey = '';
     paintChanges();
   });
-  el.changes.querySelectorAll('[data-file-mode]').forEach((btn) => {
+  el.fileStage.querySelectorAll('[data-file-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.fileMode;
       if (!mode || mode === state.filePane?.mode) return;
       state.filePane = { ...state.filePane, mode };
-      state.changesPaintKey = '';
-      paintChanges();
+      paintFilePane(state.filePane);
     });
   });
   // Editor button also bound in paintFilePane when present
 }
 
 function bindFilePaneJumps() {
-  el.changes.querySelectorAll('[data-jump-sha]').forEach((node) => {
+  el.fileStage.querySelectorAll('[data-jump-sha]').forEach((node) => {
     const go = () => jumpToCommitOnGraph(node.dataset.jumpSha);
     node.addEventListener('click', go);
     node.addEventListener('keydown', (e) => {
@@ -1636,22 +1611,22 @@ async function paintFilePane(pane) {
     : `${modeBtn('diff', 'Diff')}${modeBtn('blame', 'Blame')}${modeBtn('history', 'History')}`;
   const openPath = pane.cwd ? `${pane.cwd}/${pane.path}` : pane.path;
   el.body.classList.add('with-file-pane');
-  el.changes.innerHTML = `
+  el.fileStage.hidden = false;
+  el.fileStage.innerHTML = `
     <div class="changes-head file-pane-head">
-      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to files" aria-label="Back to files">${iconHTML('caret-right')}</button>
+      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to graph" aria-label="Back to graph">${iconHTML('caret-right')}</button>
       <div class="title">${title}<small>${esc(pane.path)}</small></div>
       <div class="file-pane-modes" role="group" aria-label="File view mode">
         ${modes}
       </div>
       <button class="btn" type="button" data-open-external title="Open in ${esc(editorName())}">${iconHTML('arrow-square-out', 'sm')}Editor</button>
-      <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
     </div>
     <div class="file-pane-body" role="region" aria-label="${esc(title)}"><div class="fx-empty">Loading…</div></div>`;
   bindFilePaneChrome();
-  el.changes.querySelector('[data-open-external]')?.addEventListener('click', () => {
+  el.fileStage.querySelector('[data-open-external]')?.addEventListener('click', () => {
     invoke('os.openEditor', openPath).catch(() => {});
   });
-  const body = el.changes.querySelector('.file-pane-body');
+  const body = el.fileStage.querySelector('.file-pane-body');
   try {
     if (wip && mode === 'diff') {
       const data = await invoke('file.workingDiff', pane.path, pane.cwd);
@@ -1758,16 +1733,7 @@ async function paintChanges() {
   state.changesPaintKey = key;
   el.changes.hidden = false;
   el.body.classList.add('with-changes');
-
-  if (view.kind === 'commit' && state.filePane?.sha === view.sha) {
-    await paintFilePane(state.filePane);
-    return;
-  }
-  if (view.kind === 'wip' && state.filePane?.sha === 'WORKTREE') {
-    await paintFilePane(state.filePane);
-    return;
-  }
-  el.body.classList.remove('with-file-pane');
+  if (!activeFilePane()) clearFileStage();
 
   if (view.kind === 'wip') {
     const lane = laneByIndex(view.laneIndex);
@@ -1811,6 +1777,9 @@ async function paintChanges() {
       ta.addEventListener('input', () => { state.commitDraft = ta.value; });
       bindCommitChord(ta, doCommit);
     }
+    const pane = activeFilePane();
+    if (pane) await paintFilePane(pane);
+    else clearFileStage();
     return;
   }
 
@@ -1837,6 +1806,9 @@ async function paintChanges() {
     };
     if (state.changesCache?.sha === token) {
       renderCommit(state.changesCache.data);
+      const pane = activeFilePane();
+      if (pane) await paintFilePane(pane);
+      else clearFileStage();
       return;
     }
     el.changes.innerHTML = `
@@ -1854,6 +1826,9 @@ async function paintChanges() {
       state.changesPaintKey = '';
       renderCommit(data);
       state.changesPaintKey = changesKey(state.changes);
+      const pane = activeFilePane();
+      if (pane) await paintFilePane(pane);
+      else clearFileStage();
     } catch {
       if (state.changes?.kind === 'commit' && state.changes.sha === token) {
         el.changes.querySelector('.changes-tree').innerHTML = '<div class="fx-empty">Could not load changes</div>';
@@ -2466,7 +2441,7 @@ document.addEventListener('keydown', (e) => {
       else closeSettings();
     }
     else if (state.filePane) {
-      state.filePane = null;
+      clearFileStage();
       state.changesPaintKey = '';
       paintChanges();
     }
@@ -2608,7 +2583,7 @@ el.graph.addEventListener('click', (e) => {
     if (!lane) return;
     const closing = state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index;
     state.selectedLane = lane.index;
-    state.filePane = null;
+    clearFileStage();
     if (closing) closeChanges();
     else state.changes = { kind: 'wip', laneIndex: lane.index };
     paint();
@@ -2618,7 +2593,7 @@ el.graph.addEventListener('click', (e) => {
   if (commit && el.graph.contains(commit)) {
     const sha = commit.dataset.commit;
     const closing = state.changes?.kind === 'commit' && state.changes.sha === sha;
-    state.filePane = null;
+    clearFileStage();
     if (closing) closeChanges();
     else state.changes = { kind: 'commit', sha };
     paint();

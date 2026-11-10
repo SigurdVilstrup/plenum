@@ -591,9 +591,11 @@ button.env-link {
   grid-template-columns: var(--rail-w) 1fr;
   position: relative;
 }
-.window.app .body.with-changes,
-.window.app .body.with-changes.with-file-pane {
+.window.app .body.with-changes {
   grid-template-columns: var(--rail-w) 1fr;
+}
+.window.app .body.with-changes.with-file-pane {
+  grid-template-columns: var(--rail-w) 1fr min(380px, 40vw);
 }
 .window.app .body.with-changes #changes {
   position: absolute;
@@ -607,7 +609,10 @@ button.env-link {
   background: var(--surface-1);
 }
 .window.app .body.with-changes.with-file-pane #changes {
-  width: min(520px, 48vw);
+  position: static;
+  width: auto;
+  z-index: auto;
+  box-shadow: none;
 }
 .window.app .panel .lane-row {
   padding: 8px 8px 8px 10px;
@@ -633,45 +638,16 @@ button.env-link {
   flex-direction: column;
   gap: 2px;
 }
-.branch-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 4px 8px;
+.branch-list[hidden] {
+  display: none !important;
 }
-.branch-filters .chip {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--hairline);
-  background: transparent;
-  color: var(--ink-tertiary);
-}
-.branch-filters .chip.on {
-  background: var(--surface-3);
-  color: var(--ink);
-  border-color: var(--hairline-strong);
-}
+
 .branch-row {
-  grid-template-columns: 16px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   column-gap: 8px;
-  pointer-events: auto;
-  cursor: default;
+  min-height: 28px;
+  padding: 4px 6px 4px 8px;
 }
-.branch-row .branch-where {
-  font-size: 10px;
-  color: var(--ink-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.branch-row .branch-acts {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  opacity: 0.7;
-}
-.branch-row:hover .branch-acts { opacity: 1; }
-.branch-row .btn {
-  font-size: 11px;
-  padding: 2px 6px;
+.branch-row .name {
+  font-size: 12px;
 }

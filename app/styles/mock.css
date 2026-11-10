@@ -491,7 +491,7 @@ a.iconbtn,
 }
 
 .body.with-changes.with-file-pane {
-  grid-template-columns: 260px 1fr minmax(360px, 42vw);
+  grid-template-columns: 260px 1fr min(380px, 40vw);
 }
 
 .panel {
@@ -633,6 +633,11 @@ a.iconbtn,
 }
 
 .fx-file:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.fx-file.on {
   background: var(--surface-2);
   color: var(--ink);
 }
@@ -1197,12 +1202,30 @@ a.navitem.back {
   color: var(--ink);
 }
 
-/* Main: selected lane header + graph */
+/* Main: selected lane header + graph (or file stage) */
 .main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.file-stage {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-1);
+}
+
+.body.with-file-pane .file-stage {
+  display: flex;
+}
+
+.body.with-file-pane .lane-head,
+.body.with-file-pane .graph {
+  display: none;
 }
 
 .lane-head {
