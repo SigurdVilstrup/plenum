@@ -3172,12 +3172,7 @@ el.graph.addEventListener('click', (e) => {
   const ref = e.target.closest('[data-branch-name]');
   if (ref && el.graph.contains(ref)) {
     e.stopPropagation();
-    // Graph ref pills: select existing lane on click; switch via right-click menu.
-    const br = branchByName(ref.dataset.branchName);
-    if (br?.hasLane) {
-      state.selectedLane = br.laneIndex;
-      paint();
-    }
+    checkoutBranchRow(ref.dataset.branchName);
     return;
   }
   const wip = e.target.closest('[data-wip-lane]');
