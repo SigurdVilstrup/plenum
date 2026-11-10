@@ -1,6 +1,6 @@
 // Warm board JSON + per-tab chrome. Escalate to hide/show DOM if paint dominates switch cost.
 
-export const WARM_MAX = 4;
+export const WARM_MAX = 8;
 export const WARM_REFRESH_MS = 20_000;
 
 export function shouldFreeze(leftAt, now, ttlMs) {

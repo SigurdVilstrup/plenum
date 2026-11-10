@@ -116,12 +116,9 @@ ipcMain.handle('tabs.open', async (_e, repoPath) => {
   const board = await loadBoard(repoPath);
   return { store: tabs.openTab(board.root, board.repoName), board };
 });
-ipcMain.handle('tabs.select', async (_e, id) => {
-  const store = tabs.selectTab(id);
-  const tab = store.tabs.find((t) => t.id === store.activeId);
-  const board = tab ? await loadBoard(tab.path) : null;
-  return { store, board };
-});
+// Select is sync — board loads in the renderer via board.get so rapid switches
+// do not pile up loadBoard work against the wrong active tab.
+ipcMain.handle('tabs.select', (_e, id) => ({ store: tabs.selectTab(id) }));
 ipcMain.handle('tabs.close', async (_e, id) => {
   const store = tabs.closeTab(id);
   const tab = store.tabs.find((t) => t.id === store.activeId);

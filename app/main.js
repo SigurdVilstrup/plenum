@@ -146,19 +146,21 @@ function toast(msg, kind = '') {
 }
 
 let loadingTimer = null;
-function setLoading(on, title = 'Opening repository…', path = '') {
+function setLoading(on, title = 'Opening repository…', path = '', { immediate = false } = {}) {
   state.loading = on;
   clearTimeout(loadingTimer);
   if (on) {
     el.loadingTitle.textContent = title;
     el.loadingPath.textContent = path;
     el.empty.hidden = true;
-    loadingTimer = setTimeout(() => {
+    const show = () => {
       if (!state.loading || state.settings.open) return;
       el.loading.hidden = false;
       el.panel.hidden = true;
       el.main.hidden = true;
-    }, 150);
+    };
+    if (immediate) show();
+    else loadingTimer = setTimeout(show, 150);
   } else {
     el.loading.hidden = true;
   }
@@ -397,12 +399,26 @@ function paint() {
     return;
   }
   const tab = activeTab();
-  if (!tab || !state.board) {
+  // Empty state is only for "no tabs". A selected tab without a board yet is loading —
+  // never the "Open a repository" marketing empty (that was the dogfood bug).
+  if (!tab) {
     el.empty.hidden = false;
+    el.loading.hidden = true;
     el.panel.hidden = true;
     el.main.hidden = true;
     closeChanges();
-    if (!state.loading) el.loading.hidden = true;
+    return;
+  }
+  if (!state.board) {
+    el.empty.hidden = true;
+    el.panel.hidden = true;
+    el.main.hidden = true;
+    closeChanges();
+    el.loading.hidden = false;
+    if (!state.loading) {
+      el.loadingTitle.textContent = 'Opening repository…';
+      el.loadingPath.textContent = tab.path || '';
+    }
     return;
   }
   el.empty.hidden = true;
@@ -2638,6 +2654,8 @@ async function selectTab(id) {
   if (id === state.store.activeId) { if (state.settings.open) closeSettings(); return; }
   const prevId = state.store.activeId;
   state.settings.open = false;
+  // Cancel any prior cold-load chrome so a late timer cannot cover the new tab.
+  setLoading(false);
   snapshotWarm(prevId);
   const seq = ++state.switchSeq;
   state.store = { ...state.store, activeId: id };
@@ -2652,10 +2670,10 @@ async function selectTab(id) {
     applyBoard(warm.board, { selectLane: warm.selectedLane });
     if (warm.timerId) { clearInterval(warm.timerId); warm.timerId = null; }
   } else {
-    // Cold tab: clear previous chrome instead of leaving the last repo painted.
+    // Cold tab: clear previous chrome; show loading (not the empty "Open a repository" state).
     resetViewChrome();
     state.board = null;
-    setLoading(true, 'Opening repository…', tab?.path || '');
+    setLoading(true, 'Opening repository…', tab?.path || '', { immediate: true });
     paint();
   }
   try {
@@ -2663,8 +2681,16 @@ async function selectTab(id) {
     if (seq !== state.switchSeq || state.store.activeId !== id) return;
     applyStore(res.store);
     if (!usedWarm) {
+      const root = tab?.path || res.store.tabs.find((t) => t.id === id)?.path;
+      let board = null;
+      try {
+        board = root
+          ? await invoke('board.get', root, { historyLimit: state.historyLimit || 120 })
+          : null;
+      } catch { /* toasted */ }
+      if (seq !== state.switchSeq || state.store.activeId !== id) return;
       setLoading(false);
-      if (res.board) applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
+      if (board) applyBoard(board, { selectLane: board.lanes[1]?.index ?? 0 });
       else {
         state.board = null;
         paint();

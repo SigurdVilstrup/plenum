@@ -36,8 +36,8 @@ test('markFrozen clears timer and sets frozen', () => {
   assert.equal(entry.timerId, null);
 });
 
-test('WARM_MAX is 4', () => {
-  assert.equal(WARM_MAX, 4);
+test('WARM_MAX is 8', () => {
+  assert.equal(WARM_MAX, 8);
 });
 
 test('evictOldest clears the evicted entry timer', () => {
