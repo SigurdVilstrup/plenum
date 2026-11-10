@@ -65,6 +65,7 @@ const state = {
   appInfo: { version: '', commit: '', committedAt: '' },
   historyLimit: 120,
   editors: [],
+  loadingOlder: false,
 };
 
 const el = {
@@ -312,20 +313,28 @@ function paint() {
     runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
     currentBranch: laneByIndex(state.selectedLane)?.branch || null,
   });
-  const rowsEl = el.graph.querySelector('.rows');
-  if (rowsEl && state.board.historyHasMore) {
-    let foot = rowsEl.querySelector('[data-load-older]');
-    if (!foot) {
-      foot = document.createElement('button');
-      foot.type = 'button';
-      foot.className = 'btn load-older';
-      foot.dataset.loadOlder = '1';
-      foot.textContent = 'Load older commits';
-      rowsEl.appendChild(foot);
-      foot.addEventListener('click', () => loadOlderHistory());
-    }
-  }
+  attachOlderSentinel(el.graph.querySelector('.rows'));
   if (state.changes) paintChanges();
+}
+
+let olderObserver = null;
+
+function attachOlderSentinel(rowsEl) {
+  if (olderObserver) {
+    olderObserver.disconnect();
+    olderObserver = null;
+  }
+  if (!rowsEl || !state.board?.historyHasMore) return;
+  const foot = document.createElement('div');
+  foot.className = 'load-older';
+  foot.dataset.loadOlder = '1';
+  foot.setAttribute('aria-live', 'polite');
+  foot.textContent = state.loadingOlder ? 'Loading…' : '';
+  rowsEl.appendChild(foot);
+  olderObserver = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) loadOlderHistory();
+  }, { root: rowsEl });
+  olderObserver.observe(foot);
 }
 
 let tabDragId = null;
@@ -2528,13 +2537,22 @@ async function refresh() {
 }
 
 async function loadOlderHistory() {
-  if (!state.board?.historyHasMore) return;
+  if (!state.board?.historyHasMore || state.loadingOlder) return;
   const next = Math.min(5000, (state.historyLimit || 120) + 120);
   state.historyLimit = next;
+  state.loadingOlder = true;
+  const foot = el.graph.querySelector('[data-load-older]');
+  if (foot) foot.textContent = 'Loading…';
+  let board = null;
   try {
-    const board = await invoke('board.get', state.board.root, { historyLimit: next });
-    if (board) applyBoard(board);
+    board = await invoke('board.get', state.board.root, { historyLimit: next });
   } catch { /* toasted */ }
+  state.loadingOlder = false;
+  if (board) applyBoard(board);
+  else {
+    const idle = el.graph.querySelector('[data-load-older]');
+    if (idle) idle.textContent = '';
+  }
 }
 
 window.addEventListener('focus', () => { refresh(); });

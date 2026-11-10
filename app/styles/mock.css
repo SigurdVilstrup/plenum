@@ -1607,6 +1607,14 @@ a.navitem.back {
   background: var(--primary-bg);
 }
 
+.load-older {
+  padding: 10px 16px 14px;
+  text-align: center;
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  min-height: 1px;
+}
+
 .graph-foot {
   display: flex;
   align-items: center;
