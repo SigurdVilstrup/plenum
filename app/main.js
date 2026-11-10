@@ -90,6 +90,8 @@ const state = {
 const el = {
   tabstrip: document.getElementById('tabstrip'),
   tabstripScroll: document.getElementById('tabstrip-scroll'),
+  tabstripEdgeLeft: document.getElementById('tabstrip-edge-left'),
+  tabstripEdgeRight: document.getElementById('tabstrip-edge-right'),
   tabScrollPrev: document.getElementById('tab-scroll-prev'),
   tabScrollNext: document.getElementById('tab-scroll-next'),
   tabAdd: document.getElementById('tab-add'),
@@ -515,6 +517,7 @@ function paint() {
     runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
     currentBranch: laneByIndex(state.selectedLane)?.branch || null,
   });
+  bindWipCommitFields();
   attachOlderSentinel(el.graph.querySelector('.rows'));
   if (state.changes) paintChanges();
 }
@@ -603,6 +606,8 @@ function syncTabScrollFades() {
   const canRight = max > 2 && scroller.scrollLeft < max - 2;
   if (el.tabScrollPrev) el.tabScrollPrev.hidden = !canLeft;
   if (el.tabScrollNext) el.tabScrollNext.hidden = !canRight;
+  if (el.tabstripEdgeLeft) el.tabstripEdgeLeft.hidden = !canLeft;
+  if (el.tabstripEdgeRight) el.tabstripEdgeRight.hidden = !canRight;
   el.tabstrip?.classList.toggle('has-scroll', canLeft || canRight);
 }
 
@@ -2172,12 +2177,46 @@ async function paintFilePane(pane) {
   }
 }
 
-function bindCommitChord(textarea, onCommit) {
+function bindCommitChord(textarea, onCommit, { enterCommits = false } = {}) {
   textarea.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    if (e.key !== 'Enter') return;
+    if ((e.metaKey || e.ctrlKey) || (enterCommits && !e.shiftKey)) {
       e.preventDefault();
+      e.stopPropagation();
       onCommit();
     }
+  });
+}
+
+function bindWipCommitFields() {
+  el.graph.querySelectorAll('[data-wip-msg]').forEach((input) => {
+    const lane = laneByIndex(Number(input.dataset.wipMsg));
+    if (!lane) return;
+    input.value = state.commitDraft;
+    const openWip = () => {
+      if (state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index) return;
+      state.selectedLane = lane.index;
+      clearFileStage();
+      state.changes = { kind: 'wip', laneIndex: lane.index };
+      paint();
+      el.graph.querySelector(`[data-wip-msg="${lane.index}"]`)?.focus();
+    };
+    const doCommit = async () => {
+      try { await commitLaneMessage(lane, input.value); } catch { /* toasted */ }
+    };
+    input.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openWip();
+    });
+    input.addEventListener('mousedown', (e) => e.stopPropagation());
+    input.addEventListener('input', () => {
+      state.commitDraft = input.value;
+      const ta = el.changes.querySelector('.commit-msg');
+      if (ta && state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index) {
+        ta.value = input.value;
+      }
+    });
+    bindCommitChord(input, doCommit, { enterCommits: true });
   });
 }
 
@@ -2275,7 +2314,11 @@ async function paintChanges() {
     el.changes.querySelector('[data-stash]')?.addEventListener('click', () => handleAction('stash', lane));
     if (ta) {
       ta.value = state.commitDraft;
-      ta.addEventListener('input', () => { state.commitDraft = ta.value; });
+      ta.addEventListener('input', () => {
+        state.commitDraft = ta.value;
+        const wip = el.graph.querySelector(`[data-wip-msg="${lane.index}"]`);
+        if (wip) wip.value = ta.value;
+      });
       bindCommitChord(ta, doCommit);
     }
     const pane = activeFilePane();
@@ -3169,6 +3212,7 @@ async function boot() {
 }
 
 el.graph.addEventListener('click', (e) => {
+  if (e.target.closest('[data-wip-msg]')) return;
   const ref = e.target.closest('[data-branch-name]');
   if (ref && el.graph.contains(ref)) {
     e.stopPropagation();
@@ -3206,7 +3250,7 @@ el.graph.addEventListener('contextmenu', (e) => {
 });
 el.graph.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
-  if (e.target.closest('[data-branch-name]')) return;
+  if (e.target.closest('[data-branch-name], [data-wip-msg], input, textarea')) return;
   const row = e.target.closest('[data-wip-lane], [data-commit]');
   if (!row || !el.graph.contains(row)) return;
   e.preventDefault();

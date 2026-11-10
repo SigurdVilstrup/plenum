@@ -96,8 +96,10 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const cy = y(i);
     const dim = c.lane !== selectedLane ? ' dim' : '';
     if (c.isWIP) {
-      const col = c.danger ? 'var(--danger)' : 'var(--warning)';
-      nodes += `<circle class="node wip${dim}" cx="${cx}" cy="${cy}" r="4" fill="var(--surface-1)" stroke="${col}" stroke-dasharray="2 2"/>`;
+      const col = c.danger
+        ? 'color-mix(in srgb, var(--danger) 65%, var(--ink-muted))'
+        : 'color-mix(in srgb, var(--warning) 65%, var(--ink-muted))';
+      nodes += `<circle class="node wip${dim}" cx="${cx}" cy="${cy}" r="5" fill="var(--canvas)" stroke="${col}" stroke-width="1.5" stroke-dasharray="2.5 2"/>`;
     } else if (c.isMerge) {
       nodes += `<circle class="node${dim}" cx="${cx}" cy="${cy}" r="4" fill="var(--canvas)" stroke="${laneColor(c.lane)}" stroke-width="1.5"/>`;
     } else if (tips.has(c.id)) {
@@ -120,15 +122,15 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
       const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
       const n = Number(c.dirtyCount) || 0;
-      const count = `${n} file${n === 1 ? '' : 's'}`;
-      const hint = c.danger ? 'on primary' : 'Review';
-      parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Show uncommitted changes">
+      const files = `${n} file${n === 1 ? '' : 's'}`;
+      parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Review uncommitted changes">
           <span></span>
-          <span class="who"></span>
+          <span class="who" title="Uncommitted changes">${icon('circle-dashed', 'wip-mark')}</span>
           <span class="msg">
-            <span class="wip-label">Working tree</span>
-            <span class="wip-count">${esc(count)}</span>
-            <span class="wip-hint">${esc(hint)}</span>
+            <span class="wip-compose">
+              <input class="wip-msg" type="text" data-wip-msg="${c.lane}" placeholder="Work In Progress" aria-label="Commit message" autocomplete="off" spellcheck="true" />
+              <span class="wip-files" title="${esc(files)}">${icon('pencil-simple', 'sm')}<span class="wip-count mono">${esc(String(n))}</span></span>
+            </span>
           </span>
           <span></span>
           <span class="time">now</span>

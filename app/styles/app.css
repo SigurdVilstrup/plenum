@@ -72,14 +72,6 @@ input, textarea, [contenteditable="true"] {
   background: var(--surface-2);
 }
 
-.window.app .titlebar .tab.add {
-  background: var(--surface-2);
-}
-
-.window.app .titlebar .tab.add:hover {
-  background: var(--surface-3);
-}
-
 .window.app .titlebar .brand {
   -webkit-app-region: drag;
 }
@@ -87,20 +79,40 @@ input, textarea, [contenteditable="true"] {
 .window.app .titlebar .tabstrip {
   flex: 1 1 auto;
   min-width: 0;
-  align-items: flex-end;
-  padding-top: 6px;
+  align-items: stretch;
+  padding-top: 0;
   padding-left: 10px;
   height: 100%;
   overflow: visible;
   gap: 4px;
 }
 
+.window.app .titlebar .tab-scroll {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+
+.window.app .titlebar .tab-scroll:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
 .window.app .titlebar .tabstrip-scroll {
+  align-items: stretch;
   gap: 10px;
 }
 
+.window.app .titlebar .tabstrip-edge.left {
+  background: linear-gradient(to right, var(--surface-2), transparent);
+}
+
+.window.app .titlebar .tabstrip-edge.right {
+  background: linear-gradient(to left, var(--surface-2), transparent);
+}
+
 .window.app .titlebar .tab {
-  height: 34px;
+  height: auto;
+  align-self: stretch;
   padding: 0 14px 0 14px;
   border-radius: 10px 10px 0 0;
   border: 1px solid transparent;
@@ -108,6 +120,7 @@ input, textarea, [contenteditable="true"] {
   overflow: visible;
   flex: 0 0 auto;
   max-width: 220px;
+  box-sizing: border-box;
 }
 
 .window.app .titlebar .tab.active {
@@ -115,6 +128,7 @@ input, textarea, [contenteditable="true"] {
   border-color: var(--hairline);
   margin-bottom: -1px;
   padding-bottom: 1px;
+  height: calc(100% + 1px);
   z-index: 2;
 }
 
@@ -267,7 +281,8 @@ input, textarea, [contenteditable="true"] {
   width: 56px;
   height: 56px;
   margin: 0 auto 16px;
-  border-radius: 12px;
+  color: var(--ink-subtle);
+  fill: currentColor;
 }
 
 .spinner {
@@ -573,6 +588,7 @@ button.env-link {
     animation: none !important;
   }
   .spinner, .btn-spin { animation: spin 2s linear infinite !important; }
+  .window.app .row.wip .who .wip-mark { animation: none !important; opacity: 0.75; }
   .lane-row .mark { transition: none; }
 }
 
@@ -777,40 +793,108 @@ button.env-link {
   background: var(--surface-3);
 }
 
-/* Working tree — strip, not a fake commit */
+/* Working tree — not a commit; make the expected action obvious */
 .window.app .row.wip {
   color: var(--ink-muted);
-  background: color-mix(in srgb, var(--warning) 7%, transparent);
+  background: color-mix(in srgb, var(--warning) 5%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--warning) 55%, var(--hairline));
 }
 .window.app .row.wip.danger {
-  color: var(--ink-muted);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--danger) 55%, var(--hairline));
+}
+.window.app .row.wip:hover:not(.active-commit),
+.window.app .row.wip.selected-lane:hover:not(.active-commit) {
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface-1));
+}
+.window.app .row.wip.danger:hover:not(.active-commit),
+.window.app .row.wip.danger.selected-lane:hover:not(.active-commit) {
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-1));
+}
+.window.app .row.wip.active-commit {
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface-2));
+}
+.window.app .row.wip.danger.active-commit {
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface-2));
 }
 .window.app .row.wip .msg {
   gap: 8px;
 }
-.window.app .row.wip .wip-label {
+.window.app .row.wip .who .wip-mark {
+  width: 18px;
+  height: 18px;
+  color: color-mix(in srgb, var(--warning) 70%, var(--ink-muted));
+  transform-origin: 50% 50%;
+  animation: wip-mark 8s linear infinite;
+}
+.window.app .row.wip.danger .who .wip-mark {
+  color: color-mix(in srgb, var(--danger) 70%, var(--ink-muted));
+}
+@keyframes wip-mark {
+  0% { transform: rotate(0deg) scale(0.88); opacity: 0.4; }
+  50% { transform: rotate(180deg) scale(1.22); opacity: 0.85; }
+  100% { transform: rotate(360deg) scale(0.88); opacity: 0.4; }
+}
+.window.app .row.wip .wip-compose {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: min(100%, 280px);
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px 0 9px;
+  border: 1px solid color-mix(in srgb, var(--warning) 12%, var(--hairline));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--canvas) 28%, transparent);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.window.app .row.wip:hover .wip-compose,
+.window.app .row.wip .wip-compose:focus-within {
+  border-color: color-mix(in srgb, var(--warning) 22%, var(--hairline));
+  background: color-mix(in srgb, var(--canvas) 55%, transparent);
+}
+.window.app .row.wip .wip-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 11rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
   font-size: 12px;
-  font-weight: 500;
-  color: var(--ink);
+  font-weight: 400;
+  line-height: 22px;
+  outline: none;
+  box-shadow: none;
+}
+.window.app .row.wip .wip-msg::placeholder {
+  color: var(--ink-tertiary);
+  font-weight: 400;
+  opacity: 1;
+}
+.window.app .row.wip .wip-files {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--warning) 65%, var(--ink-muted));
+}
+.window.app .row.wip.danger .wip-files {
+  color: color-mix(in srgb, var(--danger) 65%, var(--ink-muted));
+}
+.window.app .row.wip .wip-files .icon {
+  color: inherit;
 }
 .window.app .row.wip .wip-count {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-subtle);
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
-}
-.window.app .row.wip .wip-hint {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--primary-hover);
-}
-.window.app .row.wip.danger .wip-hint {
-  color: var(--danger);
+  color: inherit;
 }
 .window.app .row.wip .time {
   color: var(--ink-tertiary);
