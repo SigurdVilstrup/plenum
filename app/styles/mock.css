@@ -1607,13 +1607,9 @@ a.navitem.back {
   font-weight: 500;
 }
 
+/* Other-lane rows stay full ink; only the graph edges/nodes dim. */
 .row.dim {
-  color: var(--ink-tertiary);
-}
-
-.row.dim .ref,
-.row.dim .pill {
-  opacity: 0.55;
+  color: var(--ink);
 }
 
 .row .msg {
