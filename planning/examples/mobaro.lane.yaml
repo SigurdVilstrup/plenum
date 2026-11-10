@@ -1,10 +1,10 @@
 # Lane manifest for MobaroIT/mobaro, as the doctor would propose it on 6 Nov 2026.
-# Lives at .overlook/lane.yaml in the repo. This copy is an example; mobaro itself is untouched.
+# Lives at .plenum/lane.yaml in the repo. This copy is an example; mobaro itself is untouched.
 # Values come from tools/aspire-apphost/apphost.mts, package.json and the Docker volumes on this machine.
 
 version: 1
 
-# Commands run inside the lane folder. Overlook does not interpret them; it sets the folder, the env and the
+# Commands run inside the lane folder. Plenum does not interpret them; it sets the folder, the env and the
 # port offset, then calls them. Aspire here; docker compose, make, or three shell scripts work the same way.
 # {lane} is the lane number, {port.web} etc. resolve after offset.
 setup: pnpm install                          # links from the shared .pnpm-store, about 1.4 GB the first time

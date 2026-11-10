@@ -1,6 +1,6 @@
 # Favicon logo critique agent
 
-Use this rubric when reviewing brand marks for Overlook (agent-era Mac git client / lane board). Audience: developers + corporate buyers. Marks must work primarily as **16×16 / 32×32 favicons** and Dock icons.
+Use this rubric when reviewing brand marks for Plenum (agent-era Mac git client / lane board). Audience: developers + corporate buyers. Marks must work primarily as **16×16 / 32×32 favicons** and Dock icons.
 
 ## Style north star (prefer these over ornate Logobook samples)
 

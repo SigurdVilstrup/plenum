@@ -1,13 +1,13 @@
 # Plenum
 
-Mac git client for parallel work. Phase one: board, lanes (worktrees), commit / push / pull / rebase / merge, conflict walk. Phase two: runnable lanes — `.overlook/lane.yaml`, Run / Stop / Test with port offsets, doctor, CLI, and local MCP.
+Mac git client for parallel work. Phase one: board, lanes (worktrees), commit / push / pull / rebase / merge, conflict walk. Phase two: runnable lanes — `.plenum/lane.yaml`, Run / Stop / Test with port offsets, doctor, CLI, and local MCP.
 
 ## Run
 
 ```bash
 npm install
 npm run smoke:init          # disposable repo at tmp/smoke-repo
-OVERLOOK_OPEN="$PWD/tmp/smoke-repo" npm run dev
+PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev
 ```
 
 Or open any repo from the empty state / ⌘K.
@@ -15,7 +15,7 @@ Or open any repo from the empty state / ⌘K.
 Hand-write a minimal manifest to try Run on a feature lane:
 
 ```yaml
-# .overlook/lane.yaml
+# .plenum/lane.yaml
 version: 1
 run: python3 -m http.server {port.web}
 test: node -e "process.exit(0)"
@@ -25,7 +25,7 @@ ports:
     web: 8000
 ```
 
-Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup lives under Settings (`⌘,`) → Repositories → the repo (not a dialog); Write saves `.overlook/lane.yaml`. Create copies `env.copy` and runs `setup` when present. Drift gates Run when shared migrations are pending. Palette: Quick start, Tab warm time…
+Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup lives under Settings (`⌘,`) → Repositories → the repo (not a dialog); Write saves `.plenum/lane.yaml`. Create copies `env.copy` and runs `setup` when present. Drift gates Run when shared migrations are pending. Palette: Quick start, Tab warm time…
 
 ## Scripts
 
@@ -38,7 +38,7 @@ Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup liv
 | `npm run pack` | Unsigned `Plenum.app` in `release/mac*` |
 | `npm run dist` | Same + `.dmg` |
 | `npm run icons` | Rebuild `build/icon.icns` from `planning/assets/app-icon-1024.png` |
-| `npm run overlook -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
+| `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
 
 ### Mac app
 
@@ -56,7 +56,7 @@ Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Pack
 
 - `app/` — renderer (lifted from `planning/mocks`)
 - `electron/` — main process, git ops, lane supervisor, tabs, MCP
-- `bin/overlook.mjs` — CLI + `overlook mcp` (stdio)
+- `bin/plenum.mjs` — CLI + `plenum mcp` (stdio)
 - `planning/` — product, design, mocks
 
 ## MCP (Cursor)
@@ -66,12 +66,12 @@ Point Cursor at the local stdio server (`repo.doctor`, `lane.create|up|down|test
 ```json
 {
   "mcpServers": {
-    "overlook": {
+    "plenum": {
       "command": "node",
-      "args": ["/absolute/path/to/overlook/bin/overlook.mjs", "mcp"]
+      "args": ["/absolute/path/to/plenum/bin/plenum.mjs", "mcp"]
     }
   }
 }
 ```
 
-Or if `overlook` is on your `PATH`: `"command": "overlook", "args": ["mcp"]`.
+Or if `plenum` is on your `PATH`: `"command": "plenum", "args": ["mcp"]`.

@@ -2,7 +2,7 @@
 
 Drafted 10 Nov 2026 from raw material only: `PRODUCT.md` (mining + Mom Test kill criteria), dogfood GitHub issues (#5–#28), live competitor URLs (same rubric). No landing mockups.
 
-Brand name on the site: **Plenum**. Domain direction: **plenum.sh**. Repo code name Overlook remains internal.
+Brand name on the site: **Plenum**. Domain direction: **plenum.sh**. 
 
 ---
 
@@ -80,7 +80,7 @@ Basics must catch up (#24). Landing copy for **phase one** should promise overvi
 
 ### Strongest product moment to capture (proof asset)
 
-Board with several lanes: protected primary, behind marks, authorship pills, graph tips — Mobaro-scale, calm scan. Secondary: CLI/`overlook mcp` next to the board (CLI → interface without dropping agents).
+Board with several lanes: protected primary, behind marks, authorship pills, graph tips — Mobaro-scale, calm scan. Secondary: CLI/`plenum mcp` next to the board (CLI → interface without dropping agents).
 
 ---
 
@@ -108,7 +108,7 @@ Do **not** add more “study X’s website” children until child 1 passes the 
 
 ### Who
 
-Five people who match ICP (Mac, multi-dev product repo, some agent use). Not founders of Plenum. Not people who already know Overlook.
+Five people who match ICP (Mac, multi-dev product repo, some agent use). Not founders of Plenum. Not people who already know Plenum.
 
 ### Protocol
 

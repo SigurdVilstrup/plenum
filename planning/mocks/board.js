@@ -88,7 +88,7 @@ function renderPanel(sc, selected) {
   const main = sc.main;
   const mainRow = `
     <div class="section">
-      <div class="section-head" title="The checkout on the team branch. Overlook watches it and never works in it.">Protected</div>
+      <div class="section-head" title="The checkout on the team branch. Plenum watches it and never works in it.">Protected</div>
       <button class="lane-row ${selected === 0 ? 'selected' : ''}" type="button" data-lane="0">
         <span class="mark protected ${main.state === 'dirty' ? 'alert' : ''}">${icon(main.state === 'dirty' ? 'warning-circle' : 'shield-check')}</span>
         <span class="name">main</span>
@@ -140,7 +140,7 @@ function renderPanel(sc, selected) {
   return `${mainRow}
     <div class="section">
       <div class="section-head">
-        <span title="A lane is a git worktree on its own branch plus the way to run it: commands, a port offset, env and data mode from .overlook/lane.yaml.">Lanes <span class="count">${sc.lanes.length}</span></span>
+        <span title="A lane is a git worktree on its own branch plus the way to run it: commands, a port offset, env and data mode from .plenum/lane.yaml.">Lanes <span class="count">${sc.lanes.length}</span></span>
         <a class="iconbtn" href="create-lane.html" aria-label="New lane from main">${icon('plus')}</a>
       </div>
       ${rows}
@@ -184,9 +184,9 @@ function renderHeader(sc, selected) {
       </div>
       </div>
       <div class="env-row">
-        <span class="env-note">${icon('shield-check', 'sm')}Never started by Overlook. Run the stack from a lane.</span>
+        <span class="env-note">${icon('shield-check', 'sm')}Never started by Plenum. Run the stack from a lane.</span>
         <span class="env-sep"></span>
-        <span class="badge data" title="The databases every lane shares: RavenDB :1338, SQL Edge :1433, Postgres :5432. Defined in .overlook/lane.yaml.">${icon('database', 'sm')}shared data</span>
+        <span class="badge data" title="The databases every lane shares: RavenDB :1338, SQL Edge :1433, Postgres :5432. Defined in .plenum/lane.yaml.">${icon('database', 'sm')}shared data</span>
         <span class="env-note">RavenDB <span class="mono">:1338</span> · SQL Edge <span class="mono">:1433</span> · Postgres <span class="mono">:5432</span></span>
         <a class="env-link" href="settings.html?page=repositories">${icon('gear-six', 'sm')}Lane setup in Settings</a>
       </div>`;
@@ -243,7 +243,7 @@ function renderEnvRow(sc, l) {
     </div>`;
   }
   const sharedWith = sc.lanes.filter((x) => x.running && x.lane !== l.lane).map((x) => x.name);
-  const dataTitle = `RavenDB, SQL Edge and Postgres are the same instances for every lane${sharedWith.length ? `, right now also used by ${sharedWith.join(', ')}` : ''}. Switch a service to snapshot in .overlook/lane.yaml to give this lane its own copy.`;
+  const dataTitle = `RavenDB, SQL Edge and Postgres are the same instances for every lane${sharedWith.length ? `, right now also used by ${sharedWith.join(', ')}` : ''}. Switch a service to snapshot in .plenum/lane.yaml to give this lane its own copy.`;
   const runBtn = l.running
     ? `<button class="btn" type="button" data-stop>${icon('stop', 'sm')}Stop</button>`
     : `<button class="btn" type="button" data-up>${icon('play', 'sm')}Run</button>`;
@@ -285,7 +285,7 @@ function renderUpSheet(sc, l) {
         </label>
         <label class="list-row compact choice">
           <input type="radio" name="up" />
-          <div class="name">Give this lane its own Postgres<small>Sets <span class="mono">postgres: snapshot</span> in <span class="mono">.overlook/lane.yaml</span>. Seeded from the latest snapshot, about 40 s.</small></div>
+          <div class="name">Give this lane its own Postgres<small>Sets <span class="mono">postgres: snapshot</span> in <span class="mono">.plenum/lane.yaml</span>. Seeded from the latest snapshot, about 40 s.</small></div>
         </label>
       </div>
       <div class="check">
@@ -319,7 +319,7 @@ function renderRemoveSheet(l) {
       </div>
       <div class="check">
         ${icon('shield-check')}
-        <div>One lane at a time. Overlook never removes a lane with uncommitted work or unmerged commits, and never in bulk.</div>
+        <div>One lane at a time. Plenum never removes a lane with uncommitted work or unmerged commits, and never in bulk.</div>
       </div>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const paint = () => {
     panel.innerHTML = renderPanel(sc, selected);
     header.innerHTML = renderHeader(sc, selected);
-    OverlookGraph.renderGraph(graph, { commits: sc.commits, selectedLane: selected, runningLanes: new Set(sc.lanes.filter((l) => l.running).map((l) => l.lane)) });
+    PlenumGraph.renderGraph(graph, { commits: sc.commits, selectedLane: selected, runningLanes: new Set(sc.lanes.filter((l) => l.running).map((l) => l.lane)) });
     panel.querySelectorAll('[data-lane]').forEach((b) =>
       b.addEventListener('click', () => {
         selected = Number(b.dataset.lane);
@@ -389,5 +389,5 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-window.OverlookScenarios = scenarios;
+window.PlenumScenarios = scenarios;
 })();

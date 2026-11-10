@@ -4,7 +4,7 @@ Written 9 November 2026. Approved direction from product chat.
 
 ## Goal
 
-Make it trivially easy for dogfooders to leave UX-directed feedback on Overlook: open a sheet, optionally point at a UI element, write a comment, and save a full-window screenshot (with highlight) plus structured metadata on disk. No network in v1.
+Make it trivially easy for dogfooders to leave UX-directed feedback on Plenum: open a sheet, optionally point at a UI element, write a comment, and save a full-window screenshot (with highlight) plus structured metadata on disk. No network in v1.
 
 ## Non-goals
 
@@ -40,7 +40,7 @@ Make it trivially easy for dogfooders to leave UX-directed feedback on Overlook:
 
 Each submit creates one folder under `userData`:
 
-`~/Library/Application Support/Overlook/feedback/<id>/`
+`~/Library/Application Support/Plenum/feedback/<id>/`
 
 ```
 meta.json

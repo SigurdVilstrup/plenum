@@ -1,10 +1,10 @@
-# Overlook: product
+# Plenum: product
 
 Written 6 November 2026. The deck in `index.html` is the pitch; this document is the full version, including the numbers behind every slide and the decision notes (kill criteria, ask, smoke test) at the end. Numbers come from the scripts in `scripts/` run against the repositories on this machine, from vendor pages fetched on 6 November 2026, and from the Stack Overflow 2026 survey. Where I could not get evidence, the word is "unknown".
 
 ## One line
 
-Overlook is a Mac git client built around lanes: a graph and a lane board that show where each worktree stands against the team, with every git verb per lane. Phase two adds the thing no git client does, which is make every lane runnable and testable, with shared data as a fact you can see, through the board, a CLI, and a local MCP any agent can call.
+Plenum is a Mac git client built around lanes: a graph and a lane board that show where each worktree stands against the team, with every git verb per lane. Phase two adds the thing no git client does, which is make every lane runnable and testable, with shared data as a fact you can see, through the board, a CLI, and a local MCP any agent can call.
 
 ## The problem, short
 
@@ -12,19 +12,19 @@ Half the commits in the team repository are now agent-marked (53% in October). A
 
 ## The idea
 
-Overlook is a git client first. Then it makes lanes runnable. In that order, because the second part is the bigger job and only pays off once the client is in daily use.
+Plenum is a git client first. Then it makes lanes runnable. In that order, because the second part is the bigger job and only pays off once the client is in daily use.
 
 **Work.** The verbs every client has, per lane: commit, push, pull, rebase onto main, merge into main, resolve conflicts. The lane header shows only the ones that apply right now (Commit when there is uncommitted work, Rebase on main when behind, Merge and Push when ahead); the palette has all of them with keys. Real git underneath, the repo stays plain. This is phase one and the whole of the first Mac app.
 
 **See.** Lanes panel, full-height graph, protected main, behind, authorship. The part that makes it a git client and not a sidecar. Not an addition to GitKraken: the graph and the lanes are the product, running is what makes lanes exist in the first place.
 
-**Run (phase two).** A doctor reads the repo and proposes a lane manifest, `.overlook/lane.yaml`, checked into the repo. Each lane gets a port offset. Run, Stop and Test sit in the lane header. Services are shared by default; the board says so on every lane, lists what is shared, and turns the lane amber when it carries migrations the shared database has not run. That drift is the one thing that gates Run.
+**Run (phase two).** A doctor reads the repo and proposes a lane manifest, `.plenum/lane.yaml`, checked into the repo. Each lane gets a port offset. Run, Stop and Test sit in the lane header. Services are shared by default; the board says so on every lane, lists what is shared, and turns the lane amber when it carries migrations the shared database has not run. That drift is the one thing that gates Run.
 
-**Hand off (phase two).** The lane operations as a local MCP server and a CLI: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. Cursor, Claude Code and Codex get runnable lanes without Overlook building into any of them, and whatever they start shows up on the board as running.
+**Hand off (phase two).** The lane operations as a local MCP server and a CLI: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. Cursor, Claude Code and Codex get runnable lanes without Plenum building into any of them, and whatever they start shows up on the board as running.
 
-**What Overlook does not care about.** Which IDE, which agent, which model, which workflow, or how the stack starts. The manifest holds commands; Overlook sets the folder, the env and the port offset, then calls them. Running through an Aspire AppHost is the same to it as running three shell scripts for backend, frontend and worker, or `docker compose up`, or `make dev`. If the command can take a port from the environment, the lane is runnable. If it cannot, the doctor says so and that is the one change the repo needs. The same holds on the agent side: anything that speaks MCP or can run a CLI gets lanes, and Overlook has no opinion about what it does inside one.
+**What Plenum does not care about.** Which IDE, which agent, which model, which workflow, or how the stack starts. The manifest holds commands; Plenum sets the folder, the env and the port offset, then calls them. Running through an Aspire AppHost is the same to it as running three shell scripts for backend, frontend and worker, or `docker compose up`, or `make dev`. If the command can take a port from the environment, the lane is runnable. If it cannot, the doctor says so and that is the one change the repo needs. The same holds on the agent side: anything that speaks MCP or can run a CLI gets lanes, and Plenum has no opinion about what it does inside one.
 
-Why shared data is the default and not isolation: isolation is what every "parallel agents" tool reaches for, and it is why nobody uses them on a repo with three databases. Sharing is what a developer does today when they switch branches in one checkout; the hazard is the same, migration drift. Overlook makes that hazard visible and offers `snapshot` per service for the lanes that need their own copy. The cheap default is the one people will keep.
+Why shared data is the default and not isolation: isolation is what every "parallel agents" tool reaches for, and it is why nobody uses them on a repo with three databases. Sharing is what a developer does today when they switch branches in one checkout; the hazard is the same, migration drift. Plenum makes that hazard visible and offers `snapshot` per service for the lanes that need their own copy. The cheap default is the one people will keep.
 
 ## Vocabulary
 
@@ -32,7 +32,7 @@ Six words. Every screen uses them and nothing else.
 
 **Lane.** A git worktree on its own branch, plus the way to run it: the manifest's commands, a port offset, the env, and a data mode. Several features in progress at once, each one startable. Agents create them; so do people. A worktree without a manifest still shows as a lane; it just cannot be started yet.
 
-**Protected main.** The checkout that sits on the team branch. Overlook watches it, never works in it, never starts it, and shows it first.
+**Protected main.** The checkout that sits on the team branch. Plenum watches it, never works in it, never starts it, and shows it first.
 
 **Behind.** How many commits the team branch has that this lane does not. Measured against `origin/main` (or the team's default), not the lane's own upstream.
 
@@ -50,9 +50,9 @@ Mocks: [`mocks/board.html`](mocks/board.html) (a normal day, two lanes running, 
 
 ## Must and must not
 
-Overlook must: show the three facts for every worktree in under ten seconds; create a lane from latest `main`; commit, push, pull, rebase and merge per lane, and walk a conflict file by file inside the lane; remove a lane only when it is safe, and say why when it is not. In phase two: write `.overlook/lane.yaml` when the user accepts the doctor's proposal; start and stop a lane's `run` command with its port offset and env, and keep those processes alive as a supervisor while the app or CLI runs; run a lane's `test` command and keep the last result; refuse to start a lane with migration drift without the sheet; expose the lane operations on a local MCP and a CLI with the same names.
+Plenum must: show the three facts for every worktree in under ten seconds; create a lane from latest `main`; commit, push, pull, rebase and merge per lane, and walk a conflict file by file inside the lane; remove a lane only when it is safe, and say why when it is not. In phase two: write `.plenum/lane.yaml` when the user accepts the doctor's proposal; start and stop a lane's `run` command with its port offset and env, and keep those processes alive as a supervisor while the app or CLI runs; run a lane's `test` command and keep the last result; refuse to start a lane with migration drift without the sheet; expose the lane operations on a local MCP and a CLI with the same names.
 
-Overlook must not: commit, push, merge or rebase on behalf of an agent (agents get lane verbs over MCP, not git verbs; git stays with whoever is in the lane); open a terminal into an agent or run an agent; interpret, wrap or replace the repo's own start, test or setup commands; start anything in the protected checkout; hide the fact that data is shared behind a dialog or a setting; change a service to `snapshot` or `isolated` without writing it to the manifest where the whole team sees it; run anything that is not in the manifest.
+Plenum must not: commit, push, merge or rebase on behalf of an agent (agents get lane verbs over MCP, not git verbs; git stays with whoever is in the lane); open a terminal into an agent or run an agent; interpret, wrap or replace the repo's own start, test or setup commands; start anything in the protected checkout; hide the fact that data is shared behind a dialog or a setting; change a service to `snapshot` or `isolated` without writing it to the manifest where the whole team sees it; run anything that is not in the manifest.
 
 Git writes are the ones every client has. Beyond those, lanes add four (create lane, remove lane, write manifest, start and stop processes) and one standing process.
 
@@ -60,14 +60,14 @@ Git writes are the ones every client has. Beyond those, lanes add four (create l
 
 1. **Phase one, the client.** Board, graph, lanes as worktrees, protected main, behind, authorship, and the git verbs per lane. A Mac app used every day. Eight weeks of evenings.
 2. **Dogfood.** The team repo for four weeks. Count lanes per person and whether anyone opens another client.
-3. **Phase two, running.** The manifest for mobaro, then `overlook up / test / doctor` and the MCP. The strip under the lane header. Starts only once the client is in daily use.
+3. **Phase two, running.** The manifest for mobaro, then `plenum up / test / doctor` and the MCP. The strip under the lane header. Starts only once the client is in daily use.
 4. **Shared data.** Drift detection, snapshot per service, the Run sheet. Last, because it is the hardest to get right.
 
 ## Lane manifest
 
-`.overlook/lane.yaml`, in the repo, proposed by the doctor and edited by hand. Checked in, so every teammate and every agent gets the same lanes with or without Overlook.
+`.plenum/lane.yaml`, in the repo, proposed by the doctor and edited by hand. Checked in, so every teammate and every agent gets the same lanes with or without Plenum.
 
-One manifest per git repository, because a worktree is per repository. A monorepo is the easy case: one file, one `run`. When the stack spans repositories, a lane that needs another repo's service names it under `services` as `shared` with a `url`; Overlook shows it as shared and checks that it answers, but does not start it in v1. Settings > Repositories lists these cross-repo services so the dependency is visible.
+One manifest per git repository, because a worktree is per repository. A monorepo is the easy case: one file, one `run`. When the stack spans repositories, a lane that needs another repo's service names it under `services` as `shared` with a `url`; Plenum shows it as shared and checks that it answers, but does not start it in v1. Settings > Repositories lists these cross-repo services so the dependency is visible.
 
 ```yaml
 version: 1
@@ -89,17 +89,17 @@ data:
   snapshot: <default seed command>
 ```
 
-Commands. `setup`, `run` and `test` are shell commands, run in the lane folder with the lane's env and port offset. Overlook does not know what they do. `run` is expected to stay in the foreground and to die on SIGTERM, the same contract a terminal gives it; that is all the supervisor relies on.
+Commands. `setup`, `run` and `test` are shell commands, run in the lane folder with the lane's env and port offset. Plenum does not know what they do. `run` is expected to stay in the foreground and to die on SIGTERM, the same contract a terminal gives it; that is all the supervisor relies on.
 
 Modes. `shared`: the lane uses the instance everyone uses; the board shows `shared data`. `snapshot`: the lane gets its own copy seeded from the snapshot command, on an offset port, dropped on remove. `isolated`: its own empty instance. Mode is per service, so Postgres can be a snapshot while RavenDB stays shared.
 
-Drift. Before `lane.up`, Overlook lists migrations in the lane's `data.migrations` folder that the shared database has not applied (by name, the way the migration tool itself does). Zero: start. More than zero: the sheet, with three choices: run them (changes the shared database for every lane; the other lanes keep running on the new schema), start without them, or switch that service to `snapshot` for this lane.
+Drift. Before `lane.up`, Plenum lists migrations in the lane's `data.migrations` folder that the shared database has not applied (by name, the way the migration tool itself does). Zero: start. More than zero: the sheet, with three choices: run them (changes the shared database for every lane; the other lanes keep running on the new schema), start without them, or switch that service to `snapshot` for this lane.
 
 Worked example for mobaro: [`examples/mobaro.lane.yaml`](examples/mobaro.lane.yaml). Every value in it is read from the repo on this machine; mobaro itself is not modified by this project.
 
 ## The local MCP and CLI
 
-One binary, `overlook`. `overlook mcp` serves the tools below over stdio; the same names are subcommands.
+One binary, `plenum`. `plenum mcp` serves the tools below over stdio; the same names are subcommands.
 
 | Tool | Does | Returns |
 |---|---|---|
@@ -111,7 +111,7 @@ One binary, `overlook`. `overlook mcp` serves the tools below over stdio; the sa
 | `lane.status` | Every worktree: the three facts plus running, ports, data mode, drift. | The board as JSON. |
 | `lane.remove {lane}` | Only when safe; otherwise the reasons. | |
 
-What this buys. Claude Code already creates `.claude/worktrees/<name>` and runs setup hooks; Cursor already runs `.cursor/worktrees.json` setup scripts. Neither starts the app, offsets ports, or knows what is shared. Conductor does all three, for the workspaces it creates with the agents it launches, inside its own window. Overlook's manifest is for whichever agent, and whichever worktree, you already have. With the manifest in the repo and `overlook mcp` configured once, an agent asked to "fix the CSV export and show me" creates a lane, starts it, returns a URL, runs the tests, and the lane shows up on the board as running with the shared-data badge like any lane a person made. Nothing of Overlook's runs in the cloud; the MCP is a local process over stdio.
+What this buys. Claude Code already creates `.claude/worktrees/<name>` and runs setup hooks; Cursor already runs `.cursor/worktrees.json` setup scripts. Neither starts the app, offsets ports, or knows what is shared. Conductor does all three, for the workspaces it creates with the agents it launches, inside its own window. Plenum's manifest is for whichever agent, and whichever worktree, you already have. With the manifest in the repo and `plenum mcp` configured once, an agent asked to "fix the CSV export and show me" creates a lane, starts it, returns a URL, runs the tests, and the lane shows up on the board as running with the shared-data badge like any lane a person made. Nothing of Plenum's runs in the cloud; the MCP is a local process over stdio.
 
 ## Problem: what my own repositories show
 
@@ -181,7 +181,7 @@ Audit of shipping software, fetched 6 November 2026. "Behind main" means the num
 | Tower | 15.0, 2 Nov 2026 (Windows); Mac notes on same page | No | No | No. AI commit messages. | No | No | Repair worktree, crash fixes, branch deletion across worktrees. No agent-era features. |
 | lazygit | v0.66.2 | No | No | No | No | No | Worktree fixes only. |
 | Cursor | Agents Window, Cursor 3, Apr 2026; CLI `--worktree` | Unknown. Worktrees under `~/.cursor/worktrees/`; `/worktree`, `/best-of-n`, `/apply-worktree`, `/delete-worktree`. | Partial: the agent's "main checkout stays untouched" is the product promise, not a view. | No | Partial. `.cursor/worktrees.json` setup scripts run on worktree creation. No run, test or ports. | No | Worktrees are plumbing for parallel agents; `.cursor/worktrees.json` setup scripts. |
-| Claude Code | docs current Nov 2026 | No. Creates `.claude/worktrees/<name>` on branch `worktree-<name>`, from the remote default branch by default. | Partial: `blockWritesOutsideWorkingDirectories` refuses edits to the main checkout from a worktree session. A guard, not a view. | Writes `Co-authored-by: Claude` trailers, which is the signal Overlook reads. | Partial. `WorktreeCreate` hook and setup commands; no run, test or ports. | No | Worktree cleanup prompts, periodic sweep, locks while running, subagent worktrees. |
+| Claude Code | docs current Nov 2026 | No. Creates `.claude/worktrees/<name>` on branch `worktree-<name>`, from the remote default branch by default. | Partial: `blockWritesOutsideWorkingDirectories` refuses edits to the main checkout from a worktree session. A guard, not a view. | Writes `Co-authored-by: Claude` trailers, which is the signal Plenum reads. | Partial. `WorktreeCreate` hook and setup commands; no run, test or ports. | No | Worktree cleanup prompts, periodic sweep, locks while running, subagent worktrees. |
 
 Sources: help.gitkraken.com (release notes, worktrees page), gitkraken.com/pricing, teebe.io and github.com/klein-t/teebe, conductor.build/changelog and docs.conductor.build/core/scripts, git-fork.com/releasenotes, git-tower.com/release-notes/mac, github.com/jesseduffield/lazygit/releases, cursor.com/docs (worktrees, agents-window, CLI parameters), code.claude.com/docs/en/worktrees.
 
@@ -199,7 +199,7 @@ Three details, each shown by a mock state.
 
 ## Risks: pre-mortem
 
-It is November 2027 and Overlook failed. The four most likely stories.
+It is November 2027 and Plenum failed. The four most likely stories.
 
 **1. Lanes still did not multiply.** The manifest worked for mobaro, the lanes started, and people still ran one agent in one folder because that was enough. The runnable-lane thesis was right about the blocker and wrong about the demand. *Response:* kill criterion 2 measures exactly this, on the team repo, in four weeks, before any app is built.
 
@@ -207,7 +207,7 @@ It is November 2027 and Overlook failed. The four most likely stories.
 
 **3. The doctor could not read real repos.** Mobaro has one AppHost; the next repo has docker-compose, a Makefile, three READMEs and a port hard-coded in a test. The doctor proposed nonsense, people edited YAML by hand, and the "cheap lanes" promise died in setup. *Response:* the doctor proposes, never decides; a manifest written by hand in ten minutes is still the product. Measure time-to-first-running-lane per repo in the smoke test.
 
-**4. The supervisor ate the year.** Process trees, port collisions, orphaned containers, a lane that would not stop, Docker on macOS. Overlook became a worse Foreman with a graph attached, and the Mac app never shipped. *Response:* `lane.up` in version one runs the manifest's `run` command and nothing else. No container orchestration. If the repo's own start script cannot take a port offset, the doctor says so and the lane is not runnable yet.
+**4. The supervisor ate the year.** Process trees, port collisions, orphaned containers, a lane that would not stop, Docker on macOS. Plenum became a worse Foreman with a graph attached, and the Mac app never shipped. *Response:* `lane.up` in version one runs the manifest's `run` command and nothing else. No container orchestration. If the repo's own start script cannot take a port offset, the doctor says so and the lane is not runnable yet.
 
 A fifth, smaller: agents stop writing trailers. The `Co-authored-by` convention is a habit, not a contract. Authorship is the weakest of the three facts and this document treats it that way; behind, protected main and running do not depend on it.
 
@@ -246,7 +246,7 @@ Output of `scripts/mine.sh ~/Dev/Repositories 90`, 6 November 2026. Repositories
 | mobaro (and its worktree) | 2026-11-06 | 2203 | 824 | 281 | 88 | 49 | 1 / 198 (7 over 20)* | 5 | 1 |
 | mobaro-switch | 2026-10-22 | 121 | 119 | 119 | 118 | 1 | 0 / 0 | 0 | 0 |
 | mobaro.wiki | 2026-11-06 | 1017 | 57 | 976 | 57 | 8 | 1 / 9 | 0 | 0 |
-| overlook-pitch | 2026-11-06 | 0 | | | | | | | |
+| plenum-pitch | 2026-11-06 | 0 | | | | | | | |
 | ps-automation-platform | 2026-04-27 | 0 | | | | | | | |
 | superset | 2025-09-09 | 0 | | | | | | | |
 | terrane | 2026-07-30 | 0 | | | | | | | |
@@ -317,15 +317,15 @@ Pass bar: four of eight score 5 or more, and question 3 scores at least 1 for fo
 
 ## Appendix D: smoke test
 
-**What it is.** The manifest in `examples/mobaro.lane.yaml` applied to the real mobaro repo (as `.overlook/lane.yaml`, on a branch, by pull request), plus the `overlook` CLI with `doctor`, `create`, `up`, `down`, `test`, `status`, `remove`, and `overlook mcp` so Claude Code and Cursor can call the same. No UI, no daemon beyond the supervisor while a lane runs, no account.
+**What it is.** The manifest in `examples/mobaro.lane.yaml` applied to the real mobaro repo (as `.plenum/lane.yaml`, on a branch, by pull request), plus the `plenum` CLI with `doctor`, `create`, `up`, `down`, `test`, `status`, `remove`, and `plenum mcp` so Claude Code and Cursor can call the same. No UI, no daemon beyond the supervisor while a lane runs, no account.
 
 ```
-$ overlook status
+$ plenum status
 main    ~/Dev/Repositories/mobaro          feature/see-s6-login-hook   23 dirty  34 behind  Assisted (Cursor)  not on main
 lane 1  ../mobaro-organizational-contacts  eng/organizational-contacts  1 dirty   0 behind  Human              merged, safe to remove
-$ overlook create search-filters
+$ plenum create search-filters
 lane 2  .worktrees/search-filters  feat/search-filters  setup 41 s
-$ overlook up 2
+$ plenum up 2
 drift: 2 migrations not in shared postgres (20261104_facets, 20261105_facet_index)
   [r]un them for every lane  [s]tart without  [p]ostgres snapshot for this lane  > r
 web http://localhost:5201  api http://localhost:5255   shared: ravendb sqledge postgres
@@ -335,7 +335,7 @@ One line per worktree, in this order: the primary checkout, then every lane. `st
 
 **Build.** Go, one binary. Four evenings including the MCP wrapper (the tool list is seven calls over stdio) and a Homebrew tap. The git mining in `scripts/mine.sh` is most of the read logic already. The AppHost needs to read a port offset from the environment; that is a small change in `apphost.mts` and goes in the same pull request as the manifest.
 
-**Distribution for the test.** The manifest pull request to the mobaro team (seven people), plus three outside testers with their own repo and a hand-written manifest. Logging is a local opt-in file (`~/.overlook/runs.log`) the tester sends at the end; no telemetry.
+**Distribution for the test.** The manifest pull request to the mobaro team (seven people), plus three outside testers with their own repo and a hand-written manifest. Logging is a local opt-in file (`~/.plenum/runs.log`) the tester sends at the end; no telemetry.
 
 **What is measured.** Per tester, after four weeks: lanes created and lanes running at once (from `status` logs); `up` calls per week; time from `create` to first URL; drift sheets shown and which choice was taken; whether an agent called the MCP (tool name in the log); whether the tester wrote or edited a manifest for a second repo.
 

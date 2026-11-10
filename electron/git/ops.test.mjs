@@ -178,7 +178,7 @@ test('stash and pop uncommitted', async () => {
 });
 
 function writeManifest(root, yaml) {
-  const dir = path.join(root, '.overlook');
+  const dir = path.join(root, '.plenum');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'lane.yaml'), yaml);
 }
@@ -300,7 +300,7 @@ test('removeLane downs a running process before removing the worktree', async ()
   );
   // Commit+push so primary stays clean (merge refuses dirty) and createLane's
   // origin/main base includes the manifest (avoids diverge → ff failure).
-  await git(['add', '.overlook'], root);
+  await git(['add', '.plenum'], root);
   await git(['commit', '-m', 'manifest'], root);
   await git(['push'], root);
 

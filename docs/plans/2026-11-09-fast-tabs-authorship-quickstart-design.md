@@ -4,7 +4,7 @@ Written 9 November 2026. Approved direction from product chat.
 
 ## Goal
 
-Make Overlook feel snappy when hopping between repo tabs, make AI authorship quieter in the graph, and teach the lane/worktree model on demand — without a first-run tour.
+Make Plenum feel snappy when hopping between repo tabs, make AI authorship quieter in the graph, and teach the lane/worktree model on demand — without a first-run tour.
 
 ## Non-goals
 
@@ -126,9 +126,9 @@ else:
 
 One screen, product vocabulary only — not the full PRODUCT.md:
 
-1. **Overlook vs a normal git client** — board of worktrees (lanes), not one checkout.
+1. **Plenum vs a normal git client** — board of worktrees (lanes), not one checkout.
 2. **Lane** — worktree + branch; several features at once.
-3. **Protected main** — team branch checkout; Overlook watches it, does not work in it.
+3. **Protected main** — team branch checkout; Plenum watches it, does not work in it.
 4. **Behind** — vs team `main` / `origin/main`, not the lane’s own upstream.
 5. **Authorship** — trailers (`Co-authored-by`, …); human has no badge.
 6. One line on **phase two** (runnable lanes) so the pitch is complete without promising UI that is not the focus of this sheet.

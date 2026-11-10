@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { manifestDir } from '../paths.mjs';
 
 /**
  * Shared-data drift (v1).
- * # ponytail: name-only compare via .overlook/applied-migrations; upgrade is tool-specific
+ * # ponytail: name-only compare via .plenum/applied-migrations; upgrade is tool-specific
  * migrator introspection (mobaro: Aspire/EF adapter — not blocking v1).
  */
 
@@ -24,10 +25,10 @@ export function usesSharedData(manifest) {
   return modes.length === 0 || modes.some((m) => m === 'shared' || m == null);
 }
 
-/** Stub adapter: newline filenames in `.overlook/applied-migrations` under markerRoot. */
+/** Stub adapter: newline filenames in `.plenum/applied-migrations` under markerRoot (legacy `.overlook` ok). */
 export async function fileAdapter(markerRoot) {
   try {
-    const text = await fs.readFile(path.join(markerRoot, '.overlook', 'applied-migrations'), 'utf8');
+    const text = await fs.readFile(path.join(manifestDir(markerRoot), 'applied-migrations'), 'utf8');
     return new Set(
       text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean),
     );

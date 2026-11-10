@@ -1,6 +1,6 @@
-# Overlook, planning
+# Plenum, planning
 
-Business and product materials for Overlook: a Mac git client built around lanes (worktrees), with runnable lanes as phase two. Nothing is built; PRODUCT.md says what would have to be true before anything is.
+Business and product materials for Plenum: a Mac git client built around lanes (worktrees), with runnable lanes as phase two. Nothing is built; PRODUCT.md says what would have to be true before anything is.
 
 To refresh the numbers: `planning/scripts/mine.sh ~/Dev/Repositories 90` and `planning/scripts/prs.sh MobaroIT/mobaro 90 ~/Dev/Repositories/mobaro` (needs `gh auth login`).
 

@@ -1,4 +1,4 @@
-# Brand name investigation — replacing Overlook
+# Brand name investigation — replacing Plenum
 
 Written 9 November 2026. Meaning-first shortlist with domain probes (DNS + RDAP) and collision checks against adjacent agent/git tooling. Domains marked available are **likely** free as of this date; register before announcing.
 

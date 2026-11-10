@@ -2,7 +2,7 @@
 
 // Theme: first load follows the OS, then the toggle persists.
 (function theme() {
-  const saved = localStorage.getItem('overlook-theme');
+  const saved = localStorage.getItem('plenum-theme');
   const os = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   const fromUrl = new URLSearchParams(location.search).get('theme');
   document.documentElement.dataset.theme = fromUrl || saved || os;
@@ -18,7 +18,7 @@
     btn.addEventListener('click', () => {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.dataset.theme = next;
-      localStorage.setItem('overlook-theme', next);
+      localStorage.setItem('plenum-theme', next);
       paint();
     });
     paint();
@@ -35,7 +35,7 @@
   ];
   // Lanes come from the active board scenario when one is loaded.
   const laneItems = () => {
-    const sc = window.OverlookScenarios?.[new URLSearchParams(location.search).get('scenario')] || window.OverlookScenarios?.normal;
+    const sc = window.PlenumScenarios?.[new URLSearchParams(location.search).get('scenario')] || window.PlenumScenarios?.normal;
     return sc ? sc.lanes.map((l) => ({ g: 'Lanes', icon: 'tree-structure', label: l.name, hint: l.folder })) : staticLanes;
   };
   const rest = [

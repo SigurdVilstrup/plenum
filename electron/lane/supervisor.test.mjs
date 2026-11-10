@@ -35,10 +35,10 @@ async function fixture({
   sh(['commit', '-m', 'init'], root);
   sh(['worktree', 'add', '-b', 'feat/one', wt], root);
 
-  const overlook = path.join(root, '.overlook');
-  fs.mkdirSync(overlook);
+  const plenum = path.join(root, '.plenum');
+  fs.mkdirSync(plenum);
   fs.writeFileSync(
-    path.join(overlook, 'lane.yaml'),
+    path.join(plenum, 'lane.yaml'),
     [
       'version: 1',
       `run: ${run}`,
@@ -207,7 +207,7 @@ test('up throws DRIFT when shared migrations pending', async () => {
     fs.mkdirSync(mig);
     fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       ['services:', '  db:', '    mode: shared', 'data:', '  migrations: migrations', ''].join('\n'),
     );
     await assert.rejects(
@@ -232,7 +232,7 @@ test('up force: true skips drift gate', async () => {
     fs.mkdirSync(mig);
     fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       ['data:', '  migrations: migrations', ''].join('\n'),
     );
     const status = await supervisor.up(root, 1, { force: true });
@@ -251,7 +251,7 @@ test('up DRIFT when migration exists only in lane worktree', async () => {
     fs.mkdirSync(path.join(wt, 'migrations'));
     fs.writeFileSync(path.join(wt, 'migrations', '20260104_branch.sql'), '--\n');
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       ['data:', '  migrations: migrations', ''].join('\n'),
     );
     await assert.rejects(
@@ -272,7 +272,7 @@ test('up runs services.*.snapshot before run when mode is snapshot', async () =>
   const { root, wt } = await fixture();
   try {
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       [
         'services:',
         '  db:',
@@ -295,7 +295,7 @@ test('up falls back to data.snapshot for snapshot services', async () => {
   const { root, wt } = await fixture();
   try {
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       [
         'services:',
         '  db:',
@@ -318,7 +318,7 @@ test('up does not start run when snapshot command fails', async () => {
   const { root, wt } = await fixture();
   try {
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       [
         'services:',
         '  db:',
@@ -342,7 +342,7 @@ test('up skips drift gate when all services are snapshot', async () => {
     fs.mkdirSync(mig);
     fs.writeFileSync(path.join(mig, '20260101_a.sql'), '--\n');
     fs.appendFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       [
         'services:',
         '  db:',

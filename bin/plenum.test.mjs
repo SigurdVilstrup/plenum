@@ -6,25 +6,25 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from './overlook.mjs';
+import { parseArgs } from './plenum.mjs';
 import * as supervisor from '../electron/lane/supervisor.mjs';
 
-const CLI = fileURLToPath(new URL('./overlook.mjs', import.meta.url));
+const CLI = fileURLToPath(new URL('./plenum.mjs', import.meta.url));
 
 test('parseArgs extracts command, rest, --json, and --force', () => {
-  assert.deepEqual(parseArgs(['node', 'overlook', 'doctor']), {
+  assert.deepEqual(parseArgs(['node', 'plenum', 'doctor']), {
     cmd: 'doctor', rest: [], json: false, force: false,
   });
-  assert.deepEqual(parseArgs(['node', 'overlook', '--json', 'status', '/tmp/r']), {
+  assert.deepEqual(parseArgs(['node', 'plenum', '--json', 'status', '/tmp/r']), {
     cmd: 'status', rest: ['/tmp/r'], json: true, force: false,
   });
-  assert.deepEqual(parseArgs(['node', 'overlook', 'up', '2', '--json']), {
+  assert.deepEqual(parseArgs(['node', 'plenum', 'up', '2', '--json']), {
     cmd: 'up', rest: ['2'], json: true, force: false,
   });
-  assert.deepEqual(parseArgs(['node', 'overlook', 'up', '2', '--force']), {
+  assert.deepEqual(parseArgs(['node', 'plenum', 'up', '2', '--force']), {
     cmd: 'up', rest: ['2'], json: false, force: true,
   });
-  assert.deepEqual(parseArgs(['node', 'overlook', 'create', 'feat-x']), {
+  assert.deepEqual(parseArgs(['node', 'plenum', 'create', 'feat-x']), {
     cmd: 'create', rest: ['feat-x'], json: false, force: false,
   });
 });
@@ -43,7 +43,7 @@ function alive(pid) {
 }
 
 /** Regression: piped stdio must not keep the CLI event loop alive after `up`. */
-test('overlook up exits within 3s while run child stays alive', async () => {
+test('plenum up exits within 3s while run child stays alive', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-cli-up-'));
   const wt = path.join(os.tmpdir(), `ovl-cli-up-wt-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   try {
@@ -55,9 +55,9 @@ test('overlook up exits within 3s while run child stays alive', async () => {
     sh(['add', 'README'], root);
     sh(['commit', '-m', 'init'], root);
     sh(['worktree', 'add', '-b', 'feat/one', wt], root);
-    fs.mkdirSync(path.join(root, '.overlook'));
+    fs.mkdirSync(path.join(root, '.plenum'));
     fs.writeFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       'version: 1\nrun: node -e "setInterval(()=>{}, 1000)"\ntest: node -e "process.exit(0)"\nports:\n  offset: 100\n  expose:\n    web: 5001\n',
     );
 
@@ -99,9 +99,9 @@ test('registry file roundtrip: up writes, getProc reads, down clears', async () 
     sh(['add', 'README'], root);
     sh(['commit', '-m', 'init'], root);
     sh(['worktree', 'add', '-b', 'feat/one', wt], root);
-    fs.mkdirSync(path.join(root, '.overlook'));
+    fs.mkdirSync(path.join(root, '.plenum'));
     fs.writeFileSync(
-      path.join(root, '.overlook', 'lane.yaml'),
+      path.join(root, '.plenum', 'lane.yaml'),
       'version: 1\nrun: node -e "setInterval(()=>{}, 1000)"\ntest: node -e "process.exit(0)"\nports:\n  offset: 100\n  expose:\n    web: 5001\n',
     );
 

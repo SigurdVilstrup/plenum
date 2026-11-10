@@ -16,7 +16,7 @@ Written 9 November 2026 while shipping #7 / #8.
 
 ## Deliberate differences
 
-- Lanes remain first-class in the rail (Overlook mission); GitKraken’s branch list is flatter.
+- Lanes remain first-class in the rail (Plenum mission); GitKraken’s branch list is flatter.
 - Protected / team branch stay visually distinct.
 
 ## Follow-ups

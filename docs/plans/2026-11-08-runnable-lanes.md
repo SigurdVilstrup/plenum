@@ -2,11 +2,11 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make every Overlook lane startable and testable from the board (and later CLI/MCP) via a checked-in `.overlook/lane.yaml`, without Overlook interpreting the stack.
+**Goal:** Make every Plenum lane startable and testable from the board (and later CLI/MCP) via a checked-in `.plenum/lane.yaml`, without Plenum interpreting the stack.
 
 **Architecture:** Keep git in `electron/git/*`. Add a sibling `electron/lane/*` for manifest parse, doctor, process supervisor, and drift. The Electron main process owns long-lived `run` children and pushes status into `loadBoard`. UI adds a Running section + env strip (already mocked in `planning/mocks/`). CLI/MCP wrap the same functions. Shared-data drift and snapshot modes ship after plain Run/Stop/Test works.
 
-**Tech Stack:** Electron main (Node `child_process`), YAML (`yaml` package — only new dep if needed; prefer hand-parse of the tiny v1 schema first), existing Vite/vanilla renderer, Node test runner, later a thin `bin/overlook` + MCP stdio server.
+**Tech Stack:** Electron main (Node `child_process`), YAML (`yaml` package — only new dep if needed; prefer hand-parse of the tiny v1 schema first), existing Vite/vanilla renderer, Node test runner, later a thin `bin/plenum` + MCP stdio server.
 
 **Source of truth:** `planning/PRODUCT.md` (Run / Hand off / Lane manifest / MCP table), `planning/examples/mobaro.lane.yaml`, `planning/mocks/board.js` (env strip + Running section).
 
@@ -57,7 +57,7 @@ Expected: FAIL (module missing)
 
 ```bash
 git add electron/lane fixtures/lane
-git commit -m "feat(lane): load .overlook/lane.yaml and resolve ports"
+git commit -m "feat(lane): load .plenum/lane.yaml and resolve ports"
 ```
 
 ---
@@ -71,7 +71,7 @@ git commit -m "feat(lane): load .overlook/lane.yaml and resolve ports"
 
 **Step 1: Failing test** — board lane includes `runnable: false` when no manifest; with fixture manifest copied into temp repo, `runnable: true`, `offset`, `urls`, `dataMode: 'shared'`, `running: false`.
 
-**Step 2: Implement** — `loadBoard` reads `<root>/.overlook/lane.yaml` once. Primary (`index === 0`) is never runnable (`runnable: false` even if manifest exists). Feature lanes get computed ports and service mode summary (`shared` if any service is shared).
+**Step 2: Implement** — `loadBoard` reads `<root>/.plenum/lane.yaml` once. Primary (`index === 0`) is never runnable (`runnable: false` even if manifest exists). Feature lanes get computed ports and service mode summary (`shared` if any service is shared).
 
 **Step 3: Commit**
 
@@ -103,7 +103,7 @@ test('refuses primary checkout', async () => {
 
 **Step 2: Implement contract**
 
-- `up(root, laneIndex)`: cwd = lane path; env = `process.env` + rendered `env.set` + `OVERLOOK_LANE`, `OVERLOOK_OFFSET`; spawn `run` with `shell: true`, detached process group on macOS (`detached: true` + `process.kill(-pid)` on stop).
+- `up(root, laneIndex)`: cwd = lane path; env = `process.env` + rendered `env.set` + `PLENUM_LANE`, `PLENUM_OFFSET`; spawn `run` with `shell: true`, detached process group on macOS (`detached: true` + `process.kill(-pid)` on stop).
 - Store `{ root, laneIndex, pid, startedAt, urls }` in memory Map keyed by `${root}#${laneIndex}`.
 - `down`: SIGTERM, then SIGKILL after 5s.
 - Never start if already running (idempotent return current status).
@@ -176,7 +176,7 @@ git commit -am "feat(lane): supervisor for run/stop with port env"
 - Create: `electron/lane/doctor.mjs`
 - Create: `electron/lane/doctor.test.mjs` with a tiny fixture repo (fake `package.json` + `docker-compose.yml`)
 - Modify: `electron/main.mjs` — `repo.doctor`
-- Create: minimal Settings page OR sheet “Lane setup” that shows findings + proposed YAML + **Accept** (writes `.overlook/lane.yaml`)
+- Create: minimal Settings page OR sheet “Lane setup” that shows findings + proposed YAML + **Accept** (writes `.plenum/lane.yaml`)
 
 **Doctor heuristics (v1, keep dumb):**
 
@@ -190,28 +190,28 @@ git commit -am "feat(lane): supervisor for run/stop with port env"
 
 ---
 
-### Task 9: CLI binary `overlook`
+### Task 9: CLI binary `plenum`
 
 **Files:**
-- Create: `electron/cli/overlook.mjs` (or `bin/overlook.mjs`)
-- Modify: `package.json` — `"bin": { "overlook": "./bin/overlook.mjs" }`, script `overlook`
+- Create: `electron/cli/plenum.mjs` (or `bin/plenum.mjs`)
+- Modify: `package.json` — `"bin": { "plenum": "./bin/plenum.mjs" }`, script `plenum`
 - Reuse lane + git modules (no Electron `app` in CLI path — factor `tabs`/`userData` away from lane code)
 
 **Subcommands (same names as MCP):**
 
 ```
-overlook doctor [path]
-overlook status [path]
-overlook up <lane>
-overlook down <lane>
-overlook test <lane>
-overlook create <name>
-overlook remove <lane>
+plenum doctor [path]
+plenum status [path]
+plenum up <lane>
+plenum down <lane>
+plenum test <lane>
+plenum create <name>
+plenum remove <lane>
 ```
 
 Print JSON with `--json`, human otherwise. Supervisor state for CLI: **file-backed** pid registry under `userData/run/<hash>.json` so app and CLI see the same processes (required before MCP). Do this registry refactor here if Task 3 was memory-only.
 
-**Commit:** `feat(cli): overlook up/down/test/doctor/status`
+**Commit:** `feat(cli): plenum up/down/test/doctor/status`
 
 ---
 
@@ -219,8 +219,8 @@ Print JSON with `--json`, human otherwise. Supervisor state for CLI: **file-back
 
 **Files:**
 - Create: `electron/mcp/server.mjs`
-- Modify: `bin/overlook.mjs` — `overlook mcp` → stdio MCP
-- Docs: short block in `README.md` for Cursor MCP config pointing at `overlook mcp`
+- Modify: `bin/plenum.mjs` — `plenum mcp` → stdio MCP
+- Docs: short block in `README.md` for Cursor MCP config pointing at `plenum mcp`
 
 **Tools:** exactly the PRODUCT table (`repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`). No git commit/push tools.
 
@@ -239,11 +239,11 @@ Print JSON with `--json`, human otherwise. Supervisor state for CLI: **file-back
 
 ```
 # ponytail: name-only compare; upgrade is tool-specific migrator introspection
-applied = list filenames recorded in a local overlook marker OR parse migrate output if we add adapters later
+applied = list filenames recorded in a local plenum marker OR parse migrate output if we add adapters later
 pending = files in data.migrations not in applied
 ```
 
-Ship with a **pluggable adapter interface** and one stub adapter that reads an optional `.overlook/applied-migrations` file for tests; for mobaro, add a follow-up note rather than blocking on Aspire/EF internals.
+Ship with a **pluggable adapter interface** and one stub adapter that reads an optional `.plenum/applied-migrations` file for tests; for mobaro, add a follow-up note rather than blocking on Aspire/EF internals.
 
 Run sheet choices: (1) run migrations command if manifest gains `data.migrate` later — **or** for v1 only “start anyway” / “cancel” / “switch service to snapshot in yaml”. Match PRODUCT three choices as closely as the adapter allows; if migrate-apply isn’t ready, implement cancel + start-without + open doctor to edit mode.
 
@@ -257,7 +257,7 @@ Run sheet choices: (1) run migrations command if manifest gains `data.migrate` l
 - Modify: `electron/lane/supervisor.mjs`, `electron/lane/manifest.mjs`
 - Docs: update DOGFOOD / README
 
-**Steps:** When a service is `snapshot`, before `up` run `services.<name>.snapshot` or `data.snapshot` with env pointing at offset ports; on `lane.remove`, best-effort teardown command if present (`services.<name>.teardown` optional — YAGNI until needed). Don’t build RavenDB/SQL managers inside Overlook.
+**Steps:** When a service is `snapshot`, before `up` run `services.<name>.snapshot` or `data.snapshot` with env pointing at offset ports; on `lane.remove`, best-effort teardown command if present (`services.<name>.teardown` optional — YAGNI until needed). Don’t build RavenDB/SQL managers inside Plenum.
 
 **Commit:** `feat(lane): snapshot service hook before up`
 
@@ -291,7 +291,7 @@ Run sheet choices: (1) run migrations command if manifest gains `data.migrate` l
 - Test runs `test` and shows last result.
 - Create copies env + runs setup when manifest present.
 - Doctor can propose + write yaml.
-- `overlook` CLI and `overlook mcp` expose the same verbs.
+- `plenum` CLI and `plenum mcp` expose the same verbs.
 - Drift sheet blocks Run when adapter reports pending migrations (even if adapter is stubbed for non-mobaro repos).
 
 ## Out of scope follow-ups (explicit)

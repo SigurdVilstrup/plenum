@@ -7,14 +7,14 @@ import { loadBoard } from '../electron/git/board.mjs';
 import { createLane, removeLane } from '../electron/git/ops.mjs';
 
 const USAGE = `Usage:
-  overlook doctor [path]
-  overlook status [path]
-  overlook up <lane> [--force]
-  overlook down <lane>
-  overlook test <lane>
-  overlook create <name>
-  overlook remove <lane>
-  overlook mcp
+  plenum doctor [path]
+  plenum status [path]
+  plenum up <lane> [--force]
+  plenum down <lane>
+  plenum test <lane>
+  plenum create <name>
+  plenum remove <lane>
+  plenum mcp
 
 Options:
   --json    print JSON

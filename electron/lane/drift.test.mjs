@@ -10,9 +10,9 @@ function tmpRoot(migrations = ['20260101_a.sql', '20260102_b.sql'], applied = nu
   const migDir = path.join(root, 'migrations');
   fs.mkdirSync(migDir, { recursive: true });
   for (const name of migrations) fs.writeFileSync(path.join(migDir, name), '--\n');
-  fs.mkdirSync(path.join(root, '.overlook'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.plenum'), { recursive: true });
   if (applied != null) {
-    fs.writeFileSync(path.join(root, '.overlook', 'applied-migrations'), applied);
+    fs.writeFileSync(path.join(root, '.plenum', 'applied-migrations'), applied);
   }
   return root;
 }
@@ -119,8 +119,8 @@ test('listPendingMigrations: scans laneRoot, marker from markerRoot', async () =
   try {
     fs.mkdirSync(path.join(primary, 'migrations'), { recursive: true });
     fs.writeFileSync(path.join(primary, 'migrations', '20260101_a.sql'), '--\n');
-    fs.mkdirSync(path.join(primary, '.overlook'), { recursive: true });
-    fs.writeFileSync(path.join(primary, '.overlook', 'applied-migrations'), '20260101_a.sql\n');
+    fs.mkdirSync(path.join(primary, '.plenum'), { recursive: true });
+    fs.writeFileSync(path.join(primary, '.plenum', 'applied-migrations'), '20260101_a.sql\n');
 
     fs.mkdirSync(path.join(lane, 'migrations'), { recursive: true });
     fs.writeFileSync(path.join(lane, 'migrations', '20260101_a.sql'), '--\n');

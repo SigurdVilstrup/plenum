@@ -292,7 +292,7 @@ EOF
 
 **Step 2:** `npm run pack` (optional if time) — confirm General still shows the packaged version.
 
-**Step 3:** Send one feedback report; open `meta.json` under `~/Library/Application Support/Overlook/feedback/…` and confirm `appVersion`, `arch`, `osVersion`, `screens`, `windowSize` present.
+**Step 3:** Send one feedback report; open `meta.json` under `~/Library/Application Support/Plenum/feedback/…` and confirm `appVersion`, `arch`, `osVersion`, `screens`, `windowSize` present.
 
 **Step 4:** No commit unless verification found fixes — then fix + commit those.
 

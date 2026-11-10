@@ -15,6 +15,7 @@ import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
 import { paintHighlight, writeFeedbackReport, collectFeedbackEnv } from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
+import { env as brandEnv } from './paths.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -26,7 +27,18 @@ function expandHome(p) {
 }
 
 function prefsDir() {
-  return app.getPath('userData');
+  const dir = app.getPath('userData');
+  const legacy = path.join(path.dirname(dir), 'overlook');
+  if (!fs.existsSync(path.join(dir, 'prefs.json')) && fs.existsSync(path.join(legacy, 'prefs.json'))) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      for (const name of fs.readdirSync(legacy)) {
+        const dest = path.join(dir, name);
+        if (!fs.existsSync(dest)) fs.renameSync(path.join(legacy, name), dest);
+      }
+    } catch { /* keep reading fresh prefs if migrate fails */ }
+  }
+  return dir;
 }
 
 function appIcon() {
@@ -64,7 +76,7 @@ function createWindow() {
     },
   });
 
-  const devUrl = process.env.OVERLOOK_DEV_URL;
+  const devUrl = brandEnv('DEV_URL');
   if (devUrl && !app.isPackaged) win.loadURL(devUrl);
   else win.loadFile(path.join(rootDir, 'dist', 'index.html'));
 
@@ -83,13 +95,13 @@ app.whenReady().then(async () => {
     for (const t of tabs.listTabs().tabs) tabs.closeTab(t.id);
   }
 
-  const openPath = process.env.OVERLOOK_OPEN;
+  const openPath = brandEnv('OPEN');
   if (openPath && fs.existsSync(openPath)) {
     try {
       const board = await loadBoard(openPath);
       tabs.openTab(board.root, board.repoName);
     } catch (e) {
-      console.error('[overlook] OVERLOOK_OPEN failed', e.message);
+      console.error('[plenum] PLENUM_OPEN failed', e.message);
     }
   }
   createWindow();

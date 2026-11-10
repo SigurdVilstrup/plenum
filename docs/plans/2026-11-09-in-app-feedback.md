@@ -78,7 +78,7 @@ test('buildMeta shapes v1 report', () => {
 });
 
 test('writeFeedbackReport writes meta.json and window.png', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-fb-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
     'base64',
@@ -285,7 +285,7 @@ Expected: all existing tests + feedback helper tests PASS.
 **Steps (human or agent driving the app):**
 
 ```bash
-OVERLOOK_OPEN="$PWD/tmp/smoke-repo" npm run dev
+PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev
 ```
 
 Checklist:
@@ -308,7 +308,7 @@ Checklist:
 
 **Required skill:** `@hallmark` (`/Users/sigurdvilstrup/.agents/skills/hallmark/SKILL.md`).
 
-This is an **existing app screen** inside Overlook’s locked system (`planning/DESIGN.md`). Do **not** deal a new marketing theme. Run Hallmark as **audit → fix in-system**:
+This is an **existing app screen** inside Plenum’s locked system (`planning/DESIGN.md`). Do **not** deal a new marketing theme. Run Hallmark as **audit → fix in-system**:
 
 1. `/hallmark audit` the feedback sheet, pick overlay, panel foot row, and toast copy against:
    - Floor rules that still apply inside an app (tokens, no `transition: all`, focus-visible, reduced-motion, no purple-blue gradient slop, Phosphor not emoji).

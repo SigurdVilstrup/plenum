@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Bring GitKraken-grade tip clarity, commit→file drill-down, and blame onto Overlook’s existing lane graph — without cloning GitKraken.
+**Goal:** Bring GitKraken-grade tip clarity, commit→file drill-down, and blame onto Plenum’s existing lane graph — without cloning GitKraken.
 
 **Architecture:** Steal IA (tip pills, inspector, Diff/Blame/History). Keep SVG/DOM graph in `graph-live.js` and `#changes`. Add thin git IPC (`file.diff`, `file.history`, `file.blame`). Spike real column packing before widening history.
 
@@ -152,7 +152,7 @@ git commit -am "feat(git): spike graph column packing"
 ### Task 5: Adopt packing in `history()` when spike is green
 
 **Files:**
-- Modify: `electron/git/board.mjs` `history()` — replace first-match `column()` with `assignColumns`, still constrained to lane worktrees + team (Overlook lanes, not all remotes)
+- Modify: `electron/git/board.mjs` `history()` — replace first-match `column()` with `assignColumns`, still constrained to lane worktrees + team (Plenum lanes, not all remotes)
 - Modify: `electron/git/board.test.mjs` — multi-parent fixture asserts columns
 
 **Step 1:** Extend board test with a merge commit across main + feature worktree.

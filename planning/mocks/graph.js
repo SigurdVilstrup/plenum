@@ -1,4 +1,4 @@
-/* Overlook graph mock. Renders rows plus an SVG overlay from commit data.
+/* Plenum graph mock. Renders rows plus an SVG overlay from commit data.
    Newer at top. One column per lane. Tip nodes carry the authorship color. */
 
 const ROW = 30;
@@ -105,4 +105,4 @@ function renderGraph(root, { commits, selectedLane = 1, runningLanes = new Set()
   rowsEl.innerHTML = svg + rows;
 }
 
-window.OverlookGraph = { renderGraph };
+window.PlenumGraph = { renderGraph };

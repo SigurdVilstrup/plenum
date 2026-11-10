@@ -6,6 +6,7 @@ import { loadManifest } from '../lane/manifest.mjs';
 import { laneStatus } from '../lane/status.mjs';
 import { getProc, getLastTest } from '../lane/supervisor.mjs';
 import { assignColumns } from './graph-columns.mjs';
+import { LEGACY_TEAM_BRANCH_KEY, TEAM_BRANCH_KEY, manifestPath } from '../paths.mjs';
 
 const AGENT_TOOLS = [
   ['claude', 'Claude'],
@@ -95,14 +96,16 @@ async function detectTeamBranch(cwd) {
   }
 }
 
-/** Local `git config overlook.teamBranch` wins when the ref exists. */
+/** Local `git config plenum.teamBranch` wins when the ref exists (legacy `overlook.teamBranch` ok). */
 async function teamBranch(cwd) {
-  try {
-    const override = (await git(['config', '--local', '--get', 'overlook.teamBranch'], cwd)).trim();
-    if (override && await branchExists(override, cwd)) {
-      return { name: override, source: 'override' };
-    }
-  } catch { /* fall through */ }
+  for (const key of [TEAM_BRANCH_KEY, LEGACY_TEAM_BRANCH_KEY]) {
+    try {
+      const override = (await git(['config', '--local', '--get', key], cwd)).trim();
+      if (override && await branchExists(override, cwd)) {
+        return { name: override, source: 'override' };
+      }
+    } catch { /* try next */ }
+  }
   return { name: await detectTeamBranch(cwd), source: 'detected' };
 }
 
@@ -110,12 +113,15 @@ export async function setTeamBranch(repoPath, name) {
   const cwd = path.resolve(repoPath);
   const branch = String(name || '').trim();
   if (!branch) {
-    try { await git(['config', '--local', '--unset', 'overlook.teamBranch'], cwd); } catch { /* none */ }
+    for (const key of [TEAM_BRANCH_KEY, LEGACY_TEAM_BRANCH_KEY]) {
+      try { await git(['config', '--local', '--unset', key], cwd); } catch { /* none */ }
+    }
     return loadBoard(cwd);
   }
   if (!/^[A-Za-z0-9._/-]+$/.test(branch)) throw new Error('Invalid branch name.');
   if (!(await branchExists(branch, cwd))) throw new Error(`Branch ${branch} not found locally or on origin.`);
-  await git(['config', '--local', 'overlook.teamBranch', branch], cwd);
+  try { await git(['config', '--local', '--unset', LEGACY_TEAM_BRANCH_KEY], cwd); } catch { /* none */ }
+  await git(['config', '--local', TEAM_BRANCH_KEY, branch], cwd);
   return loadBoard(cwd);
 }
 
@@ -578,7 +584,7 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
   const hasCommit = await gitOk(['rev-parse', '--verify', '--quiet', 'HEAD'], top);
   let manifest = null;
   try {
-    manifest = await loadManifest(path.join(trees[0].path, '.overlook', 'lane.yaml'));
+    manifest = await loadManifest(manifestPath(trees[0].path));
   } catch { /* bad lane.yaml → not runnable */ }
 
   const lanes = [];

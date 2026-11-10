@@ -17,7 +17,7 @@ const ALLOWED = new Set([
   'feedback.save', 'app.version', 'os.editors',
 ]);
 
-contextBridge.exposeInMainWorld('overlook', {
+contextBridge.exposeInMainWorld('plenum', {
   invoke: (channel, ...args) => {
     if (!ALLOWED.has(channel)) throw new Error(`Blocked channel: ${channel}`);
     return ipcRenderer.invoke(channel, ...args);

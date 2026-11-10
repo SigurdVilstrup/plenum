@@ -5,6 +5,7 @@ import { git, gitOk } from './run.mjs';
 import { loadBoard } from './board.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from '../lane/manifest.mjs';
 import { down, getProc } from '../lane/supervisor.mjs';
+import { manifestPath } from '../paths.mjs';
 
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
@@ -77,7 +78,7 @@ export async function createLane(root, { name, branch, lanesFolder, existing = f
   }
 
   try {
-    const manifest = await loadManifest(path.join(primary.path, '.overlook', 'lane.yaml'));
+    const manifest = await loadManifest(manifestPath(primary.path));
     if (manifest) {
       for (const rel of manifest.env.copy) {
         const src = resolveContained(primary.path, rel, 'primary');
@@ -95,8 +96,8 @@ export async function createLane(root, { name, branch, lanesFolder, existing = f
         const ctx = { offset, lane: laneIndex, port: ports, ports };
         const env = {
           ...process.env,
-          OVERLOOK_LANE: String(laneIndex),
-          OVERLOOK_OFFSET: String(offset),
+          PLENUM_LANE: String(laneIndex),
+          PLENUM_OFFSET: String(offset),
         };
         for (const [k, v] of Object.entries(manifest.env.set ?? {})) {
           env[k] = renderTemplate(String(v), ctx);
@@ -456,7 +457,7 @@ export async function stashLane(root, laneIndex) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
   if (!lane.dirty) throw new Error('Nothing to stash.');
-  await git(['stash', 'push', '-u', '-m', `overlook: ${lane.name}`], lane.path);
+  await git(['stash', 'push', '-u', '-m', `plenum: ${lane.name}`], lane.path);
   return loadBoard(root);
 }
 

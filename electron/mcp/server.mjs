@@ -11,7 +11,7 @@ import { loadBoard } from '../git/board.mjs';
 import { createLane, removeLane } from '../git/ops.mjs';
 
 const PROTOCOL = '2024-11-05';
-const SERVER_INFO = { name: 'overlook', version: '0.1.0' };
+const SERVER_INFO = { name: 'plenum', version: '0.1.0' };
 
 const TOOLS = [
   {

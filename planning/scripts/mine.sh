@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mine local git repositories for the facts Overlook claims to surface.
+# Mine local git repositories for the facts Plenum claims to surface.
 # Read-only: no fetch, no checkout. Numbers reflect the refs as they sit on disk.
 #
 #   scripts/mine.sh [root] [days]      default: ~/Dev/Repositories, 90

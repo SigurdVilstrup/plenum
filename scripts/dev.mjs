@@ -9,11 +9,11 @@ const server = await createServer({
 });
 await server.listen();
 const url = server.resolvedUrls?.local?.[0] ?? 'http://localhost:5173/';
-console.log(`[overlook] vite ${url}`);
+console.log(`[plenum] vite ${url}`);
 
 const child = spawn(electronPath, ['.'], {
   stdio: 'inherit',
-  env: { ...process.env, OVERLOOK_DEV_URL: url },
+  env: { ...process.env, PLENUM_DEV_URL: url },
 });
 
 const shutdown = async (code = 0) => {

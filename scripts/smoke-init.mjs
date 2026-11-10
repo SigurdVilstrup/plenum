@@ -19,7 +19,7 @@ fs.rmSync(wt, { recursive: true, force: true });
 fs.mkdirSync(path.dirname(root), { recursive: true });
 
 git(['init', '-b', 'main', root]);
-git(['config', 'user.email', 'smoke@overlook.local'], root);
+git(['config', 'user.email', 'smoke@plenum.local'], root);
 git(['config', 'user.name', 'Plenum Smoke'], root);
 git(['config', 'commit.gpgsign', 'false'], root);
 fs.writeFileSync(path.join(root, 'README.md'), '# smoke\n');

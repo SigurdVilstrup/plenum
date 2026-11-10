@@ -13,7 +13,7 @@ import {
 } from './lib/warm-tabs.js';
 import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-pane.js';
 
-const api = window.overlook;
+const api = window.plenum;
 const icon = (n, c = '') => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', `icon ${c}`.trim());
@@ -1003,7 +1003,7 @@ function runActionsHTML(l) {
     return `<button class="chip url" type="button" data-act="openUrl" data-url="${esc(url)}" title="${esc(url)}">${iconHTML('globe-simple', 'sm')}${esc(name)} <span class="mono">:${esc(port)}</span></button>`;
   }).join('');
   const badge = l.dataMode === 'shared'
-    ? `<span class="badge data" title="Databases shared across lanes. Switch a service to snapshot in .overlook/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
+    ? `<span class="badge data" title="Databases shared across lanes. Switch a service to snapshot in .plenum/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
     : l.dataMode === 'snapshot'
       ? `<span class="badge data" title="This lane seeds its own copy via services.*.snapshot (or data.snapshot) before Run.">${iconHTML('database', 'sm')}snapshot data</span>`
       : '';
@@ -1197,7 +1197,7 @@ function openDriftSheet(lane, pending) {
         </label>
         <label class="list-row compact choice">
           <input type="radio" name="up" value="snapshot" />
-          <div class="name">Switch service to snapshot<small>Open Lane setup to set <span class="mono">mode: snapshot</span> plus a <span class="mono">snapshot:</span> command in <span class="mono">.overlook/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
+          <div class="name">Switch service to snapshot<small>Open Lane setup to set <span class="mono">mode: snapshot</span> plus a <span class="mono">snapshot:</span> command in <span class="mono">.plenum/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
         </label>
       </div>
       <div class="row-end">
@@ -1266,7 +1266,7 @@ function openQuickStartSheet() {
     ['shield-check', 'Protected main', 'The checkout on the team branch. Plenum watches it and never works in it.'],
     ['cloud-arrow-down', 'Behind', 'Commits the team branch has that this lane does not.'],
     ['sparkle', 'Authorship', 'Who wrote the newest commit, read from the author and agent trailers. Human gets no pill.'],
-    ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .overlook/lane.yaml. Without that file it still shows on the board.'],
+    ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .plenum/lane.yaml. Without that file it still shows on the board.'],
     ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the row under Settings. Point at UI optional; saved on this Mac.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
@@ -2462,7 +2462,7 @@ const SETTINGS_PAGES = {
       : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
     const runDetail = m?.run
       ? `run <span class="mono">${esc(m.run)}</span>${m.test ? ` · test <span class="mono">${esc(m.test)}</span>` : ''} · ports <span class="mono">+${esc(m.offset)}</span>`
-      : (b?.hasManifest ? 'Manifest present.' : 'No .overlook/lane.yaml yet — lanes show on the board but cannot start.');
+      : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet — lanes show on the board but cannot start.');
     const svc = (m?.services || []).map((s) => `${esc(s.name)} (${esc(s.mode)})`).join(', ');
     const picker = `<div class="repo-picker" role="tablist" aria-label="Open repositories">${tabs.map((tab) => {
       const on = tab.path === activePath;
@@ -2471,14 +2471,14 @@ const SETTINGS_PAGES = {
       return `<button class="option${on ? ' on' : ''}" type="button" role="tab" aria-selected="${on}" data-repo-path="${esc(tab.path)}" title="${esc(tip)}"><span>${esc(tab.title)}</span><span class="mono">${esc(bb?.displayRoot || tab.path)}</span></button>`;
     }).join('')}</div>`;
     const edit = b?.hasManifest
-      ? `<button class="btn" type="button" data-edit-manifest="${esc(root)}" title="Open .overlook/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button>`
+      ? `<button class="btn" type="button" data-edit-manifest="${esc(root)}" title="Open .plenum/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button>`
       : '';
     return `${head}${picker}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
-        ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Pick the integration tip for ↓↑ / create lane / merge. Auto re-detects from origin/HEAD. Stored as local git config overlook.teamBranch.')}
+        ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Pick the integration tip for ↓↑ / create lane / merge. Auto re-detects from origin/HEAD. Stored as local git config plenum.teamBranch.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'Override only for this repo. Relative paths are under the checkout; absolute paths are allowed.')}
-        ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.overlook/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Run the doctor and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .overlook/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
+        ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Run the doctor and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared means one instance for every lane; snapshot seeds a copy before Run.')}
       </div>`;
   },
@@ -2492,15 +2492,15 @@ const SETTINGS_PAGES = {
         : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious turned up.</div></div>`;
     return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repositories</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
       <h1>Lane setup</h1>
-      <p class="lede">Why a second checkout cannot start, and the <span class="mono">.overlook/lane.yaml</span> that fixes it. Nothing is written until you hit Write.</p>
+      <p class="lede">Why a second checkout cannot start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing is written until you hit Write.</p>
       <div class="cols">
         <div><div class="col-head">What the repo does today</div>${findings}</div>
-        <div><div class="col-head">Proposed <span class="mono">.overlook/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
+        <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
       </div>
-      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">overlook doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
+      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
         <div class="row-end">
-          <button class="btn" type="button" data-copy-doctor title="Copy an overlook doctor command for this repo">Copy CLI</button>
-          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.overlook/lane.yaml</span></button>
+          <button class="btn" type="button" data-copy-doctor title="Copy an plenum doctor command for this repo">Copy CLI</button>
+          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
         </div>
       </div>`;
   },
@@ -2508,12 +2508,12 @@ const SETTINGS_PAGES = {
     const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled title="Not wired yet — preview only."></button>`;
     const ask = (label) => `<select class="select" aria-label="${label}" disabled title="Not wired yet — preview only."><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
     return `<h1>Agents</h1>
-      <p class="lede">Preview. Agents already reach lanes through <span class="mono">overlook mcp</span> (stdio) and the <span class="mono">overlook</span> CLI. These switches do nothing yet.</p>
+      <p class="lede">Preview. Agents already reach lanes through <span class="mono">plenum mcp</span> (stdio) and the <span class="mono">plenum</span> CLI. These switches do nothing yet.</p>
       <div class="agents-stub">
         <div class="group-head">Local MCP</div>
         <div class="list">
-          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">overlook mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at overlook mcp. Plenum does not host an HTTP MCP port yet.')}
-          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appInfo.version || '…')}</span>`, 'Install the overlook binary on your PATH for shells and scripts.')}
+          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">plenum mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at plenum mcp. Plenum does not host an HTTP MCP port yet.')}
+          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appInfo.version || '…')}</span>`, 'Install the plenum binary on your PATH for shells and scripts.')}
         </div>
         <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
         <div class="list">
@@ -2524,7 +2524,7 @@ const SETTINGS_PAGES = {
           ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Allow agents to run the repo’s own start/stop/test commands with lane ports.')}
           ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Allow agents to create worktrees from the team branch.')}
           ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Same safety guard as the app: refuse when work would be lost.')}
-          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .overlook/lane.yaml is a team decision — keep this on Ask until you trust it.')}
+          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team decision — keep this on Ask until you trust it.')}
         </div>
       </div>`;
   },
@@ -2552,14 +2552,14 @@ function bindSetup(root) {
   const s = state.setup;
   root.querySelector('[data-crumb]')?.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); });
   root.querySelector('[data-copy-doctor]')?.addEventListener('click', () => {
-    navigator.clipboard.writeText(`overlook doctor '${String(s.root).replace(/'/g, `'\\''`)}'`).then(() => toast('Copied', 'ok'), () => {});
+    navigator.clipboard.writeText(`plenum doctor '${String(s.root).replace(/'/g, `'\\''`)}'`).then(() => toast('Copied', 'ok'), () => {});
   });
   root.querySelector('[data-write]')?.addEventListener('click', async () => {
     try {
       const board = await invoke('repo.acceptManifest', s.proposedYaml, s.root);
       state.repoBoards.delete(s.root);
       if (board.root === state.board?.root) applyBoard(board);
-      toast('Wrote .overlook/lane.yaml', 'ok');
+      toast('Wrote .plenum/lane.yaml', 'ok');
       openSettings('repositories');
     } catch { /* toasted */ }
   });
@@ -2605,7 +2605,7 @@ function bindRepos(root) {
     openLaneSetup(b.dataset.setupRoot);
   }));
   root.querySelectorAll('[data-edit-manifest]').forEach((b) => b.addEventListener('click', () => {
-    const file = `${b.dataset.editManifest}/.overlook/lane.yaml`;
+    const file = `${b.dataset.editManifest}/.plenum/lane.yaml`;
     invoke('os.openEditor', file).catch(() => {});
   }));
   root.querySelectorAll('[data-lanes-root]').forEach((n) => n.addEventListener('change', () => {

@@ -78,7 +78,7 @@ const tinyPng = Buffer.from(
 );
 
 test('writeFeedbackReport writes meta.json and window.png', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-fb-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
   const out = await writeFeedbackReport(dir, {
     comment: 'hi',
     target: null,
@@ -99,7 +99,7 @@ test('writeFeedbackReport writes meta.json and window.png', async () => {
 });
 
 test('writeFeedbackReport dirs are unique under baseDir/feedback', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-fb-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
   const opts = {
     comment: 'hi',
     target: null,

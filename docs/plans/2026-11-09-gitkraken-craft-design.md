@@ -1,14 +1,14 @@
-# Design: GitKraken craft on Overlook’s graph + blame
+# Design: GitKraken craft on Plenum’s graph + blame
 
 Written 9 November 2026. Approved in product chat. Study captures: `docs/plans/gitkraken-study/`.
 
 ## Goal
 
-Make Overlook’s commit tree and file drill-down feel as clear as GitKraken’s — without becoming a GitKraken clone. Steal information architecture and tip/blame craft; keep lanes, protected main, behind, and authorship as Overlook’s product.
+Make Plenum’s commit tree and file drill-down feel as clear as GitKraken’s — without becoming a GitKraken clone. Steal information architecture and tip/blame craft; keep lanes, protected main, behind, and authorship as Plenum’s product.
 
 ## Non-goals
 
-- Avatar-as-node graph (Overlook already has authorship pills on tips)
+- Avatar-as-node graph (Plenum already has authorship pills on tips)
 - Merge / commit / interactive rebase from the graph (`planning/DESIGN.md`)
 - Agents, Explain/Recompose AI, Issues, Teams, PR pills, Cloud Patches
 - Full 900-remote browser as the default left panel
@@ -17,7 +17,7 @@ Make Overlook’s commit tree and file drill-down feel as clear as GitKraken’s
 
 ## What we steal (craft ledger)
 
-| Pattern | Why it works | Overlook action |
+| Pattern | Why it works | Plenum action |
 | --- | --- | --- |
 | BRANCH/TAG · GRAPH · MESSAGE columns | Refs don’t fight the lines | Keep; tighten BRANCH/TAG column like GK |
 | Tip pill: checkmark + local/remote icons + lane color | “Where am I” is instant | Adapt: current lane tip + primary/remote marks |

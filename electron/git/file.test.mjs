@@ -11,7 +11,7 @@ function git(args, cwd) {
 }
 
 function tempRepo() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-file-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-file-'));
   git(['init', '-b', 'main'], root);
   git(['config', 'user.email', 't@example.com'], root);
   git(['config', 'user.name', 'Tester'], root);

@@ -30,7 +30,7 @@ test('initialize advertises tools capability', async () => {
     method: 'initialize',
     params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '0' } },
   });
-  assert.equal(res.result.serverInfo.name, 'overlook');
+  assert.equal(res.result.serverInfo.name, 'plenum');
   assert.ok(res.result.capabilities.tools);
 });
 

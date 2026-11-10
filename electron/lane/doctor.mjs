@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { parseDirty } from '../git/board.mjs';
+import { writeManifestDir } from '../paths.mjs';
 import { loadManifest } from './manifest.mjs';
 
 /**
@@ -83,7 +84,7 @@ export async function doctor(repoPath) {
 }
 
 /**
- * Write accepted doctor YAML to `<repo>/.overlook/lane.yaml` only.
+ * Write accepted doctor YAML to `<repo>/.plenum/lane.yaml` only.
  * Validates via loadManifest before replacing the dest file.
  * @param {string} repoPath
  * @param {string} yaml
@@ -93,14 +94,14 @@ export async function acceptManifest(repoPath, yaml) {
     throw new Error('yaml must be a non-empty string');
   }
   const root = path.resolve(repoPath);
-  const dest = path.resolve(root, '.overlook', 'lane.yaml');
-  const overlook = path.resolve(root, '.overlook');
-  if (!dest.startsWith(root + path.sep) || !overlook.startsWith(root + path.sep)) {
+  const dir = writeManifestDir(root);
+  const dest = path.join(dir, 'lane.yaml');
+  if (!dest.startsWith(root + path.sep) || !dir.startsWith(root + path.sep)) {
     throw new Error('path escape rejected');
   }
 
   const text = yaml.endsWith('\n') ? yaml : yaml + '\n';
-  const tmp = path.join(os.tmpdir(), `overlook-lane-${process.pid}-${Date.now()}.yaml`);
+  const tmp = path.join(os.tmpdir(), `plenum-lane-${process.pid}-${Date.now()}.yaml`);
   await fs.writeFile(tmp, text, 'utf8');
   try {
     const m = await loadManifest(tmp);
@@ -115,7 +116,7 @@ export async function acceptManifest(repoPath, yaml) {
   await fs.unlink(tmp).catch(() => {});
 
   // ponytail: fixed single-file write; multi-file accept if doctor ever proposes more
-  await fs.mkdir(overlook, { recursive: true });
+  await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(dest, text, 'utf8');
   return dest;
 }

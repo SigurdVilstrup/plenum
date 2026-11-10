@@ -33,8 +33,8 @@ test('parseNumstat', () => {
 });
 
 test('loadBoard: worktree ahead dirty assisted', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
-  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const wt = path.join(os.tmpdir(), `plenum-wt-${Date.now()}`);
   try {
     git(['init', '-b', 'main'], root);
     git(['config', 'user.email', 't@example.com'], root);
@@ -76,9 +76,9 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
 
 
 test('loadBoard: unpushed tracks origin/branch, not team ahead', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
-  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-bare-')) + '.git';
-  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-bare-')) + '.git';
+  const wt = path.join(os.tmpdir(), `plenum-wt-${Date.now()}`);
   fs.rmSync(bare, { recursive: true, force: true });
   try {
     git(['init', '-b', 'main'], root);
@@ -118,9 +118,9 @@ test('loadBoard: unpushed tracks origin/branch, not team ahead', async () => {
 });
 
 
-test('loadBoard: overlook.teamBranch git config overrides detection', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
-  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-bare-')) + '.git';
+test('loadBoard: plenum.teamBranch git config overrides detection', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-bare-')) + '.git';
   fs.rmSync(bare, { recursive: true, force: true });
   try {
     git(['init', '-b', 'main'], root);
@@ -141,7 +141,7 @@ test('loadBoard: overlook.teamBranch git config overrides detection', async () =
     assert.equal(board.teamBranch, 'main');
     assert.equal(board.teamBranchSource, 'detected');
 
-    git(['config', 'overlook.teamBranch', 'develop'], root);
+    git(['config', 'plenum.teamBranch', 'develop'], root);
     board = await loadBoard(root);
     assert.equal(board.teamBranch, 'develop');
     assert.equal(board.teamRef, 'origin/develop');
@@ -152,9 +152,9 @@ test('loadBoard: overlook.teamBranch git config overrides detection', async () =
   }
 });
 
-test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
-  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+test('loadBoard: feature lane runnable from .plenum/lane.yaml', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const wt = path.join(os.tmpdir(), `plenum-wt-${Date.now()}`);
   try {
     git(['init', '-b', 'main'], root);
     git(['config', 'user.email', 't@example.com'], root);
@@ -165,11 +165,11 @@ test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
     git(['commit', '-m', 'init'], root);
     git(['worktree', 'add', '-b', 'feat/one', wt], root);
 
-    const overlook = path.join(root, '.overlook');
-    fs.mkdirSync(overlook);
+    const plenum = path.join(root, '.plenum');
+    fs.mkdirSync(plenum);
     fs.copyFileSync(
       path.join(process.cwd(), 'fixtures/lane/minimal.lane.yaml'),
-      path.join(overlook, 'lane.yaml'),
+      path.join(plenum, 'lane.yaml'),
     );
 
     const board = await loadBoard(root);
@@ -192,8 +192,8 @@ test('loadBoard: feature lane runnable from .overlook/lane.yaml', async () => {
 });
 
 test('loadBoard: merge packs feature tip onto a side column', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
-  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const wt = path.join(os.tmpdir(), `plenum-wt-${Date.now()}`);
   try {
     git(['init', '-b', 'main'], root);
     git(['config', 'user.email', 't@example.com'], root);
@@ -227,8 +227,8 @@ test('loadBoard: merge packs feature tip onto a side column', async () => {
 });
 
 test('loadBoard: bad lane.yaml still loads board as not runnable', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-'));
-  const wt = path.join(os.tmpdir(), `overlook-wt-${Date.now()}`);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const wt = path.join(os.tmpdir(), `plenum-wt-${Date.now()}`);
   try {
     git(['init', '-b', 'main'], root);
     git(['config', 'user.email', 't@example.com'], root);
@@ -239,9 +239,9 @@ test('loadBoard: bad lane.yaml still loads board as not runnable', async () => {
     git(['commit', '-m', 'init'], root);
     git(['worktree', 'add', '-b', 'feat/one', wt], root);
 
-    const overlook = path.join(root, '.overlook');
-    fs.mkdirSync(overlook);
-    fs.writeFileSync(path.join(overlook, 'lane.yaml'), 'version: 2\nrun: echo hi\n');
+    const plenum = path.join(root, '.plenum');
+    fs.mkdirSync(plenum);
+    fs.writeFileSync(path.join(plenum, 'lane.yaml'), 'version: 2\nrun: echo hi\n');
 
     const board = await loadBoard(root);
     assert.equal(board.lanes.length, 2);
@@ -255,8 +255,8 @@ test('loadBoard: bad lane.yaml still loads board as not runnable', async () => {
 
 
 test('listBranches overview: locals remotes lane flags', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-br-'));
-  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'overlook-bare-')) + '.git';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-br-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-bare-')) + '.git';
   fs.rmSync(bare, { recursive: true, force: true });
   try {
     git(['init', '-b', 'main'], root);

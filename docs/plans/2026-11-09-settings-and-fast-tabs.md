@@ -1,8 +1,8 @@
-# Overlook: Settings + Fast Tabs + Authorship + Quick Start
+# Plenum: Settings + Fast Tabs + Authorship + Quick Start
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task in this session.
 > After each task: (1) implementer subagent, (2) **spec + UI/UX review** subagent, (3) **tech/code-quality review** subagent. Loop fix → re-review until both reviews approve before starting the next task.
-> Final task uses `/hallmark` (audit then fix) against Overlook's locked `planning/DESIGN.md` — do not invent a new visual system; correct floor/reflex issues inside the existing mock language.
+> Final task uses `/hallmark` (audit then fix) against Plenum's locked `planning/DESIGN.md` — do not invent a new visual system; correct floor/reflex issues inside the existing mock language.
 
 **Goal:** Ship an in-window Settings page (Lane setup leaves the dialog), snappy warm tab switching, quieter AI authorship pills, and an on-demand Quick start sheet — without first-run tours or multi-window boards.
 
@@ -57,7 +57,7 @@ Author column unchanged. Prefer tool name over `Assisted, Cursor`.
 ### Quick start
 - Never auto-opens
 - Palette: “Quick start” / “What are lanes?”
-- One sheet: Overlook vs normal client, Lane, Protected main, Behind, Authorship, one line on phase-two runnable lanes
+- One sheet: Plenum vs normal client, Lane, Protected main, Behind, Authorship, one line on phase-two runnable lanes
 - Plain PRODUCT.md voice; Esc / backdrop / Done
 
 ---
@@ -72,7 +72,7 @@ Author column unchanged. Prefer tool name over `Assisted, Cursor`.
 5. Do not start N+1 until N approved
 ```
 
-**Smoke:** `OVERLOOK_OPEN="$PWD/tmp/smoke-repo" npm run dev`
+**Smoke:** `PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev`
 
 ---
 

@@ -6,7 +6,7 @@
 
 ## Ask
 
-Support in-app updates so Overlook can roll out builds multiple times a day without asking people to re-run `npm run pack` / drag a new `.app`.
+Support in-app updates so Plenum can roll out builds multiple times a day without asking people to re-run `npm run pack` / drag a new `.app`.
 
 ## Why
 

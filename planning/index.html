@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Overlook: parallel work you can run</title>
+    <title>Plenum: parallel work you can run</title>
     <link rel="icon" href="assets/app-icon-16.svg" type="image/svg+xml" />
     <style>
       :root {
@@ -453,14 +453,14 @@
     <!-- 1 title -->
     <section class="slide" id="s1">
       <div class="stage">
-        <div class="brand"><img src="assets/app-icon-1024.png" alt="" />Overlook</div>
+        <div class="brand"><img src="assets/app-icon-1024.png" alt="" />Plenum</div>
         <div class="cols body" style="grid-template-columns: 400px 1fr; align-items: center">
           <div>
             <h1>A git client built for lanes.</h1>
             <p style="margin-top: 20px; font-size: 19px">A Mac git client where every worktree is a lane: measured against <span class="mono">main</span>, with the normal verbs per lane. Then, phase two: each lane runs on its own ports and any agent can drive it.</p>
           </div>
           <figure class="fill hero">
-            <img class="shot" src="assets/hero.png" alt="Overlook board: protected main, four lanes with two running, the selected lane header with Stop, Test, URL chips and a shared data badge, and the commit graph" />
+            <img class="shot" src="assets/hero.png" alt="Plenum board: protected main, four lanes with two running, the selected lane header with Stop, Test, URL chips and a shared data badge, and the commit graph" />
           </figure>
         </div>
       </div>
@@ -497,7 +497,7 @@
             <li data-target="0.15,0.437" data-side="left"><strong>Running</strong><span>A ring on the mark, a row with the port, a dot in the graph.</span></li>
           </ul>
           <figure class="fill">
-            <img class="shot" src="assets/board-dark.png" alt="Full Overlook window: lanes panel with readiness marks and a Running section, selected lane header, and the full-height commit graph with authorship pills" />
+            <img class="shot" src="assets/board-dark.png" alt="Full Plenum window: lanes panel with readiness marks and a Running section, selected lane header, and the full-height commit graph with authorship pills" />
           </figure>
           <ul class="facts side right">
             <li data-target="0.86,0.273" data-side="right"><strong>Authorship</strong><span>Human, assisted or agent, read off the commit. Human gets no badge.</span></li>
@@ -533,7 +533,7 @@
           </div>
           <div>
             <p><strong>Phase one is this.</strong> A Mac git client you would use every day: the graph, lanes as worktrees, protected main, behind, authorship, and the normal verbs.</p>
-            <p><strong>Nothing clever about git itself.</strong> Overlook runs real git; the repo stays plain. What is different is that every verb is per lane and the board tells you what each lane needs before you ask.</p>
+            <p><strong>Nothing clever about git itself.</strong> Plenum runs real git; the repo stays plain. What is different is that every verb is per lane and the board tells you what each lane needs before you ask.</p>
             <p><strong>Running comes after.</strong> Lane setup, ports, shared data and the MCP are phase two. They land on the same board, in the strip under the header.</p>
           </div>
         </div>
@@ -545,17 +545,17 @@
       <div class="stage">
         <div>
           <div class="kicker">Phase two: run</div>
-          <h2>One file. Your commands. Overlook just calls them.</h2>
+          <h2>One file. Your commands. Plenum just calls them.</h2>
         </div>
         <div class="cols body" style="grid-template-columns: 1fr 360px">
           <figure class="fill">
-            <img class="shot" src="assets/setup-dark.png" alt="Settings, Repositories, Lane setup for Mobaro Web: six findings about the repo beside a proposed .overlook/lane.yaml with a port offset and three shared services, and a Write button" />
+            <img class="shot" src="assets/setup-dark.png" alt="Settings, Repositories, Lane setup for Mobaro Web: six findings about the repo beside a proposed .plenum/lane.yaml with a port offset and three shared services, and a Write button" />
           </figure>
           <div>
-            <p><strong>Settings › Repositories › Lane setup.</strong> Overlook reads the repo and lists why a second checkout cannot start: ports, volumes, env files, the install.</p>
-            <p><strong>Then it proposes <span class="mono">.overlook/lane.yaml</span></strong>: setup, run, test, a port offset per lane, which services are shared. You press Write.</p>
+            <p><strong>Settings › Repositories › Lane setup.</strong> Plenum reads the repo and lists why a second checkout cannot start: ports, volumes, env files, the install.</p>
+            <p><strong>Then it proposes <span class="mono">.plenum/lane.yaml</span></strong>: setup, run, test, a port offset per lane, which services are shared. You press Write.</p>
             <p><strong>It does not run your app. It calls your command.</strong> Aspire, docker compose, three shell scripts, <span class="mono">make dev</span>: whatever starts the stack today is what a lane starts.</p>
-            <p><strong>The file lives in the repo,</strong> so every teammate and every agent gets the same lanes, with or without Overlook open.</p>
+            <p><strong>The file lives in the repo,</strong> so every teammate and every agent gets the same lanes, with or without Plenum open.</p>
           </div>
         </div>
       </div>
@@ -594,7 +594,7 @@
           </figure>
           <div>
             <p><strong>Why not isolate everything?</strong> Own copies of three databases per lane cost minutes and gigabytes each time. People stop making lanes. Sharing is what you already do when you switch branches in one checkout.</p>
-            <p><strong>So Overlook makes the hazard visible instead.</strong> A <span class="mono">shared data</span> badge on every lane. Before Run, it checks the lane's migrations against the shared database. If they differ, you get three plain choices and the cost of each.</p>
+            <p><strong>So Plenum makes the hazard visible instead.</strong> A <span class="mono">shared data</span> badge on every lane. Before Run, it checks the lane's migrations against the shared database. If they differ, you get three plain choices and the cost of each.</p>
             <p><strong>Per service.</strong> Postgres can be a snapshot while RavenDB stays shared. The choice is in the file, where the team sees it.</p>
           </div>
         </div>
@@ -611,24 +611,24 @@
         <div class="cols body" style="grid-template-columns: 1fr 360px">
 <pre class="term"><span class="t">claude ›</span> <span class="u">fix the CSV export streaming and show me it working</span>
 
-<span class="a">overlook.lane.create</span> { name: "export-csv" }
+<span class="a">plenum.lane.create</span> { name: "export-csv" }
   <span class="t">→</span> lane 2  .worktrees/export-csv  setup 41 s
 
 <span class="t">… edits apps/backend/Export/StreamWriter.cs, 3 files</span>
 
-<span class="a">overlook.lane.up</span> { lane: 2 }
+<span class="a">plenum.lane.up</span> { lane: 2 }
   <span class="t">→</span> drift: 0   shared: ravendb sqledge postgres
   <span class="t">→</span> web <span class="url">http://localhost:5201</span>  api <span class="url">http://localhost:5255</span>
 
-<span class="a">overlook.lane.test</span> { lane: 2 }
+<span class="a">plenum.lane.test</span> { lane: 2 }
   <span class="t">→</span> <span class="ok">passed</span>  12 projects  2 m 04 s
 
 <span class="t">claude ›</span> Running on <span class="url">localhost:5201</span>. Tests pass.
 
-<span class="t">overlook ›</span> <span class="ok">●</span> feat/export-csv  running <span class="t">:5201</span>  Agent, Claude</pre>
+<span class="t">plenum ›</span> <span class="ok">●</span> feat/export-csv  running <span class="t">:5201</span>  Agent, Claude</pre>
           <div>
-            <p><strong>Seven calls</strong>: doctor, create, up, down, test, status, remove. Served by <span class="mono">overlook mcp</span> over stdio, and the same names as a CLI.</p>
-            <p><strong>Claude Code, Cursor, Codex, a shell script</strong>: anything that speaks MCP or can run a CLI. Configure it once per machine; no Overlook code inside any of them, and no opinion about which model or workflow you use.</p>
+            <p><strong>Seven calls</strong>: doctor, create, up, down, test, status, remove. Served by <span class="mono">plenum mcp</span> over stdio, and the same names as a CLI.</p>
+            <p><strong>Claude Code, Cursor, Codex, a shell script</strong>: anything that speaks MCP or can run a CLI. Configure it once per machine; no Plenum code inside any of them, and no opinion about which model or workflow you use.</p>
             <p><strong>Nothing is hidden.</strong> The lane the agent made shows on the board like any other: behind, authorship, running, shared data.</p>
           </div>
         </div>
@@ -647,9 +647,9 @@
             <img class="shot" src="assets/settings-agents-dark.png" alt="Settings, Agents: the local MCP endpoint and CLI, connected clients Cursor and Claude Code with Codex not configured, and switches for what agents may do" />
           </figure>
           <div>
-            <p><strong>One endpoint, loopback only,</strong> and the same verbs as a CLI. Overlook sees which tools are wired up and what they last called.</p>
-            <p><strong>Add is two lines</strong> in the tool's own MCP config. No Overlook code inside Cursor, Claude Code or Codex, and no opinion about the model.</p>
-            <p><strong>Lane verbs only:</strong> start and stop, test, create, remove, write the manifest. Remove and write ask by default. Commit, push and merge stay with whoever is in the lane; Overlook does not do those for an agent.</p>
+            <p><strong>One endpoint, loopback only,</strong> and the same verbs as a CLI. Plenum sees which tools are wired up and what they last called.</p>
+            <p><strong>Add is two lines</strong> in the tool's own MCP config. No Plenum code inside Cursor, Claude Code or Codex, and no opinion about the model.</p>
+            <p><strong>Lane verbs only:</strong> start and stop, test, create, remove, write the manifest. Remove and write ask by default. Commit, push and merge stay with whoever is in the lane; Plenum does not do those for an agent.</p>
           </div>
         </div>
       </div>
@@ -676,7 +676,7 @@
             <tr><td>Conductor 0.93</td><td><span class="no">No</span> graph</td><td><span class="part">Only its own</span> workspaces, with the agents it launches</td><td><span class="part">A switch</span> that stops the other workspace</td></tr>
             <tr><td>Fork, Tower, lazygit, teebe</td><td><span class="part">Partial</span>. Behind upstream, not main</td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
             <tr><td>Cursor, Claude Code</td><td><span class="no">No</span></td><td><span class="part">Setup scripts</span> only; no run, test or ports</td><td><span class="no">No</span></td></tr>
-            <tr><td class="ours">Overlook</td><td class="ours">Graph; behind <span class="mono">origin/main</span>, protected main, authorship</td><td class="ours">Any worktree, any agent, from a file in the repo</td><td class="ours">Per service, with a drift check before Run</td></tr>
+            <tr><td class="ours">Plenum</td><td class="ours">Graph; behind <span class="mono">origin/main</span>, protected main, authorship</td><td class="ours">Any worktree, any agent, from a file in the repo</td><td class="ours">Per service, with a drift check before Run</td></tr>
           </tbody>
         </table>
         <p class="src">Shipping versions and docs, fetched 6 Nov 2026. Sources and the full audit in PRODUCT.md.</p>
@@ -718,7 +718,7 @@
           <ol class="steps">
             <li><strong>Phase one, the client</strong><span>Board, graph, lanes as worktrees, protected main, behind, authorship; commit, push, pull, rebase, merge, conflicts. A Mac app I use every day. Eight weeks of evenings.</span></li>
             <li><strong>Dogfood</strong><span>The team repo for four weeks. Count lanes per person and whether anyone opens another client.</span></li>
-            <li><strong>Phase two, running</strong><span><span class="mono">.overlook/lane.yaml</span> for mobaro, then <span class="mono">overlook up / test / doctor</span> and the MCP. The strip under the header. The bigger job; it only starts once the client is in daily use.</span></li>
+            <li><strong>Phase two, running</strong><span><span class="mono">.plenum/lane.yaml</span> for mobaro, then <span class="mono">plenum up / test / doctor</span> and the MCP. The strip under the header. The bigger job; it only starts once the client is in daily use.</span></li>
             <li><strong>Shared data</strong><span>Drift detection, snapshot per service, the Run sheet. Last, because it is the hardest to get right.</span></li>
           </ol>
           <div>

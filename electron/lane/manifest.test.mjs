@@ -19,7 +19,7 @@ test('loadManifest missing file returns null', async () => {
 });
 
 test('loadManifest unsupported version throws', async () => {
-  const file = path.join(os.tmpdir(), `overlook-lane-${Date.now()}.yaml`);
+  const file = path.join(os.tmpdir(), `plenum-lane-${Date.now()}.yaml`);
   fs.writeFileSync(file, 'version: 2\nrun: echo hi\n');
   try {
     await assert.rejects(() => loadManifest(file), /unsupported lane manifest version/);
@@ -29,7 +29,7 @@ test('loadManifest unsupported version throws', async () => {
 });
 
 test('loadManifest keeps services.*.snapshot and teardown', async () => {
-  const file = path.join(os.tmpdir(), `overlook-lane-snap-${Date.now()}.yaml`);
+  const file = path.join(os.tmpdir(), `plenum-lane-snap-${Date.now()}.yaml`);
   fs.writeFileSync(
     file,
     [

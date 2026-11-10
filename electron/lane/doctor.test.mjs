@@ -68,7 +68,7 @@ test('doctor proposes run/test from package.json and lists stack files', async (
     assert.equal(proposed.ports.expose.api, undefined);
     const m = await loadManifest(
       (() => {
-        const p = path.join(root, '.overlook', 'probe.yaml');
+        const p = path.join(root, '.plenum', 'probe.yaml');
         fs.mkdirSync(path.dirname(p), { recursive: true });
         fs.writeFileSync(p, proposedYaml);
         return p;
@@ -114,16 +114,16 @@ test('doctor canAccept false when no run script', async () => {
   }
 });
 
-test('doctor writes nothing; acceptManifest writes only .overlook/lane.yaml', async () => {
+test('doctor writes nothing; acceptManifest writes only .plenum/lane.yaml', async () => {
   const root = fixtureRepo({ compose: false, makefile: false, apphost: false });
   try {
     const before = fs.readdirSync(root);
     const { proposedYaml } = await doctor(root);
-    assert.ok(!fs.existsSync(path.join(root, '.overlook')));
+    assert.ok(!fs.existsSync(path.join(root, '.plenum')));
     assert.deepEqual(fs.readdirSync(root).sort(), before.sort());
 
     const dest = await acceptManifest(root, proposedYaml);
-    assert.equal(dest, path.join(root, '.overlook', 'lane.yaml'));
+    assert.equal(dest, path.join(root, '.plenum', 'lane.yaml'));
     const m = await loadManifest(dest);
     assert.equal(m.version, 1);
     assert.equal(m.run, 'npm run dev');
@@ -145,7 +145,7 @@ test('acceptManifest rejects missing run and invalid yaml', async () => {
       () => acceptManifest(root, 'version: 2\nrun: echo hi\n'),
       /invalid|unsupported|version/i,
     );
-    assert.ok(!fs.existsSync(path.join(root, '.overlook', 'lane.yaml')));
+    assert.ok(!fs.existsSync(path.join(root, '.plenum', 'lane.yaml')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

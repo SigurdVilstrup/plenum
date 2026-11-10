@@ -1,16 +1,16 @@
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
 import { driftError, listPendingMigrations, usesSharedData } from './drift.mjs';
+import { manifestPath, runDir } from '../paths.mjs';
 
 const LOG_LINES = 200;
 const TEST_LOG_LINES = 50;
 const TEST_TIMEOUT_MS = 10 * 60 * 1000;
-const RUN_DIR = path.join(os.homedir(), '.overlook', 'run');
+const RUN_DIR = runDir();
 
 /** In-process child handles + logs (not shared across CLI/Electron). */
 /** @type {Map<string, { child: import('node:child_process').ChildProcess, logs: { stdout: string[], stderr: string[] }, pid: number, root: string, laneIndex: number }>} */
@@ -150,7 +150,7 @@ async function prepareLane(root, laneIndex) {
   const cwd = paths[laneIndex];
   if (!cwd) throw new Error(`lane ${laneIndex} not found`);
 
-  const manifest = await loadManifest(path.join(paths[0], '.overlook', 'lane.yaml'));
+  const manifest = await loadManifest(manifestPath(paths[0]));
   const ports = resolvePorts(manifest ?? { ports: { offset: 0, expose: {} } }, laneIndex);
   const offset = (manifest?.ports?.offset ?? 0) * laneIndex;
   const urls = Object.fromEntries(
@@ -159,8 +159,8 @@ async function prepareLane(root, laneIndex) {
   const ctx = { offset, lane: laneIndex, port: ports, ports };
   const env = {
     ...process.env,
-    OVERLOOK_LANE: String(laneIndex),
-    OVERLOOK_OFFSET: String(offset),
+    PLENUM_LANE: String(laneIndex),
+    PLENUM_OFFSET: String(offset),
   };
   for (const [k, v] of Object.entries(manifest?.env?.set ?? {})) {
     env[k] = renderTemplate(String(v), ctx);

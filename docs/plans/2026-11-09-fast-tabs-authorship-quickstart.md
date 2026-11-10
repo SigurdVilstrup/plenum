@@ -277,9 +277,9 @@ git commit -m "feat(prefs): palette sheet to set tab warm TTL"
 **Step 2:** Sheet copy (keep short; PRODUCT vocabulary):
 
 - Title: Quick start  
-- Lede: Overlook is a git client built around lanes (worktrees), not a single checkout.  
+- Lede: Plenum is a git client built around lanes (worktrees), not a single checkout.  
 - **Lane** — a worktree on its own branch. Several features in progress at once.  
-- **Protected main** — the team-branch checkout; Overlook watches it and does not work in it.  
+- **Protected main** — the team-branch checkout; Plenum watches it and does not work in it.  
 - **Behind** — commits on team main this lane does not have (vs `origin/main`, not the lane upstream).  
 - **Authorship** — from author + trailers (`Co-authored-by`, …). Humans get no badge.  
 - Footer line: Phase two makes lanes runnable; this board is the client you use every day first.  

@@ -1,6 +1,6 @@
 ---
 version: beta
-name: Overlook
+name: Plenum
 description: >-
   Team-safe overview of parallel git worktrees, each one runnable. Adapts Linear's product UI
   language (near-black canvas, hairline panels, one lavender signal) to a
@@ -113,9 +113,9 @@ components:
 
 ## Overview
 
-Overlook is a Mac app for scanning parallel git worktrees before merge. The visual contract is Linear's product UI (see [Linear DESIGN.md](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)): near-black canvas, charcoal panels, hairline borders, one lavender accent for real actions, focus, and the selected lane. Never decoration.
+Plenum is a Mac app for scanning parallel git worktrees before merge. The visual contract is Linear's product UI (see [Linear DESIGN.md](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)): near-black canvas, charcoal panels, hairline borders, one lavender accent for real actions, focus, and the selected lane. Never decoration.
 
-The structural idea is GitKraken's: a narrow list on the left and a full-height graph that owns the window. Overlook's own facts (behind the team branch, protected primary, authorship, running) live on that structure as marks, pills, and two header strips. Nothing is a card.
+The structural idea is GitKraken's: a narrow list on the left and a full-height graph that owns the window. Plenum's own facts (behind the team branch, protected primary, authorship, running) live on that structure as marks, pills, and two header strips. Nothing is a card.
 
 ## Colors
 
@@ -152,7 +152,7 @@ Meaning is fixed per icon so it can be learned once:
 | `check-circle` | safe to remove |
 | `user`, `sparkle`, `robot` | human, assisted, agent |
 | `arrows-clockwise`, `broadcast`, `clock` | fetch, webhooks, fetch on focus |
-| `arrow-square-out` | leaves Overlook (open in Cursor) |
+| `arrow-square-out` | leaves Plenum (open in Cursor) |
 | `pencil-simple` | rename |
 | `magnifying-glass`, `command` | palette |
 | `gear-six`, `sun`, `moon` | settings, theme |
@@ -236,7 +236,7 @@ App icon: a macOS squircle (rx 224 on 1024) on surface-1 with a hairline-strong 
 - Interactive rebase, merge-from-graph, or commit from the graph.
 - A refresh button. Everything is a stream.
 - A warning dialog about shared data every time a lane starts. Once it is a badge, it stays a badge.
-- A data-mode setting in Settings. Modes live in `.overlook/lane.yaml`, where the team can see them.
+- A data-mode setting in Settings. Modes live in `.plenum/lane.yaml`, where the team can see them.
 - A terminal into the agent, or a log viewer. Running shows URLs and the last test result, nothing more.
 
 ## Don't change
