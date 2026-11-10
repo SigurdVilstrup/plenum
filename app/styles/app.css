@@ -47,6 +47,8 @@ input, textarea, [contenteditable="true"] {
 
 .window.app .titlebar .tab,
 .window.app .titlebar .tab *,
+.window.app .titlebar .tab-scroll,
+.window.app .titlebar .tab-scroll *,
 .window.app .titlebar .searchbtn,
 .window.app .titlebar .searchbtn *,
 .window.app .titlebar button {
@@ -63,9 +65,19 @@ input, textarea, [contenteditable="true"] {
 
 .window.app .title-actions {
   align-self: center;
+  flex: 0 0 auto;
   gap: 14px;
   padding-left: 12px;
   padding-right: 14px;
+  background: var(--surface-2);
+}
+
+.window.app .titlebar .tab.add {
+  background: var(--surface-2);
+}
+
+.window.app .titlebar .tab.add:hover {
+  background: var(--surface-3);
 }
 
 .window.app .titlebar .brand {
@@ -73,12 +85,17 @@ input, textarea, [contenteditable="true"] {
 }
 
 .window.app .titlebar .tabstrip {
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: flex-end;
   padding-top: 6px;
   padding-left: 2px;
   height: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: visible;
+  gap: 4px;
+}
+
+.window.app .titlebar .tabstrip-scroll {
   gap: 10px;
 }
 
@@ -89,6 +106,8 @@ input, textarea, [contenteditable="true"] {
   border: 1px solid transparent;
   border-bottom: 0;
   overflow: visible;
+  flex: 0 0 auto;
+  max-width: 220px;
 }
 
 .window.app .titlebar .tab.active {
@@ -824,37 +843,50 @@ button.env-link {
 }
 .window.app .op-busy {
   position: absolute;
-  top: 36px;
-  left: 0;
-  right: 0;
-  margin-inline: auto;
-  width: max-content;
-  max-width: calc(100% - 24px);
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 20;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
-  padding: 0 12px;
+  height: 30px;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 0 12px 0 10px;
   border-radius: 8px;
   border: 1px solid var(--hairline-strong);
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-1) 92%, var(--surface-2));
   box-shadow: var(--shadow-menu);
   color: var(--ink-muted);
   font-size: 12px;
+  line-height: 1;
   pointer-events: none;
 }
 .window.app .op-busy[hidden] {
   display: none !important;
 }
 .window.app .op-busy .spinner {
+  flex: 0 0 auto;
   width: 12px;
   height: 12px;
+  margin: 0;
+  border-width: 1.5px;
+}
+.window.app .op-busy .label {
+  flex: 0 0 auto;
+  color: var(--ink-subtle);
+  font-weight: 500;
 }
 .window.app .op-busy .detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--hairline);
   color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
   font-weight: 500;
-  max-width: 28ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -89,6 +89,10 @@ const state = {
 
 const el = {
   tabstrip: document.getElementById('tabstrip'),
+  tabstripScroll: document.getElementById('tabstrip-scroll'),
+  tabScrollPrev: document.getElementById('tab-scroll-prev'),
+  tabScrollNext: document.getElementById('tab-scroll-next'),
+  tabAdd: document.getElementById('tab-add'),
   loading: document.getElementById('loading'),
   loadingTitle: document.getElementById('loading-title'),
   loadingPath: document.getElementById('loading-path'),
@@ -340,20 +344,20 @@ function settleBoard(tabId, root, board, opts) {
 }
 
 const OP_LABELS = {
-  checkout: 'Checking out…',
-  'branch-update': 'Pulling from remote…',
-  'branch-push': 'Pushing to remote…',
-  push: 'Pushing…',
-  pull: 'Pulling…',
-  rebase: 'Rebasing…',
-  merge: 'Merging…',
-  commit: 'Committing…',
-  stash: 'Stashing…',
-  stashPop: 'Popping stash…',
-  up: 'Starting lane…',
-  down: 'Stopping lane…',
-  test: 'Running tests…',
-  remove: 'Removing lane…',
+  checkout: 'Checkout',
+  'branch-update': 'Pull',
+  'branch-push': 'Push',
+  push: 'Push',
+  pull: 'Pull',
+  rebase: 'Rebase',
+  merge: 'Merge',
+  commit: 'Commit',
+  stash: 'Stash',
+  stashPop: 'Pop stash',
+  up: 'Starting',
+  down: 'Stopping',
+  test: 'Testing',
+  remove: 'Removing',
 };
 
 function beginOp(act, detail) {
@@ -395,9 +399,11 @@ function paintOpBusy() {
   }
   el.body?.classList.add('is-busy');
   bar.hidden = false;
-  const label = OP_LABELS[op.act] || 'Working…';
-  const detail = op.detail ? `<span class="detail">${esc(op.detail)}</span>` : '';
-  bar.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>${esc(label)}</span>${detail}`;
+  const label = OP_LABELS[op.act] || 'Working';
+  const detail = op.detail
+    ? `<span class="detail" title="${esc(op.detail)}">${esc(op.detail)}</span>`
+    : '';
+  bar.innerHTML = `<i class="spinner" aria-hidden="true"></i><span class="label">${esc(label)}</span>${detail}`;
 }
 
 /** Pin IPC to the repo root that started the call (survives tab switches). */
@@ -557,24 +563,15 @@ async function applyTabOrder(fromId, overId, after) {
 const SEARCH_COLLAPSE_CUSHION = 48;
 let searchLabelWidth = 0;
 
-/** Natural width tabs want before flex-shrinking / ellipsis. */
 function tabsPreferredWidth() {
-  const gap = parseFloat(getComputedStyle(el.tabstrip).gap) || 0;
-  const tabs = el.tabstrip.querySelectorAll('.tab:not(.add)');
+  const scroller = el.tabstripScroll;
+  if (!scroller) return 0;
+  const gap = parseFloat(getComputedStyle(scroller).gap) || 0;
+  const tabs = scroller.querySelectorAll('.tab');
   let need = 0;
-  for (const n of tabs) {
-    const title = n.querySelector('.tab-title');
-    const ic = n.querySelector('.icon');
-    const padL = parseFloat(getComputedStyle(n).paddingLeft) || 0;
-    const padR = parseFloat(getComputedStyle(n).paddingRight) || 0;
-    const g = parseFloat(getComputedStyle(n).gap) || 0;
-    const natural = (ic?.offsetWidth || 16) + (title ? g + title.scrollWidth : 0) + padL + padR;
-    need += Math.min(220, Math.ceil(natural));
-  }
-  const add = el.tabstrip.querySelector('.tab.add');
-  if (add) need += add.offsetWidth;
-  const parts = tabs.length + (add ? 1 : 0);
-  if (parts > 1) need += gap * (parts - 1);
+  for (const n of tabs) need += n.offsetWidth;
+  if (tabs.length > 1) need += gap * (tabs.length - 1);
+  if (el.tabAdd) need += el.tabAdd.offsetWidth + gap;
   return need;
 }
 
@@ -595,6 +592,33 @@ function syncSearchCollapse() {
   } else if (need + SEARCH_COLLAPSE_CUSHION > avail) {
     btn.classList.add('compact');
   }
+  syncTabScrollFades();
+}
+
+function syncTabScrollFades() {
+  const scroller = el.tabstripScroll;
+  if (!scroller) return;
+  const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+  const canLeft = scroller.scrollLeft > 2;
+  const canRight = max > 2 && scroller.scrollLeft < max - 2;
+  scroller.classList.toggle('fade-left', canLeft);
+  scroller.classList.toggle('fade-right', canRight);
+  if (el.tabScrollPrev) el.tabScrollPrev.hidden = !canLeft;
+  if (el.tabScrollNext) el.tabScrollNext.hidden = !canRight;
+  el.tabstrip?.classList.toggle('has-scroll', canLeft || canRight);
+}
+
+function scrollTabsBy(dir) {
+  const scroller = el.tabstripScroll;
+  if (!scroller) return;
+  const step = Math.max(120, Math.round(scroller.clientWidth * 0.7));
+  scroller.scrollBy({ left: dir * step, behavior: 'smooth' });
+}
+
+function scrollActiveTabIntoView() {
+  const active = el.tabstripScroll?.querySelector('.tab.active');
+  active?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  syncTabScrollFades();
 }
 
 function paintTabs() {
@@ -629,7 +653,7 @@ function paintTabs() {
     btn.addEventListener('dragend', () => {
       tabDragId = null;
       btn.classList.remove('dragging');
-      el.tabstrip.querySelectorAll('.tab.drop-before, .tab.drop-after').forEach((n) => {
+      el.tabstripScroll.querySelectorAll('.tab.drop-before, .tab.drop-after').forEach((n) => {
         n.classList.remove('drop-before', 'drop-after');
       });
     });
@@ -641,7 +665,7 @@ function paintTabs() {
       const after = e.clientX > mid;
       btn.classList.toggle('drop-after', after);
       btn.classList.toggle('drop-before', !after);
-      el.tabstrip.querySelectorAll('.tab').forEach((n) => {
+      el.tabstripScroll.querySelectorAll('.tab').forEach((n) => {
         if (n !== btn) n.classList.remove('drop-before', 'drop-after');
       });
     });
@@ -659,15 +683,12 @@ function paintTabs() {
     });
     frag.appendChild(btn);
   }
-  const add = document.createElement('button');
-  add.className = 'tab add';
-  add.type = 'button';
-  add.setAttribute('aria-label', 'Add repository');
-  add.appendChild(icon('plus'));
-  add.addEventListener('click', openRepo);
-  frag.appendChild(add);
-  el.tabstrip.replaceChildren(frag);
-  requestAnimationFrame(syncSearchCollapse);
+  el.tabstripScroll.replaceChildren(frag);
+
+  requestAnimationFrame(() => {
+    syncSearchCollapse();
+    scrollActiveTabIntoView();
+  });
 }
 
 function openCtxMenu(x, y, tab, anchor) {
@@ -3076,6 +3097,16 @@ async function boot() {
   } else {
     window.addEventListener('resize', syncSearchCollapse);
   }
+  el.tabstripScroll?.addEventListener('scroll', syncTabScrollFades, { passive: true });
+  el.tabstripScroll?.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    if (el.tabstripScroll.scrollWidth <= el.tabstripScroll.clientWidth) return;
+    e.preventDefault();
+    el.tabstripScroll.scrollLeft += e.deltaY;
+  }, { passive: false });
+  el.tabScrollPrev?.addEventListener('click', () => scrollTabsBy(-1));
+  el.tabScrollNext?.addEventListener('click', () => scrollTabsBy(1));
+  el.tabAdd?.addEventListener('click', openRepo);
   try {
     state.editors = await invoke('os.editors');
   } catch { state.editors = []; }
