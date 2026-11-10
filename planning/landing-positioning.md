@@ -18,8 +18,21 @@ Rubric: category claim · audience · proof · CTA · job of the page.
 | [teebe.io](https://teebe.io/) | Worktree manager beside the terminal | Terminal + Claude/Codex/Cursor users | Live badges, merge marks, brew | brew install | Sell “see agent worktrees / clean up” — not full git verbs |
 | [cursor.com](https://cursor.com/) | Coding agent for ambitious software | Builders / enterprises adopting AI | Logos, interactive demos | Try Cursor | Sell writing code with agents |
 | [linear.app](https://linear.app/) | Product development system for teams + agents | Product/eng teams | Live product UI, stories | Get started / sales | Sell planning+build system, craft + speed |
+| [t3.codes](https://t3.codes/) | Open-source control plane for coding agents | Devs juggling many harnesses/subs | Tweet wall, BYO-sub demo, fork CLI | Fork / use your sub | Sell orchestrating agents you already pay for |
 
 **Learning for us:** Git clients sell *control of history*; orchestrators sell *running agents*; Cursor sells *writing*. Plenum must not sound like Cursor or Conductor on the hero. Closest traps: GitKraken’s “agents in view” (suite) and teebe’s worktree marks (narrow). Our wedge is **lanes on a real git board measured against the team**, with CLI/MCP as the agent handoff — humans keep the git verbs.
+
+### Craft note: t3.codes (liked reference)
+
+Not a category twin (agent control plane ≠ git client). Steal **how** they sell:
+
+- One sharp category line, then proof in the product’s own vocabulary (threads, branches, one-button PR).
+- **BYO** framing — “we orchestrate, you keep your plan” maps cleanly to Plenum’s “we show lanes / git; agents keep CLI/MCP.”
+- Social proof as a dense, slightly irreverent stream (not enterprise logo soup).
+- Concrete verbs on the page (commit, push, PR, fork) instead of abstract “clarity / flow.”
+- Open/fork path as trust for builders.
+
+Use in **page build (#39)** for tone and structure after positioning locks — do not drift the hero into “control plane for agents.”
 
 ---
 
