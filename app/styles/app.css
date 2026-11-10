@@ -54,7 +54,7 @@ input, textarea, [contenteditable="true"] {
 }
 
 .window.app .titlebar .traffic.spacer {
-  width: 74px;
+  width: 78px;
   height: 40px;
   flex-shrink: 0;
   visibility: hidden;
@@ -63,7 +63,28 @@ input, textarea, [contenteditable="true"] {
 
 .window.app .titlebar .appmark {
   align-self: center;
+  margin-left: 2px;
+  margin-right: 6px;
+  /* Match native traffic-light centers; the mark reads a hair high in its box. */
+  transform: translateY(1px);
   -webkit-app-region: drag;
+}
+
+.window.app .titlebar .app-version {
+  align-self: center;
+  position: static;
+  right: auto;
+  bottom: auto;
+  margin-right: 10px;
+  z-index: auto;
+  transform: translateY(1px);
+  -webkit-app-region: drag;
+}
+
+.window.app .titlebar .searchbtn.compact {
+  align-self: center;
+  margin: 0 6px 0 2px;
+  -webkit-app-region: no-drag;
 }
 
 .window.app .titlebar .tabstrip {
@@ -389,12 +410,8 @@ button.env-link {
 }
 
 .app-version {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
   font-size: 11px;
   line-height: 1;
-  z-index: 5;
   opacity: 0.65;
   cursor: default;
 }
@@ -722,10 +739,21 @@ button.env-link {
 .window.app .panel .branch-row .name {
   font-size: 12px;
 }
+.window.app .panel .branch-row .metas {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .window.app .panel .branch-row .meta {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.window.app .panel .branch-row .meta.upstream {
+  color: var(--ink-tertiary);
+  padding-left: 6px;
+  border-left: 1px solid var(--hairline);
 }
 .window.app .panel .branch-folder {
   grid-template-columns: 14px minmax(0, 1fr) auto;

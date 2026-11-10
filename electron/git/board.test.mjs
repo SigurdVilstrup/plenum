@@ -273,12 +273,21 @@ test('listBranches overview: locals remotes lane flags', async () => {
     git(['push', 'origin', 'feat/solo'], root);
     git(['branch', '-d', 'feat/solo'], root); // leave remote-only
     git(['branch', 'feat/local'], root);
+    git(['push', '-u', 'origin', 'feat/local'], root);
+    git(['checkout', 'feat/local'], root);
+    fs.writeFileSync(path.join(root, 'b.txt'), 'b\n');
+    git(['add', 'b.txt'], root);
+    git(['commit', '-m', 'local ahead'], root);
 
     const board = await loadBoard(root);
     const local = board.branches.find((b) => b.name === 'feat/local');
     const remote = board.branches.find((b) => b.name === 'origin/feat/solo');
     const team = board.branches.find((b) => b.name === 'main');
     assert.ok(local && !local.hasLane && !local.remote);
+    assert.equal(local.upstream, 'origin/feat/local');
+    assert.equal(local.upstreamAhead, 1);
+    assert.equal(local.upstreamBehind, 0);
+    assert.ok(local.ahead >= 1, 'local tip is ahead of team');
     assert.ok(remote && remote.remote && !remote.hasLane);
     assert.ok(team && team.isTeam && team.hasLane);
     assert.ok(!board.branches.some((b) => b.name === 'origin' || b.short === 'origin'),
