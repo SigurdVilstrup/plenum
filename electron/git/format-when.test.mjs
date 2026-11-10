@@ -10,10 +10,14 @@ test('formatWhen: relative today and yesterday', () => {
   assert.equal(formatWhen(sec(2026, 10, 8), NOW), 'yesterday');
 });
 
-test('formatWhen: calendar date after yesterday', () => {
+test('formatWhen: calendar date after yesterday is compact (no year same year)', () => {
   const label = formatWhen(sec(2026, 10, 1), NOW);
-  assert.match(label, /2026/);
-  assert.doesNotMatch(label, /ago|d$|w$|mo$/);
+  assert.doesNotMatch(label, /2026|ago|d$|w$|mo$/);
+  assert.match(label, /Nov|1/);
+});
+
+test('formatWhen: other year keeps year', () => {
+  assert.match(formatWhen(sec(2025, 5, 1), NOW), /2025/);
 });
 
 test('formatWhenUtc: ISO Z', () => {

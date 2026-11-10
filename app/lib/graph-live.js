@@ -5,6 +5,8 @@ import { dateBandLabel } from './date-band.js';
 import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
+/** Must match `.date-divider` height in CSS — SVG y accounts for these gaps. */
+export const DIVIDER_H = 16;
 const COL_X0 = 14;
 const COL_W = 24;
 const laneColor = (c) => `var(--lane-${c})`;
@@ -43,6 +45,21 @@ const refPill = (r, { running = false, current = false } = {}) => {
   return `<span class="${cls}">${icon(ic)}${esc(r.name)}${dot}</span>`;
 };
 
+/** Per-commit center Y and divider flags so the SVG tracks sticky day rows. */
+export function layoutGraphRows(commits) {
+  let prevAt = null;
+  let yCursor = 0;
+  const rows = commits.map((c) => {
+    const band = (!c.isWIP && dateBandLabel(c.at, prevAt)) || null;
+    if (c.at) prevAt = c.at;
+    if (band) yCursor += DIVIDER_H;
+    const cy = yCursor + ROW / 2;
+    yCursor += ROW;
+    return { band, cy };
+  });
+  return { rows, height: Math.max(ROW, yCursor) };
+}
+
 export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set(), currentBranch = null }) {
   const rowsEl = root.querySelector('.rows');
   const scrollTop = rowsEl.scrollTop;
@@ -50,8 +67,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
   // Fixed canvas width so switching lanes never nudges the grid.
   const width = 136;
   const x = (lane) => COL_X0 + Math.min(lane, 4) * COL_W;
-  const y = (i) => i * ROW + ROW / 2;
-  const height = Math.max(ROW, commits.length * ROW);
+  const { rows: layout, height } = layoutGraphRows(commits);
+  const y = (i) => layout[i].cy;
   const tips = new Set(commits.filter((c) => (c.isTip || c.refs?.some((r) => !r.tag))).map((c) => c.id));
 
   let edges = '';
@@ -61,7 +78,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       const dash = c.isWIP ? ' stroke-dasharray="3 3"' : '';
       if (p == null) {
         const dim = c.lane !== selectedLane ? ' dim' : '';
-        edges += `<path class="edge${dim}" d="M${x(c.lane)} ${y(i)} V${height}" stroke="${laneColor(c.lane)}"/>`;
+        // Continue past the last painted tip so load-older doesn't look cut off.
+        edges += `<path class="edge${dim}" d="M${x(c.lane)} ${y(i)} V${height + ROW}" stroke="${laneColor(c.lane)}"/>`;
         return;
       }
       const parent = commits[p];
@@ -71,7 +89,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       if (c.lane === parent.lane) {
         d = `M${x(c.lane)} ${y(i)} V${y(p)}`;
       } else {
-        const yTurn = y(p - 1);
+        const yTurn = y(p) - ROW;
         d = `M${x(c.lane)} ${y(i)} V${yTurn} C${x(c.lane)} ${yTurn + ROW * 0.6}, ${x(parent.lane)} ${y(p) - ROW * 0.6}, ${x(parent.lane)} ${y(p)}`;
       }
       edges += `<path class="edge${dim}" d="${d}" stroke="${color}"${dash}/>`;
@@ -96,19 +114,16 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     }
   });
 
-  const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+  const svg = `<svg width="${width}" height="${height + ROW}" viewBox="0 0 ${width} ${height + ROW}" aria-hidden="true">
     <g fill="none" stroke-width="1.5" stroke-linecap="round">${edges}</g>
     <g>${nodes}</g>
   </svg>`;
 
-  let prevAt = null;
   const parts = [];
-  for (const c of commits) {
+  commits.forEach((c, i) => {
     const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
-    const band = dateBandLabel(c.at, prevAt);
-    if (c.at) prevAt = c.at;
-    // Sticky day/month dividers while scrolling (#35) — not inline chips in the subject.
-    if (band && !c.isWIP) {
+    const band = layout[i].band;
+    if (band) {
       parts.push(`<div class="date-divider" role="presentation"><span>${esc(band)}</span></div>`);
     }
     if (c.isWIP) {
@@ -119,7 +134,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
           <span class="msg">${icon(c.danger ? 'warning-circle' : 'circle-dashed', 'sm')}<span class="text">${esc(c.subject)}</span></span>
           <span></span><span></span><span></span>
         </div>`);
-      continue;
+      return;
     }
     const list = c.refs || [];
     const { shown, overflow } = visibleRefs(list, { currentBranch });
@@ -147,7 +162,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
         <span class="sha">${sha}</span>
         <span class="time">${esc(c.when)}</span>
       </div>`);
-  }
+  });
 
   rowsEl.innerHTML = svg + parts.join('');
   rowsEl.scrollTop = scrollTop;

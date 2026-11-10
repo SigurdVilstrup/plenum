@@ -58,6 +58,8 @@ const state = {
   opsByTab: new Map(),
   conflictRoot: null,
   branchesOpen: true,
+  /** Remotes fold-out — collapsed by default; locals are the active work. */
+  remotesOpen: false,
   /** Session expand/collapse for branch path folders (#21). */
   collapsedBranchFolders: new Set(),
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
@@ -317,12 +319,29 @@ function settleBoard(tabId, root, board, opts) {
   return false;
 }
 
+const OP_LABELS = {
+  checkout: 'Checking out…',
+  'branch-update': 'Updating from remote…',
+  push: 'Pushing…',
+  pull: 'Pulling…',
+  rebase: 'Rebasing…',
+  merge: 'Merging…',
+  commit: 'Committing…',
+  stash: 'Stashing…',
+  stashPop: 'Popping stash…',
+  up: 'Starting lane…',
+  down: 'Stopping lane…',
+  test: 'Running tests…',
+  remove: 'Removing lane…',
+};
+
 function beginOp(act) {
   const id = state.store.activeId;
   if (!id || state.opsByTab.has(id)) return null;
   state.opsByTab.set(id, { act });
   state.busy = true;
   if (act) setActionBusy(act, true);
+  paintOpBusy();
   return id;
 }
 
@@ -330,6 +349,29 @@ function endOp(tabId, act) {
   if (tabId) state.opsByTab.delete(tabId);
   state.busy = state.opsByTab.has(state.store.activeId);
   if (act && state.store.activeId === tabId) setActionBusy(act, false);
+  paintOpBusy();
+}
+
+function paintOpBusy() {
+  let bar = document.getElementById('op-busy');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'op-busy';
+    bar.className = 'op-busy';
+    bar.hidden = true;
+    bar.setAttribute('aria-live', 'polite');
+    (el.main || document.body).appendChild(bar);
+  }
+  const op = state.opsByTab.get(state.store.activeId);
+  if (!op?.act) {
+    bar.hidden = true;
+    bar.innerHTML = '';
+    el.body?.classList.remove('is-busy');
+    return;
+  }
+  el.body?.classList.add('is-busy');
+  bar.hidden = false;
+  bar.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>${esc(OP_LABELS[op.act] || 'Working…')}</span>`;
 }
 
 /** Pin IPC to the repo root that started the call (survives tab switches). */
@@ -457,7 +499,9 @@ function attachOlderSentinel(rowsEl) {
   foot.className = 'load-older';
   foot.dataset.loadOlder = '1';
   foot.setAttribute('aria-live', 'polite');
-  foot.textContent = state.loadingOlder ? 'Loading…' : '';
+  foot.innerHTML = state.loadingOlder
+    ? `<i class="spinner btn-spin" aria-hidden="true"></i><span>Loading older…</span>`
+    : '';
   rowsEl.appendChild(foot);
   olderObserver = new IntersectionObserver((entries) => {
     if (entries.some((e) => e.isIntersecting)) loadOlderHistory();
@@ -751,18 +795,31 @@ function paintPanel() {
     </div>`;
   }
 
-  const branches = b.branches || [];
-  const branchBody = branches.length
-    ? renderBranchListHTML(branches, b, selected)
-    : `<div class="empty-note">None</div>`;
+  const allBranches = b.branches || [];
+  const locals = allBranches.filter((br) => !br.remote);
+  const remotes = allBranches.filter((br) => br.remote);
   const vsLabel = b.teamBranch ? ` · vs ${esc(b.teamBranch)}` : '';
-  html += `<div class="section">
-    <button class="lane-row" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Ahead/behind chips compare to the protected branch${b.teamBranch ? ` (${esc(b.teamBranch)})` : ''}">
+  const localBody = locals.length
+    ? renderBranchListHTML(locals, b, selected)
+    : `<div class="empty-note">None</div>`;
+  const remoteBody = remotes.length
+    ? renderBranchListHTML(remotes, b, selected)
+    : `<div class="empty-note">None</div>`;
+  html += `<div class="section section-branches">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips — ahead/behind vs the protected branch${b.teamBranch ? ` (${esc(b.teamBranch)})` : ''}">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
-      <span class="meta">${branches.length}${vsLabel}</span>
+      <span class="meta">${locals.length}${vsLabel}</span>
     </button>
-    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${branchBody}</div>
+    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${localBody}</div>
+  </div>`;
+  html += `<div class="section section-branches">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips on origin. Check out or open as lane when you need one.">
+      <span class="mark">${iconHTML('caret-right')}</span>
+      <span class="name" style="color: var(--ink-subtle)">Remotes</span>
+      <span class="meta">${remotes.length}</span>
+    </button>
+    <div class="branch-list"${state.remotesOpen ? '' : ' hidden'}>${remoteBody}</div>
   </div>`;
 
   const foot = `<div class="panel-foot">
@@ -789,6 +846,10 @@ function paintPanel() {
   el.panel.querySelector('[data-new-lane]')?.addEventListener('click', openCreateLane);
   el.panel.querySelector('[data-branches]')?.addEventListener('click', () => {
     state.branchesOpen = !state.branchesOpen;
+    paint();
+  });
+  el.panel.querySelector('[data-remotes]')?.addEventListener('click', () => {
+    state.remotesOpen = !state.remotesOpen;
     paint();
   });
   el.panel.querySelectorAll('[data-branch-folder]').forEach((btn) => {
@@ -2887,7 +2948,7 @@ async function loadOlderHistory() {
   state.historyLimit = next;
   state.loadingOlder = true;
   const foot = el.graph.querySelector('[data-load-older]');
-  if (foot) foot.textContent = 'Loading…';
+  if (foot) foot.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>Loading older…</span>`;
   let board = null;
   try {
     board = await invoke('board.get', root, { historyLimit: next });
@@ -2905,7 +2966,7 @@ async function loadOlderHistory() {
   if (board) applyBoard(board);
   else {
     const idle = el.graph.querySelector('[data-load-older]');
-    if (idle) idle.textContent = '';
+    if (idle) idle.innerHTML = '';
   }
 }
 

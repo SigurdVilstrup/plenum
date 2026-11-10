@@ -486,10 +486,15 @@ button.env-link {
 
 .tab .close { display: none !important; }
 
-/* Keep graph column width fixed so selection doesn't nudge the grid */
+/* Keep graph column width fixed; widen When so dates stay one line */
 .window.app .graph-cols,
 .window.app .row {
-  grid-template-columns: 136px 1fr 200px 72px 60px;
+  grid-template-columns: 136px 1fr 200px 72px 72px;
+}
+.window.app .row .time {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .window.app .rows > svg {
@@ -601,6 +606,9 @@ button.env-link {
   grid-template-columns: var(--rail-w) 1fr;
   position: relative;
 }
+.window.app .main {
+  position: relative;
+}
 .window.app .body.with-changes,
 .window.app .body.with-changes.with-file-pane {
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--changes-w);
@@ -689,25 +697,85 @@ button.env-link {
   padding-left: 10px;
 }
 
-/* #35 — sticky When context while scrolling history */
+/* Thin sticky day rule — height must match DIVIDER_H in graph-live.js */
 .window.app .date-divider {
   position: sticky;
   top: 0;
   z-index: 3;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  height: 22px;
+  height: 16px;
   padding: 0 12px 0 148px;
   margin: 0;
-  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
+  border-top: 1px solid var(--hairline);
   color: var(--ink-tertiary);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   pointer-events: none;
 }
 .window.app .date-divider span {
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.window.app .section.section-branches {
+  padding: 4px 8px 2px;
+}
+.window.app .section.section-branches + .section.section-branches {
+  border-top: 0;
+  padding-top: 0;
+}
+.window.app .panel .branch-toggle {
+  min-height: 24px;
+  padding: 2px 6px 2px 8px;
+}
+.window.app .panel .branch-toggle .name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.window.app .branch-list {
+  padding: 0 0 4px 4px;
+}
+
+.window.app .op-busy {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-menu);
+  color: var(--ink-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+.window.app .op-busy[hidden] {
+  display: none !important;
+}
+.window.app .op-busy .spinner {
+  width: 12px;
+  height: 12px;
+}
+.window.app .load-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 28px;
+}
+.window.app .body.is-busy {
+  cursor: progress;
 }

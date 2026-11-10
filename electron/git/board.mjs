@@ -265,7 +265,7 @@ function dayStartMs(ms) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-/** Relative only for today/yesterday; calendar date after that. */
+/** Relative today/yesterday; compact calendar after that (single line, no wrap). */
 export function formatWhen(unix, now = Date.now()) {
   const at = Number(unix);
   if (!Number.isFinite(at) || at <= 0) return '';
@@ -278,7 +278,11 @@ export function formatWhen(unix, now = Date.now()) {
     return `${Math.floor(seconds / 3600)}h`;
   }
   if (days === 1) return 'yesterday';
-  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const d = new Date(ms);
+  const sameYear = d.getFullYear() === new Date(now).getFullYear();
+  return d.toLocaleDateString(undefined, sameYear
+    ? { day: 'numeric', month: 'short' }
+    : { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function formatWhenUtc(unix) {
@@ -376,13 +380,18 @@ export async function listBranches(cwd, lanes, team, teamRef) {
     }
   } catch { /* empty */ }
 
-  for (const b of locals.values()) {
-    if (!b.head) continue;
+  // Parallel ahead/behind vs team — sequential rev-list made checkout/update crawl on big repos.
+  await Promise.all([...locals.values()].map(async (b) => {
+    if (!b.head) return;
     try {
-      b.ahead = await countRange(`${teamRef}..${b.name}`, cwd);
-      b.behind = await countRange(`${b.name}..${teamRef}`, cwd);
+      const [ahead, behind] = await Promise.all([
+        countRange(`${teamRef}..${b.name}`, cwd),
+        countRange(`${b.name}..${teamRef}`, cwd),
+      ]);
+      b.ahead = ahead;
+      b.behind = behind;
     } catch { /* empty */ }
-  }
+  }));
 
   const remotes = [];
   try {
@@ -399,12 +408,7 @@ export async function listBranches(cwd, lanes, team, teamRef) {
         locals.get(short).hasRemote = true;
         continue;
       }
-      let ahead = 0;
-      let behind = 0;
-      try {
-        ahead = await countRange(`${teamRef}..${name}`, cwd);
-        behind = await countRange(`${name}..${teamRef}`, cwd);
-      } catch { /* empty */ }
+      // Skip vs-team counts on remote-only tips — Remotes are a separate fold-out; chips live on locals.
       remotes.push({
         name,
         short,
@@ -418,8 +422,8 @@ export async function listBranches(cwd, lanes, team, teamRef) {
         isPrimary: false,
         isTeam: short === team,
         hasRemote: true,
-        ahead,
-        behind,
+        ahead: 0,
+        behind: 0,
       });
     }
   } catch { /* empty */ }
