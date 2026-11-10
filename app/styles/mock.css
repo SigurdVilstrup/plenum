@@ -292,12 +292,19 @@ kbd {
   background: var(--traffic-max);
 }
 
-.appmark {
-  align-self: center;
-  display: flex;
+.brand {
+  display: inline-flex;
   align-items: center;
-  margin-right: 8px;
+  gap: 7px;
+  height: 28px;
   flex-shrink: 0;
+}
+
+.appmark {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
   color: var(--ink-subtle);
 }
 
@@ -308,14 +315,83 @@ kbd {
   fill: currentColor;
 }
 
+.titlebar .app-version {
+  font-size: 11px;
+  line-height: 16px;
+  height: 16px;
+  opacity: 0.65;
+}
+
+.titlebar .app-version[hidden] {
+  display: none;
+}
+
 .tabstrip {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   height: 100%;
   padding-top: 6px;
+}
+
+.tab-scroll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-tertiary);
+  padding: 0;
+  -webkit-app-region: no-drag;
+}
+
+.tab-scroll:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.tab-scroll[hidden] {
+  display: none;
+}
+
+.tab-scroll .icon.flip {
+  transform: scaleX(-1);
+}
+
+.tabstrip-scroll {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 0, #000 100%);
+}
+
+.tabstrip-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tabstrip-scroll.fade-left {
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 100%);
+}
+
+.tabstrip-scroll.fade-right {
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 16px), transparent);
+}
+
+.tabstrip-scroll.fade-left.fade-right {
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
 
 .tab {
@@ -330,7 +406,14 @@ kbd {
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   background: transparent;
   color: var(--ink-subtle);
+  flex: 0 0 auto;
   max-width: 220px;
+  white-space: nowrap;
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -341,6 +424,7 @@ a.iconbtn,
 }
 
 .tab .icon {
+  flex-shrink: 0;
   color: var(--ink-tertiary);
 }
 
@@ -403,23 +487,34 @@ a.iconbtn,
 }
 
 .tab.add {
+  flex: 0 0 auto;
   width: 30px;
+  min-width: 30px;
+  max-width: 30px;
   padding: 0;
   justify-content: center;
-  color: var(--ink-tertiary);
+  align-self: center;
+  position: relative;
+  z-index: 2;
+  color: var(--ink-subtle);
+  background: var(--surface-1);
 }
 
 .tab.add:hover {
   color: var(--ink);
+  background: var(--surface-3);
 }
 
 .title-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 14px;
   align-self: center;
-  flex-shrink: 0;
-  padding-bottom: 0;
+  flex: 0 0 auto;
+  padding: 0 14px 0 12px;
+  position: relative;
+  z-index: 4;
+  background: var(--surface-1);
 }
 
 .live {
@@ -480,7 +575,8 @@ a.iconbtn,
   background: var(--surface-2);
   color: var(--ink-subtle);
   font-size: 12px;
-  margin-right: 6px;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .searchbtn:hover {
@@ -489,8 +585,23 @@ a.iconbtn,
 }
 
 .searchbtn span {
-  min-width: 140px;
+  min-width: 12ch;
   text-align: left;
+  white-space: nowrap;
+}
+
+.searchbtn .icon,
+.searchbtn kbd {
+  flex-shrink: 0;
+}
+
+.searchbtn.compact {
+  gap: 5px;
+  padding: 0 8px;
+}
+
+.searchbtn.compact span {
+  display: none;
 }
 
 /* Body: lanes panel + graph (+ changes explorer) */
