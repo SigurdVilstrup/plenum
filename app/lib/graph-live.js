@@ -129,10 +129,18 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     if (c.isWIP) {
       const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
       const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
+      const n = Number(c.dirtyCount) || 0;
+      const count = `${n} file${n === 1 ? '' : 's'}`;
+      const hint = c.danger ? 'on primary' : 'Review';
       parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Show uncommitted changes">
           <span></span>
-          <span class="msg">${icon(c.danger ? 'warning-circle' : 'circle-dashed', 'sm')}<span class="text">${esc(c.subject)}</span></span>
-          <span></span><span></span><span></span>
+          <span class="msg">
+            <span class="wip-label">Working tree</span>
+            <span class="wip-count">${esc(count)}</span>
+            <span class="wip-hint">${esc(hint)}</span>
+          </span>
+          <span></span><span></span>
+          <span class="time">now</span>
         </div>`);
       return;
     }

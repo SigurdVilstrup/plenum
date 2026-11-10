@@ -1580,23 +1580,17 @@ a.navitem.back {
 }
 
 .row.wip {
-  color: var(--warning);
   cursor: pointer;
 }
 
 .row.wip:hover:not(.active-commit),
 .row.wip.selected-lane:hover:not(.active-commit) {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface-2));
 }
 
 .row.wip:focus-visible {
   outline: 2px solid var(--warning);
   outline-offset: -2px;
-}
-
-.row.wip .msg .text {
-  font-family: var(--mono);
-  font-size: 11px;
 }
 
 .row.wip .open {
@@ -1985,8 +1979,9 @@ a.navitem {
   color: var(--primary-hover);
 }
 
-.row.wip.danger {
-  color: var(--danger);
+.row.wip.danger:hover:not(.active-commit),
+.row.wip.danger.selected-lane:hover:not(.active-commit) {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface-2));
 }
 
 .hint-text {

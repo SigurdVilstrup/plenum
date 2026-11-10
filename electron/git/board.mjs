@@ -550,7 +550,8 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
       wips.push({
         id: `wip-${lane.index}`,
         lane: lane.index,
-        subject: `${lane.dirty} uncommitted`,
+        subject: 'Working tree',
+        dirtyCount: lane.dirty,
         author: '',
         kind: 'human',
         tool: null,

@@ -526,6 +526,7 @@ button.env-link {
 
 .window.app .rows > svg {
   width: 136px !important;
+  z-index: 1; /* above row washes so edges stay continuous */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -732,7 +733,7 @@ button.env-link {
   background: var(--surface-3);
 }
 
-/* Thin sticky day rule — height must match DIVIDER_H in graph-live.js */
+/* Sticky day rule — transparent over the graph so SVG edges stay continuous */
 .window.app .date-divider {
   position: sticky;
   top: 0;
@@ -744,18 +745,74 @@ button.env-link {
   height: 16px;
   padding: 0 16px 0 148px;
   margin: 0;
-  background: var(--surface-1);
-  border-top: 1px solid var(--hairline);
+  background: linear-gradient(
+    to right,
+    transparent 0,
+    transparent 148px,
+    var(--surface-1) 148px
+  );
+  border-top: none;
   color: var(--ink-tertiary);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
   pointer-events: none;
 }
+.window.app .date-divider::before {
+  content: '';
+  position: absolute;
+  left: 148px;
+  right: 0;
+  top: 0;
+  border-top: 1px solid var(--hairline);
+}
 .window.app .date-divider span {
+  position: relative;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
+  padding-left: 8px;
+  background: var(--surface-1);
+}
+
+/* Working tree — strip, not a fake commit */
+.window.app .row.wip {
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+}
+.window.app .row.wip.danger {
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.window.app .row.wip .msg {
+  gap: 8px;
+}
+.window.app .row.wip .wip-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.window.app .row.wip .wip-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-subtle);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+}
+.window.app .row.wip .wip-hint {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--primary-hover);
+}
+.window.app .row.wip.danger .wip-hint {
+  color: var(--danger);
+}
+.window.app .row.wip .time {
+  color: var(--ink-tertiary);
+  font-size: 11px;
 }
 
 .window.app .section.section-branches {
