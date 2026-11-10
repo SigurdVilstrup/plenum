@@ -266,29 +266,17 @@ async function shaSet(args, cwd) {
   }
 }
 
-function dayStartMs(ms) {
-  const d = new Date(ms);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-/** Relative today/yesterday; compact calendar after that (single line, no wrap). */
+/** Absolute local date + time to the minute, one line (e.g. `9 Nov 14:22`). */
 export function formatWhen(unix, now = Date.now()) {
   const at = Number(unix);
   if (!Number.isFinite(at) || at <= 0) return '';
-  const ms = at * 1000;
-  const days = Math.round((dayStartMs(now) - dayStartMs(ms)) / 86400000);
-  if (days <= 0) {
-    const seconds = Math.max(0, Math.floor(now / 1000) - at);
-    if (seconds < 45) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-    return `${Math.floor(seconds / 3600)}h`;
-  }
-  if (days === 1) return 'yesterday';
-  const d = new Date(ms);
+  const d = new Date(at * 1000);
   const sameYear = d.getFullYear() === new Date(now).getFullYear();
-  return d.toLocaleDateString(undefined, sameYear
+  const date = d.toLocaleDateString(undefined, sameYear
     ? { day: 'numeric', month: 'short' }
     : { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${date} ${time}`;
 }
 
 export function formatWhenUtc(unix) {

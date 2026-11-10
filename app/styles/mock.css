@@ -1397,8 +1397,8 @@ a.navitem.back {
 
 .graph-cols {
   display: grid;
-  grid-template-columns: 136px 1fr 200px 72px 60px;
-  gap: 12px;
+  grid-template-columns: 136px 1fr 40px 64px 110px;
+  gap: 10px;
   padding: 0 16px 0 12px;
   height: 28px;
   align-items: center;
@@ -1436,8 +1436,8 @@ a.navitem.back {
 
 .row {
   display: grid;
-  grid-template-columns: 136px 1fr 200px 72px 60px;
-  gap: 12px;
+  grid-template-columns: 136px 1fr 40px 64px 110px;
+  gap: 10px;
   align-items: center;
   height: var(--row-h);
   padding: 0 16px 0 12px;

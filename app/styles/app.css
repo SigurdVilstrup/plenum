@@ -504,7 +504,7 @@ button.env-link {
 /* Graph fixed; Commit slightly tighter; Author = icons; When roomy for one-line dates */
 .window.app .graph-cols,
 .window.app .row {
-  grid-template-columns: 136px minmax(0, 1fr) 40px 64px 80px;
+  grid-template-columns: 136px minmax(0, 1fr) 40px 64px 110px;
   gap: 10px;
 }
 .window.app .row .time {
@@ -731,48 +731,6 @@ button.env-link {
 }
 .window.app .panel .branch-row.current {
   background: var(--surface-3);
-}
-
-/* Sticky day rule — transparent over the graph so SVG edges stay continuous */
-.window.app .date-divider {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  height: 16px;
-  padding: 0 16px 0 148px;
-  margin: 0;
-  background: linear-gradient(
-    to right,
-    transparent 0,
-    transparent 148px,
-    var(--surface-1) 148px
-  );
-  border-top: none;
-  color: var(--ink-tertiary);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-}
-.window.app .date-divider::before {
-  content: '';
-  position: absolute;
-  left: 148px;
-  right: 0;
-  top: 0;
-  border-top: 1px solid var(--hairline);
-}
-.window.app .date-divider span {
-  position: relative;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
-  padding-left: 8px;
-  background: var(--surface-1);
 }
 
 /* Working tree — strip, not a fake commit */

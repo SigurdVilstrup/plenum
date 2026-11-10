@@ -1,12 +1,9 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
 import { authorIcon, authorLabel } from './authorship-pill.js';
-import { dateBandLabel } from './date-band.js';
 import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
-/** Must match `.date-divider` height in CSS — SVG y accounts for these gaps. */
-export const DIVIDER_H = 16;
 const COL_X0 = 14;
 const COL_W = 24;
 const laneColor = (c) => `var(--lane-${c})`;
@@ -45,19 +42,10 @@ const refPill = (r, { running = false, current = false } = {}) => {
   return `<span class="${cls}">${icon(ic)}${esc(r.name)}${dot}</span>`;
 };
 
-/** Per-commit center Y and divider flags so the SVG tracks sticky day rows. */
+/** Uniform row centers — no day-divider gaps. */
 export function layoutGraphRows(commits) {
-  let prevAt = null;
-  let yCursor = 0;
-  const rows = commits.map((c) => {
-    const band = (!c.isWIP && dateBandLabel(c.at, prevAt)) || null;
-    if (c.at) prevAt = c.at;
-    if (band) yCursor += DIVIDER_H;
-    const cy = yCursor + ROW / 2;
-    yCursor += ROW;
-    return { band, cy };
-  });
-  return { rows, height: Math.max(ROW, yCursor) };
+  const rows = commits.map((_, i) => ({ cy: i * ROW + ROW / 2 }));
+  return { rows, height: Math.max(ROW, commits.length * ROW) };
 }
 
 export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set(), currentBranch = null }) {
@@ -120,12 +108,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
   </svg>`;
 
   const parts = [];
-  commits.forEach((c, i) => {
+  commits.forEach((c) => {
     const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
-    const band = layout[i].band;
-    if (band) {
-      parts.push(`<div class="date-divider" role="presentation"><span>${esc(band)}</span></div>`);
-    }
     if (c.isWIP) {
       const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
       const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
