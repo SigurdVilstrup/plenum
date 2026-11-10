@@ -653,7 +653,7 @@ a.iconbtn,
   font-size: 11px;
 }
 
-.fx-file .stat {
+.stat {
   flex-shrink: 0;
   display: inline-flex;
   gap: 4px;
@@ -662,8 +662,14 @@ a.iconbtn,
   font-variant-numeric: tabular-nums;
 }
 
-.fx-file .stat .add { color: var(--success); }
-.fx-file .stat .del { color: var(--danger); }
+.stat .add { color: var(--success); }
+.stat .del { color: var(--danger); }
+
+.changes-head .stat {
+  font-size: 11px;
+  gap: 6px;
+  font-weight: 500;
+}
 
 .fx-file .mark {
   flex-shrink: 0;

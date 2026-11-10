@@ -1659,11 +1659,37 @@ function nestDirty(files) {
   return root;
 }
 
+function sumStats(files) {
+  let added = 0;
+  let deleted = 0;
+  for (const f of files || []) {
+    added += Number(f.added) || 0;
+    deleted += Number(f.deleted) || 0;
+  }
+  return { added, deleted };
+}
+
 function formatStat(f) {
   const a = Number(f.added) || 0;
   const d = Number(f.deleted) || 0;
   if (!a && !d) return '';
-  return `<span class="stat">${a ? `<span class="add">+${a}</span>` : ''}${d ? `<span class="del">−${d}</span>` : ''}</span>`;
+  const fmt = (n) => n.toLocaleString('en-US');
+  return `<span class="stat">${a ? `<span class="add">+${fmt(a)}</span>` : ''}${d ? `<span class="del">−${fmt(d)}</span>` : ''}</span>`;
+}
+
+function sumTreeStats(node) {
+  let added = 0;
+  let deleted = 0;
+  for (const f of node.files) {
+    added += Number(f.added) || 0;
+    deleted += Number(f.deleted) || 0;
+  }
+  for (const child of node.dirs.values()) {
+    const s = sumTreeStats(child);
+    added += s.added;
+    deleted += s.deleted;
+  }
+  return { added, deleted };
 }
 
 function renderDirtyTree(node, depth = 0, prefix = '') {
@@ -1673,7 +1699,7 @@ function renderDirtyTree(node, depth = 0, prefix = '') {
     const key = prefix ? `${prefix}/${name}` : name;
     const collapsed = state.collapsedDirs.has(key);
     html += `<button class="fx-folder${collapsed ? ' collapsed' : ''}" type="button" style="${pad}" data-dir="${esc(key)}">
-      ${iconHTML('caret-down', 'sm caret')}${iconHTML('folder-simple', 'sm')}<span class="name">${esc(name)}</span>
+      ${iconHTML('caret-down', 'sm caret')}${iconHTML('folder-simple', 'sm')}<span class="name">${esc(name)}</span>${collapsed ? formatStat(sumTreeStats(child)) : ''}
     </button>`;
     if (!collapsed) html += renderDirtyTree(child, depth + 1, key);
   }
@@ -1920,9 +1946,12 @@ async function paintChanges() {
     }
     const files = lane.dirtyFiles || [];
     const tree = nestDirty(files);
+    const totals = sumStats(files);
+    const fileLabel = `${files.length} file${files.length === 1 ? '' : 's'}`;
     el.changes.innerHTML = `
       <div class="changes-head">
-        <div class="title">Uncommitted<small>${esc(lane.name)} · ${files.length}</small></div>
+        <div class="title">Uncommitted<small>${esc(lane.name)} · ${fileLabel}</small></div>
+        ${formatStat(totals)}
         <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
       </div>
       <div class="changes-tree" role="tree">
@@ -1965,10 +1994,13 @@ async function paintChanges() {
     const renderCommit = (data) => {
       const files = data.files || [];
       const tree = nestDirty(files);
+      const totals = sumStats(files);
+      const fileLabel = `${files.length} file${files.length === 1 ? '' : 's'}`;
       const rootPath = state.board?.root || '';
       el.changes.innerHTML = `
         <div class="changes-head">
-          <div class="title">${esc(data.subject || 'Commit')}<small>${esc(data.short)} · ${files.length} · ${esc(data.author || '')}${data.authoredAtUtc ? ` · ${esc(data.authoredAtUtc)}` : ''}</small></div>
+          <div class="title">${esc(data.subject || 'Commit')}<small>${esc(data.short)} · ${fileLabel} · ${esc(data.author || '')}${data.authoredAtUtc ? ` · ${esc(data.authoredAtUtc)}` : ''}</small></div>
+          ${formatStat(totals)}
           <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
         </div>
         <div class="changes-tree" role="tree">
