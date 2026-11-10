@@ -12,6 +12,7 @@ import {
   applyChromeToEntry,
 } from './lib/warm-tabs.js';
 import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-pane.js';
+import { groupBranchesByPrefix } from './lib/branch-folders.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -335,10 +336,10 @@ const OP_LABELS = {
   remove: 'Removing lane…',
 };
 
-function beginOp(act) {
+function beginOp(act, detail) {
   const id = state.store.activeId;
   if (!id || state.opsByTab.has(id)) return null;
-  state.opsByTab.set(id, { act });
+  state.opsByTab.set(id, { act, detail: detail || '' });
   state.busy = true;
   if (act) setActionBusy(act, true);
   paintOpBusy();
@@ -353,6 +354,7 @@ function endOp(tabId, act) {
 }
 
 function paintOpBusy() {
+  const host = el.graph || el.main || document.body;
   let bar = document.getElementById('op-busy');
   if (!bar) {
     bar = document.createElement('div');
@@ -360,7 +362,9 @@ function paintOpBusy() {
     bar.className = 'op-busy';
     bar.hidden = true;
     bar.setAttribute('aria-live', 'polite');
-    (el.main || document.body).appendChild(bar);
+    host.appendChild(bar);
+  } else if (bar.parentElement !== host) {
+    host.appendChild(bar);
   }
   const op = state.opsByTab.get(state.store.activeId);
   if (!op?.act) {
@@ -371,7 +375,9 @@ function paintOpBusy() {
   }
   el.body?.classList.add('is-busy');
   bar.hidden = false;
-  bar.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>${esc(OP_LABELS[op.act] || 'Working…')}</span>`;
+  const label = OP_LABELS[op.act] || 'Working…';
+  const detail = op.detail ? `<span class="detail">${esc(op.detail)}</span>` : '';
+  bar.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>${esc(label)}</span>${detail}`;
 }
 
 /** Pin IPC to the repo root that started the call (survives tab switches). */
@@ -874,32 +880,6 @@ function paintPanel() {
   });
 }
 
-/** Group `a/b/c` into expandable folders when a prefix has 2+ branches (#21). */
-function groupBranchesByPrefix(branches) {
-  const counts = new Map();
-  for (const br of branches) {
-    const short = br.short || String(br.name || '').replace(/^origin\//, '');
-    const i = short.indexOf('/');
-    if (i > 0) counts.set(short.slice(0, i), (counts.get(short.slice(0, i)) || 0) + 1);
-  }
-  const singles = [];
-  const folders = new Map();
-  for (const br of branches) {
-    const short = br.short || String(br.name || '').replace(/^origin\//, '');
-    const i = short.indexOf('/');
-    if (i > 0) {
-      const folder = short.slice(0, i);
-      if ((counts.get(folder) || 0) >= 2) {
-        if (!folders.has(folder)) folders.set(folder, []);
-        folders.get(folder).push({ br, label: short.slice(i + 1) });
-        continue;
-      }
-    }
-    singles.push({ br, label: br.name });
-  }
-  return { singles, folders };
-}
-
 function branchRowHTML(br, label, board, selectedLane) {
   const where = br.isPrimary
     ? 'primary'
@@ -913,18 +893,21 @@ function branchRowHTML(br, label, board, selectedLane) {
   if (br.ahead) rel.push(`${br.ahead}↑`);
   const relTxt = rel.length ? rel.join(' ') : (br.isTeam ? 'team' : '');
   const vs = board.teamBranch || 'team';
+  const current = laneByIndex(selectedLane);
+  const isCurrent = (br.hasLane && br.laneIndex === selectedLane)
+    || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
   const title = [
     br.name,
-    where,
-    'Click to check out in the selected worktree · right-click for more',
+    isCurrent ? 'checked out here' : where,
+    isCurrent ? '' : 'Click to check out in the selected worktree · right-click for more',
     br.upstream ? `tracks ${br.upstream}` : '',
     br.behind || br.ahead ? `vs ${vs}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
   ].filter(Boolean).join(' · ');
-  const current = laneByIndex(selectedLane);
-  const isSelected = (br.hasLane && br.laneIndex === selectedLane)
-    || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
-  return `<button class="lane-row branch-row${isSelected ? ' selected' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}">
-    ${iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm')}
+  const mark = isCurrent
+    ? iconHTML('check-circle', 'sm current')
+    : iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
+  return `<button class="lane-row branch-row${isCurrent ? ' selected current' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}">
+    ${mark}
     <span class="name">${esc(label)}</span>
     <span class="meta ${br.behind >= 3 ? 'bad' : br.behind ? 'warn' : ''}"${rel.length ? ` title="vs ${esc(vs)}"` : ''}>${esc(relTxt)}</span>
   </button>`;
@@ -932,18 +915,24 @@ function branchRowHTML(br, label, board, selectedLane) {
 
 function renderBranchListHTML(branches, board, selectedLane) {
   const { singles, folders } = groupBranchesByPrefix(branches);
-  const parts = singles.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane));
-  const keys = [...folders.keys()].sort((a, b) => a.localeCompare(b));
-  for (const key of keys) {
-    const items = folders.get(key);
-    const open = !state.collapsedBranchFolders.has(key);
-    parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(key)}" aria-expanded="${open}">
+  const entries = [
+    ...singles.map((s) => ({ kind: 'single', sort: s.label, ...s })),
+    ...[...folders.keys()].map((key) => ({ kind: 'folder', sort: key, key, items: folders.get(key) })),
+  ].sort((a, b) => a.sort.localeCompare(b.sort));
+  const parts = [];
+  for (const entry of entries) {
+    if (entry.kind === 'single') {
+      parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane));
+      continue;
+    }
+    const open = !state.collapsedBranchFolders.has(entry.key);
+    parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(entry.key)}" aria-expanded="${open}">
       <span class="mark">${iconHTML('caret-right', 'sm')}</span>
-      <span class="name">${esc(key)}/</span>
-      <span class="meta">${items.length}</span>
+      <span class="name">${esc(entry.key)}/</span>
+      <span class="meta">${entry.items.length}</span>
     </button>`);
     if (open) {
-      parts.push(`<div class="branch-folder-kids">${items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane)).join('')}</div>`);
+      parts.push(`<div class="branch-folder-kids">${entry.items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane)).join('')}</div>`);
     }
   }
   return parts.join('');
@@ -1022,7 +1011,7 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
-        <div><h1>${esc(l.name)}</h1><div class="path">${esc(l.displayPath || l.path)}, primary checkout</div></div>
+        <div><h1>${esc(l.name)}</h1><div class="path">Checked out · ${esc(l.displayPath || l.path)} · primary</div></div>
       </div>
       <div class="facts">
         ${dirty
@@ -1056,7 +1045,7 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML('tree-structure')}
-        <div><h1>${esc(l.name)}</h1><div class="path">${esc(l.folder || l.displayPath || l.path)}</div></div>
+        <div><h1>${esc(l.name)}</h1><div class="path">Checked out · ${esc(l.folder || l.displayPath || l.path)}</div></div>
       </div>
       <div class="facts">${behind}${dirty}${pill}</div>
       <div class="actions">
@@ -1503,7 +1492,7 @@ function dismissCtxMenus() {
 async function updateBranchRow(name) {
   const br = branchByName(name);
   if (!br) return;
-  const tabId = beginOp('branch-update');
+  const tabId = beginOp('branch-update', br.short || br.name);
   if (!tabId) return;
   const root = state.board?.root;
   try {
@@ -1541,7 +1530,7 @@ async function checkoutBranchRow(name) {
       return openLaneFromBranch(br.name);
     }
   }
-  const tabId = beginOp('checkout');
+  const tabId = beginOp('checkout', br.short || br.name);
   if (!tabId) return;
   const root = state.board?.root;
   try {

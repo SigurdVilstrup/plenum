@@ -486,15 +486,27 @@ button.env-link {
 
 .tab .close { display: none !important; }
 
-/* Keep graph column width fixed; widen When so dates stay one line */
+/* Graph fixed; Commit slightly tighter; Author = icons; When roomy for one-line dates */
 .window.app .graph-cols,
 .window.app .row {
-  grid-template-columns: 136px 1fr 200px 72px 72px;
+  grid-template-columns: 136px minmax(0, 1fr) 40px 64px 80px;
+  gap: 10px;
 }
 .window.app .row .time {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
+}
+.window.app .row .who {
+  justify-content: center;
+  gap: 4px;
+}
+.window.app .row .who .icon {
+  width: 16px;
+  height: 16px;
+}
+.window.app .row .msg {
+  max-width: 52ch;
 }
 
 .window.app .rows > svg {
@@ -684,8 +696,9 @@ button.env-link {
   color: var(--ink-subtle);
 }
 .window.app .panel .branch-folder .name {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 .window.app .panel .branch-folder[aria-expanded="true"] .mark {
   transform: rotate(90deg);
@@ -696,6 +709,13 @@ button.env-link {
   gap: 1px;
   padding-left: 10px;
 }
+.window.app .panel .branch-row.current .icon.current,
+.window.app .panel .branch-row.current .name {
+  color: var(--ink);
+}
+.window.app .panel .branch-row.current {
+  background: var(--surface-3);
+}
 
 /* Thin sticky day rule — height must match DIVIDER_H in graph-live.js */
 .window.app .date-divider {
@@ -705,8 +725,9 @@ button.env-link {
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   height: 16px;
-  padding: 0 12px 0 148px;
+  padding: 0 16px 0 148px;
   margin: 0;
   background: var(--surface-1);
   border-top: 1px solid var(--hairline);
@@ -743,11 +764,17 @@ button.env-link {
   padding: 0 0 4px 4px;
 }
 
+.window.app .graph {
+  position: relative;
+}
 .window.app .op-busy {
   position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 36px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 24px);
   z-index: 20;
   display: inline-flex;
   align-items: center;
@@ -769,12 +796,23 @@ button.env-link {
   width: 12px;
   height: 12px;
 }
+.window.app .op-busy .detail {
+  color: var(--ink);
+  font-weight: 500;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .window.app .load-older {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 28px;
+  /* Center under Commit/Author/SHA/When, not under the SVG gutter */
+  padding-left: 146px;
+  padding-right: 16px;
 }
 .window.app .body.is-busy {
   cursor: progress;

@@ -1,6 +1,6 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
-import { authorshipPillHTML, authorIcon, authorLabel } from './authorship-pill.js';
+import { authorIcon, authorLabel } from './authorship-pill.js';
 import { dateBandLabel } from './date-band.js';
 import { visibleRefs } from './graph-refs.js';
 
@@ -146,8 +146,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       : '');
     const tip = tips.has(c.id);
     const kind = authorLabel[c.kind] ? c.kind : 'human';
-    const pill = tip ? authorshipPillHTML(kind, c.tool, icon) : '';
-    const who = `${icon(authorIcon[kind], kind)}<span>${esc(c.author)}</span>${pill}`;
+    const whoTitle = [c.author, tip && (c.tool || authorLabel[kind])].filter(Boolean).join(' · ');
+    const who = icon(authorIcon[kind], kind);
     const sha = esc(String(c.id || '').slice(0, 7));
     const on = selectedCommit === c.id ? ' active-commit' : '';
     const unpushed = c.unpushed ? ' unpushed' : '';
@@ -158,7 +158,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="${esc(whenTitle)}">
         <span></span>
         <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
-        <span class="who">${who}</span>
+        <span class="who" title="${esc(whoTitle)}">${who}</span>
         <span class="sha">${sha}</span>
         <span class="time">${esc(c.when)}</span>
       </div>`);
