@@ -17,6 +17,13 @@ test('setPrefs merges and persists', () => {
   assert.equal(p.theme, 'dark');
   assert.equal(p.zoom, 1.1);
   assert.equal(p.fontPack, 'system');
+  assert.equal(p.gravatar, true);
+});
+
+test('setPrefs toggles gravatar', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.equal(setPrefs({ gravatar: false }, dir).gravatar, false);
+  assert.equal(setPrefs({ gravatar: true }, dir).gravatar, true);
 });
 
 test('setPrefs clamps warmTabTtlMs', () => {

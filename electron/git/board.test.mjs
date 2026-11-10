@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadBoard, classifyAuthorship, parseDirty, parseNumstat, loadCommitChanges } from './board.mjs';
+import { loadBoard, classifyAuthorship, parseDirty, parseNumstat, loadCommitChanges, emailAvatarHash } from './board.mjs';
 
 function git(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
@@ -14,6 +14,13 @@ test('classify assisted trailer', () => {
   const a = classifyAuthorship('Sigurd', 's@x.com', 'Co-authored-by: Claude <c@x.com>');
   assert.equal(a.kind, 'assisted');
   assert.equal(a.tool, 'Claude');
+});
+
+test('emailAvatarHash normalizes and hashes', () => {
+  assert.equal(emailAvatarHash(''), '');
+  assert.equal(emailAvatarHash('  Ada@Example.COM '), emailAvatarHash('ada@example.com'));
+  assert.match(emailAvatarHash('ada@example.com'), /^[a-f0-9]{64}$/);
+  assert.notEqual(emailAvatarHash('ada@example.com'), emailAvatarHash('bob@example.com'));
 });
 
 test('parseDirty: paths and renames', () => {
@@ -66,6 +73,9 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
     assert.ok(board.commits.some((c) => c.isWIP && c.lane === 1));
     assert.equal(board.commits[0].isWIP, true);
     assert.equal(board.commits[0].lane, 1);
+    const authored = board.commits.find((c) => !c.isWIP && c.email);
+    assert.ok(authored);
+    assert.equal(authored.avatarHash, emailAvatarHash(authored.email));
     assert.equal(lane.runnable, false);
     assert.equal(board.lanes[0].runnable, false);
   } finally {

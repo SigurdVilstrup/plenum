@@ -141,6 +141,7 @@ async function setPref(partial, render = true) {
   // Debounce so rapid field edits coalesce to one acknowledgment.
   clearTimeout(setPref._toast);
   setPref._toast = setTimeout(() => toast('Saved', 'ok'), 320);
+  if ('gravatar' in partial) paint();
   if (!render) return;
   const top = el.settingsBody.scrollTop;
   renderSettings();
@@ -516,6 +517,7 @@ function paint() {
     selectedCommit,
     runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
     currentBranch: laneByIndex(state.selectedLane)?.branch || null,
+    gravatar: state.prefs.gravatar !== false,
   });
   bindWipCommitFields();
   attachOlderSentinel(el.graph.querySelector('.rows'));
@@ -871,7 +873,7 @@ function paintPanel() {
   html += `<div class="section">
     <div class="section-head">
       <span title="A lane is a git worktree on its own branch.">Lanes <span class="count">${lanes.length}</span></span>
-      <button class="iconbtn" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus')}</button>
+      <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
     </div>
     ${rows}
   </div>`;
@@ -1151,7 +1153,7 @@ function paintHeader() {
     const pill = authorshipPillHTML(l.authorship, l.tool, iconHTML);
     const remove = l.readiness === 'safe'
       ? `<button class="btn ghost-danger" type="button" data-act="remove">${iconHTML('x', 'sm')}Remove lane</button>`
-      : '';
+      : `<button class="btn ghost-danger" type="button" data-act="remove" title="Not safe — opens a guided remove">${iconHTML('warning-circle', 'sm')}Remove lane !</button>`;
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML('tree-structure')}
@@ -1715,7 +1717,8 @@ function openLaneCtxMenu(x, y, lane) {
     if (lane.running) add('Stop', () => handleAction('down', lane));
     else if (lane.runnable && lane.readiness !== 'safe') add('Run', () => handleAction('up', lane));
     if (lane.ahead && !lane.dirty) add('Merge into main…', () => handleAction('merge', lane));
-    if (lane.readiness === 'safe') add('Remove lane…', () => handleAction('remove', lane), true);
+    const removeLabel = lane.readiness === 'safe' ? 'Remove lane…' : 'Remove lane… !';
+    add(removeLabel, () => handleAction('remove', lane), true);
   }
   attachCtxMenu(menu);
 }
@@ -1889,12 +1892,39 @@ function openCreateLane() {
   nameInput.focus();
 }
 
+function laneRemoveRisks(lane) {
+  const team = state.board?.teamBranch || 'main';
+  const risks = [];
+  if (lane.dirty) {
+    risks.push(`${lane.dirty} uncommitted file${lane.dirty === 1 ? '' : 's'} will be discarded from disk`);
+  }
+  if (lane.readiness === 'unmerged') {
+    risks.push(`Not merged into ${team} — the worktree goes away; branch ${lane.name} is kept`);
+  } else if (lane.readiness === 'working' && lane.ahead > 0) {
+    risks.push(`${lane.ahead} commit${lane.ahead === 1 ? '' : 's'} ahead of ${team} stay on the branch`);
+  }
+  if (lane.running) risks.push('Running process will be stopped');
+  if (!risks.length && lane.readiness !== 'safe') {
+    risks.push('Lane is not marked safe to remove');
+  }
+  return risks;
+}
+
 function openRemoveSheet(lane) {
+  const safe = lane.readiness === 'safe';
+  const risks = laneRemoveRisks(lane);
+  const riskList = risks.map((r) => `
+    <div class="list-row compact">
+      ${iconHTML('warning-circle')}
+      <div class="name">${esc(r)}</div>
+    </div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="remove-title">
-      <div class="eyebrow">${iconHTML('check-circle', 'sm')}Safe to remove</div>
+      <div class="eyebrow${safe ? '' : ' warn'}">${iconHTML(safe ? 'check-circle' : 'warning-circle', 'sm')}${safe ? 'Safe to remove' : 'Not safe — remove anyway'}</div>
       <h1 id="remove-title">Remove lane ${esc(lane.name)}</h1>
-      <p>The branch is merged into ${esc(state.board.teamBranch)} and the tree is clean. This removes the folder only.</p>
+      <p>${safe
+        ? `The branch is merged into ${esc(state.board.teamBranch)} and the tree is clean. This removes the folder only.`
+        : `This lane is not safe to remove yet. You can still delete the worktree folder; the branch ref stays.`}</p>
       <div class="list">
         <div class="list-row compact">
           ${iconHTML('folder-simple')}
@@ -1906,27 +1936,65 @@ function openRemoveSheet(lane) {
           <div class="name">Branch<small class="mono">${esc(lane.name)}</small></div>
           <div class="detail">Kept</div>
         </div>
+        ${riskList}
       </div>
-      <div class="check">
-        ${iconHTML('shield-check')}
-        <div>One lane at a time. Plenum never removes a lane with uncommitted work or unmerged commits.</div>
-      </div>
+      ${safe
+        ? `<div class="check">${iconHTML('shield-check')}<div>One lane at a time. Prefer merge + clean before remove when you can.</div></div>`
+        : `<label class="check"><input type="checkbox" name="confirm" /> I understand — remove the folder anyway</label>`}
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn danger" type="submit">${iconHTML('x', 'sm')}Remove folder</button>
+        <button class="btn danger" type="submit"${safe ? '' : ' disabled'}>${iconHTML('x', 'sm')}${safe ? 'Remove folder' : 'Remove anyway'}</button>
       </div>
     </form>`);
-  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+  const form = el.sheetLayer.querySelector('form');
+  const submit = form.querySelector('[type=submit]');
+  const confirm = form.querySelector('[name=confirm]');
+  confirm?.addEventListener('change', () => {
+    submit.disabled = !confirm.checked;
+  });
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!safe && !confirm?.checked) return;
     const tabId = state.store.activeId;
     const root = state.board?.root;
+    const force = !safe;
+    submit.disabled = true;
+    closeSheet();
+    const step = (title, path = '') => setLoading(true, title, path, { immediate: true });
+    step('Removing lane…', lane.name);
+    const opTab = beginOp('remove', lane.name);
     try {
-      const board = await invoke('lane.remove', ...pin(lane.index));
-      closeSheet();
+      if (lane.running) {
+        step('Stopping lane…', lane.name);
+        if (opTab) {
+          state.opsByTab.set(opTab, { act: 'remove', detail: `Stopping ${lane.name}` });
+          paintOpBusy();
+        }
+        await invoke('lane.down', ...pin(lane.index)).catch(() => {});
+      }
+      step(force ? 'Force-removing worktree…' : 'Removing worktree…', lane.folder || lane.path);
+      if (opTab) {
+        state.opsByTab.set(opTab, {
+          act: 'remove',
+          detail: force ? `Force-removing ${lane.name}` : lane.name,
+        });
+        paintOpBusy();
+      }
+      const board = await invoke(
+        'lane.remove',
+        ...pin(...(force ? [lane.index, { force: true }] : [lane.index])),
+      );
+      step('Refreshing board…');
+      setLoading(false);
       if (settleBoard(tabId, root, board, { selectLane: 0 })) {
         toast(`Removed worktree for ${lane.name}`, 'ok');
       }
-    } catch { /* toasted */ }
+    } catch {
+      setLoading(false);
+      paint();
+    } finally {
+      endOp(opTab, 'remove');
+    }
   });
 }
 
@@ -2592,11 +2660,12 @@ const SETTINGS_PAGES = {
   },
   appearance: () => {
     const p = state.prefs;
-    return `<h1>Appearance</h1><p class="lede">Theme, size, and type. Lives on this Mac only.</p>
+    return `<h1>Appearance</h1><p class="lede">Theme, size, type, and committer avatars. Lives on this Mac only.</p>
       <div class="list">
         ${settingsRow('sun', 'Theme', '', 'System tracks macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Theme' }), 'System follows light/dark from macOS. Light and Dark stay put.')}
         ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole Plenum window. 100% is the design size.')}
         ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and the window should change immediately.')}
+        ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Requests a face from Gravatar using a hash of the commit email (no account). Off keeps letter marks only.')}
       </div>`;
   },
   accounts: () => {
@@ -2707,7 +2776,7 @@ const SETTINGS_PAGES = {
         <div class="list">
           ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Allow agents to run the repo’s own start/stop/test commands with lane ports.')}
           ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Allow agents to create worktrees from the team branch.')}
-          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Same safety guard as the app: refuse when work would be lost.')}
+          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Safe removes stay one-click; unsafe ones ask you to confirm before force-removing the folder.')}
           ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team decision — keep this on Ask until you trust it.')}
         </div>
       </div>`;

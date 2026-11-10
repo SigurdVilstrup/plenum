@@ -143,22 +143,25 @@ function runSetup(command, cwd, env) {
   });
 }
 
-export async function removeLane(root, laneIndex) {
+export async function removeLane(root, laneIndex, { force = false } = {}) {
   const board = await loadBoard(root);
   const lane = board.lanes.find((l) => l.index === laneIndex);
   if (!lane) throw new Error('Lane not found.');
   if (lane.isPrimary) throw new Error('Cannot remove the protected checkout.');
-  if (lane.readiness !== 'safe') {
+  if (lane.readiness !== 'safe' && !force) {
     const reasons = [];
     if (lane.dirty) reasons.push(`${lane.dirty} uncommitted file(s)`);
-    if (lane.readiness === 'unmerged' || lane.readiness === 'working') reasons.push('branch not safely merged into the team branch');
-    throw new Error(`Not safe to remove: ${reasons.join('; ') || 'lane is not marked safe'}.`);
+    if (lane.readiness === 'unmerged') reasons.push('branch not safely merged into the team branch');
+    else if (lane.readiness === 'working') reasons.push('working tree is dirty');
+    throw new Error(`Not safe to remove: ${reasons.join('; ') || 'lane is not marked safe'}. Pass force to remove anyway.`);
   }
   // Auto-down if still running so worktree remove doesn't orphan processes/registry.
   if (getProc(board.root, laneIndex)?.running) {
     await down(board.root, laneIndex).catch(() => {});
   }
-  await git(['worktree', 'remove', lane.path], board.root);
+  const args = ['worktree', 'remove', lane.path];
+  if (force || lane.readiness !== 'safe') args.push('--force');
+  await git(args, board.root);
   return loadBoard(root);
 }
 

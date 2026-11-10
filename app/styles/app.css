@@ -552,18 +552,27 @@ button.env-link {
   align-self: center;
 }
 .window.app .row .avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
   border-radius: 50%;
+  overflow: hidden;
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
   color: color-mix(in srgb, hsl(var(--avatar-hue, 210) 42% 28%) 80%, var(--ink));
   background: color-mix(in srgb, hsl(var(--avatar-hue, 210) 48% 58%) 28%, var(--surface-2));
   border: 1px solid color-mix(in srgb, hsl(var(--avatar-hue, 210) 40% 50%) 35%, var(--hairline));
+}
+.window.app .row .avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .window.app .row .avatar.assisted {
   color: var(--assisted);
@@ -572,6 +581,15 @@ button.env-link {
 .window.app .row .avatar.agent {
   color: var(--agent);
   border-color: color-mix(in srgb, var(--agent) 40%, var(--hairline));
+}
+/* Photo covers the letter — keep kind readable with a stronger ring. */
+.window.app .row .avatar.assisted:has(img) {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--assisted) 70%, var(--hairline));
+}
+.window.app .row .avatar.agent:has(img) {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--agent) 70%, var(--hairline));
 }
 .window.app .row .msg {
   min-width: 0; /* allow ellipsis only when the flex column is actually tight */

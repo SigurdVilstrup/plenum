@@ -1,7 +1,7 @@
 /* Live graph. Escapes all git-sourced strings before innerHTML. */
 
 import { authorLabel } from './authorship-pill.js';
-import { authorHue, authorInitial } from './author-avatar.js';
+import { authorHue, authorInitial, gravatarUrl } from './author-avatar.js';
 import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
@@ -54,7 +54,7 @@ export function layoutGraphRows(commits) {
   return { rows, height: Math.max(ROW, commits.length * ROW) };
 }
 
-export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set(), currentBranch = null }) {
+export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = null, runningLanes = new Set(), currentBranch = null, gravatar = true }) {
   const rowsEl = root.querySelector('.rows');
   const scrollTop = rowsEl.scrollTop;
   const index = new Map(commits.map((c, i) => [c.id, i]));
@@ -149,7 +149,11 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const kind = authorLabel[c.kind] ? c.kind : 'human';
     const whoTitle = [c.author, tip && (c.tool || authorLabel[kind])].filter(Boolean).join(' · ');
     const hue = authorHue(c.email || c.author);
-    const who = `<span class="avatar ${kind}" style="--avatar-hue:${hue}" aria-hidden="true">${esc(authorInitial(c.author))}</span>`;
+    const face = gravatar ? gravatarUrl(c.avatarHash) : '';
+    const img = face
+      ? `<img src="${esc(face)}" alt="" width="18" height="18" decoding="async" referrerpolicy="no-referrer" />`
+      : '';
+    const who = `<span class="avatar ${kind}" style="--avatar-hue:${hue}" aria-hidden="true">${img}${esc(authorInitial(c.author))}</span>`;
     const sha = esc(String(c.id || '').slice(0, 7));
     const on = selectedCommit === c.id ? ' active-commit' : '';
     const unpushed = c.unpushed ? ' unpushed' : '';
@@ -167,5 +171,11 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
   });
 
   rowsEl.innerHTML = svg + parts.join('');
+  // CSP blocks inline onerror; bind after paint. Cached 404s may already be complete.
+  rowsEl.querySelectorAll('.avatar img').forEach((img) => {
+    const drop = () => img.remove();
+    img.addEventListener('error', drop);
+    if (img.complete && !img.naturalWidth) drop();
+  });
   rowsEl.scrollTop = scrollTop;
 }

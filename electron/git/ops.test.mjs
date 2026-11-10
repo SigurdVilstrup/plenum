@@ -283,6 +283,20 @@ function alive(pid) {
   }
 }
 
+test('removeLane refuses dirty lanes unless force', async () => {
+  const { root } = await fixture();
+  let board = await ops.createLane(root, { name: 'dirtyrm', branch: 'feat/dirtyrm' });
+  const lane = board.lanes.find((l) => l.name === 'feat/dirtyrm');
+  assert.ok(lane);
+  fs.writeFileSync(path.join(lane.path, 'dirty.txt'), 'nope');
+  board = await loadBoard(root);
+  const dirty = board.lanes.find((l) => l.name === 'feat/dirtyrm');
+  assert.equal(dirty.readiness, 'working');
+  await assert.rejects(() => ops.removeLane(root, dirty.index), /Not safe to remove/);
+  board = await ops.removeLane(root, dirty.index, { force: true });
+  assert.ok(!board.lanes.some((l) => l.name === 'feat/dirtyrm'));
+});
+
 test('removeLane downs a running process before removing the worktree', async () => {
   const { root } = await fixture();
   writeManifest(

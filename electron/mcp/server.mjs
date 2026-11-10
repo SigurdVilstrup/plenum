@@ -82,12 +82,13 @@ const TOOLS = [
   },
   {
     name: 'lane.remove',
-    description: 'Remove a lane when safe.',
+    description: 'Remove a lane worktree. Refuses when not safe unless force is true.',
     inputSchema: {
       type: 'object',
       properties: {
         lane: { type: ['integer', 'string'], description: 'Lane index' },
         path: { type: 'string', description: 'Repo root (default: cwd)' },
+        force: { type: 'boolean', description: 'Remove even when dirty or unmerged (discards uncommitted work in the worktree)' },
       },
       required: ['lane'],
     },
@@ -147,7 +148,11 @@ export async function callTool(name, args = {}) {
     case 'lane.status':
       return textResult(await loadBoard(repoPath(args.path)));
     case 'lane.remove':
-      return textResult(await removeLane(repoPath(args.path), laneIndex(args.lane)));
+      return textResult(await removeLane(
+        repoPath(args.path),
+        laneIndex(args.lane),
+        args.force ? { force: true } : {},
+      ));
     default:
       throw new Error(`unknown tool: ${name}`);
   }

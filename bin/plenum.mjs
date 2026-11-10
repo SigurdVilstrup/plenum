@@ -13,12 +13,12 @@ const USAGE = `Usage:
   plenum down <lane>
   plenum test <lane>
   plenum create <name>
-  plenum remove <lane>
+  plenum remove <lane> [--force]
   plenum mcp
 
 Options:
   --json    print JSON
-  --force   skip drift gate on up
+  --force   skip drift gate on up; allow remove when not safe
 `;
 
 /** @param {string[]} argv */
@@ -134,7 +134,7 @@ export async function main(argv = process.argv) {
       out = await createLane(repoPath(rest[1]), { name: rest[0] });
       break;
     case 'remove':
-      out = await removeLane(repoPath(rest[1]), laneIndex(rest[0]));
+      out = await removeLane(repoPath(rest[1]), laneIndex(rest[0]), force ? { force: true } : {});
       break;
     default:
       throw Object.assign(new Error(`unknown command: ${cmd}`), { exitCode: 2 });

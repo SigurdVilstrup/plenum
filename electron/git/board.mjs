@@ -1,12 +1,19 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 import { git, gitOk } from './run.mjs';
 import { loadManifest } from '../lane/manifest.mjs';
 import { laneStatus } from '../lane/status.mjs';
 import { getProc, getLastTest } from '../lane/supervisor.mjs';
 import { assignColumns } from './graph-columns.mjs';
 import { LEGACY_TEAM_BRANCH_KEY, TEAM_BRANCH_KEY, manifestPath } from '../paths.mjs';
+
+/** SHA-256 of trimmed lowercase email for Gravatar (empty if no email). */
+export function emailAvatarHash(email) {
+  const e = String(email || '').trim().toLowerCase();
+  return e ? createHash('sha256').update(e).digest('hex') : '';
+}
 
 const AGENT_TOOLS = [
   ['claude', 'Claude'],
@@ -504,6 +511,7 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
       subject,
       author: name,
       email,
+      avatarHash: emailAvatarHash(email),
       kind: who.kind,
       tool: who.tool,
       when: formatWhen(at),

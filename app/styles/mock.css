@@ -1119,9 +1119,16 @@ a.iconbtn,
   margin-left: 6px;
 }
 
-.section-head .iconbtn {
+.section-head .iconbtn.add {
   width: 22px;
   height: 22px;
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+
+.section-head .iconbtn.add:hover {
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
 .lane-row {
@@ -1579,8 +1586,8 @@ a.navitem.back {
   align-items: center;
   height: var(--row-h);
   padding: 0 16px 0 12px;
-  color: var(--ink-muted);
-  transition: background 120ms ease;
+  color: var(--ink);
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .row:hover {
@@ -1588,12 +1595,16 @@ a.navitem.back {
 }
 
 .row.selected-lane {
-  background: var(--surface-1);
+  color: var(--ink);
 }
 
 .row.active-commit {
-  background: color-mix(in srgb, var(--row-lane, var(--primary)) 14%, transparent);
+  background: color-mix(in srgb, var(--row-lane, var(--primary)) 12%, var(--surface-1));
   box-shadow: inset 2px 0 0 var(--row-lane, var(--primary));
+}
+
+.row.active-commit .msg .text {
+  font-weight: 500;
 }
 
 .row.dim {
