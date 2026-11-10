@@ -8,3 +8,6 @@ tmp/
 .worktrees/
 *.log
 
+# Stamped on build/dev — not source of truth in git.
+electron/build-info.json
+
