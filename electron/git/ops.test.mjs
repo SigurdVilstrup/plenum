@@ -377,8 +377,14 @@ test('rename delete checkout rebase onto', async () => {
   board = await ops.checkoutBranch(root, { branch: 'feat/switch', laneIndex: lane.index });
   assert.equal(board.lanes.find((l) => l.index === lane.index).branch, 'feat/switch');
 
+  // Same branch held by the lane → primary must not steal it.
   await assert.rejects(
-    () => ops.checkoutBranch(root, { branch: 'feat/renamed', laneIndex: 0 }),
-    /Open .* as a lane|Protected primary/,
+    () => ops.checkoutBranch(root, { branch: 'feat/switch', laneIndex: 0 }),
+    /already checked out/,
   );
+  // Free branch may check out on primary (Open as lane is a separate verb).
+  board = await ops.checkoutBranch(root, { branch: 'feat/renamed', laneIndex: 0 });
+  assert.equal(board.lanes[0].branch, 'feat/renamed');
+  board = await ops.checkoutBranch(root, { branch: 'main', laneIndex: 0 });
+  assert.equal(board.lanes[0].branch, 'main');
 });

@@ -392,8 +392,9 @@ export async function listBranches(cwd, lanes, team, teamRef) {
     ], cwd);
     for (const line of raw.split(/\n/).filter(Boolean)) {
       const [name, head] = line.split('\t');
-      if (!name || name.endsWith('/HEAD') || name === 'origin/HEAD') continue;
-      const short = name.startsWith('origin/') ? name.slice(7) : name;
+      // origin/HEAD shortens to bare "origin" — not a branch.
+      if (!name || name === 'origin' || name.endsWith('/HEAD') || !name.startsWith('origin/')) continue;
+      const short = name.slice('origin/'.length);
       if (locals.has(short)) {
         locals.get(short).hasRemote = true;
         continue;

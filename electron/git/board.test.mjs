@@ -281,6 +281,9 @@ test('listBranches overview: locals remotes lane flags', async () => {
     assert.ok(local && !local.hasLane && !local.remote);
     assert.ok(remote && remote.remote && !remote.hasLane);
     assert.ok(team && team.isTeam && team.hasLane);
+    assert.ok(!board.branches.some((b) => b.name === 'origin' || b.short === 'origin'),
+      'origin/HEAD must not appear as a branch');
+
     // Orphan local tip should appear in graph refs
     assert.ok(board.commits.some((c) => (c.refs || []).some((r) => r.name === 'feat/local')));
   } finally {

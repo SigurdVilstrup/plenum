@@ -268,10 +268,7 @@ async function ensureLocalBranch(cwd, branch) {
   return name;
 }
 
-/**
- * Check out a branch in a lane worktree.
- * Primary only accepts the team branch (recovery). Prefer Open as lane for feature work.
- */
+/** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate. */
 export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   const board = await loadBoard(root);
   const lane = board.lanes.find((l) => l.index === laneIndex);
@@ -279,14 +276,10 @@ export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   const local = await ensureLocalBranch(board.root, branch);
   const holder = board.lanes.find((l) => l.branch === local);
   if (holder && holder.index !== lane.index) {
-    throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}.`);
-  }
-  if (lane.isPrimary) {
-    if (local !== board.teamBranch) {
-      throw new Error(`Protected primary stays on ${board.teamBranch}. Open ${local} as a lane instead.`);
-    }
+    throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Select that worktree instead.`);
   }
   if (lane.dirty) throw new Error('Uncommitted changes. Stash or commit before switching branches.');
+  if (lane.branch === local) return board;
   await git(['checkout', local], lane.path);
   return loadBoard(root);
 }
