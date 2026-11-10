@@ -576,7 +576,10 @@ function tabsPreferredWidth() {
   let need = 0;
   for (const n of tabs) need += n.offsetWidth;
   if (tabs.length > 1) need += gap * (tabs.length - 1);
-  if (el.tabAdd) need += el.tabAdd.offsetWidth + gap;
+  if (el.tabAdd) {
+    const stripGap = el.tabstrip ? (parseFloat(getComputedStyle(el.tabstrip).gap) || 0) : gap;
+    need += el.tabAdd.offsetWidth + stripGap;
+  }
   return need;
 }
 
