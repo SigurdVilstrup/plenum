@@ -3282,12 +3282,8 @@ async function boot() {
 
 el.graph.addEventListener('click', (e) => {
   if (e.target.closest('[data-wip-msg]')) return;
-  const ref = e.target.closest('[data-branch-name]');
-  if (ref && el.graph.contains(ref)) {
-    e.stopPropagation();
-    checkoutBranchRow(ref.dataset.branchName);
-    return;
-  }
+  // Branch pills: checkout / switch is right-click only (matches the sidebar).
+  if (e.target.closest('[data-branch-name]')) return;
   const wip = e.target.closest('[data-wip-lane]');
   if (wip && el.graph.contains(wip)) {
     const lane = laneByIndex(Number(wip.dataset.wipLane));
