@@ -315,17 +315,26 @@ ipcMain.handle('os.openTerminal', (_e, target) => {
 
 ipcMain.handle('os.displayPath', (_e, p) => displayPath(p));
 
-async function withRoot(fn, ...args) {
-  const root = activePath();
-  if (!root) throw new Error('No repository open.');
-  return fn(root, ...args);
+/** Peel trailing `{ __root }` so ops stay pinned to the tab that started them. */
+function takePinnedRoot(args) {
+  const last = args[args.length - 1];
+  if (last && typeof last === 'object' && !Array.isArray(last) && typeof last.__root === 'string') {
+    return { root: tabRoot(last.__root), args: args.slice(0, -1) };
+  }
+  return { root: activePath(), args };
 }
 
-ipcMain.handle('lane.create', (_e, payload) => withRoot((root, p) => {
+async function withRoot(fn, ...args) {
+  const { root, args: rest } = takePinnedRoot(args);
+  if (!root) throw new Error('No repository open.');
+  return fn(root, ...rest);
+}
+
+ipcMain.handle('lane.create', (_e, ...args) => withRoot((root, p) => {
   const prefs = getPrefs(prefsDir());
   const lanesFolder = expandHome(prefs.repoOverrides?.[root]?.lanesFolder || prefs.defaultLanesFolder);
   return ops.createLane(root, { ...p, lanesFolder });
-}, payload));
+}, ...args));
 async function accountsList() {
   return {
     hosts: getPrefs(prefsDir()).credentialHosts,
@@ -354,24 +363,24 @@ ipcMain.handle('accounts.removeHttps', async (_e, { host, username }) => {
 ipcMain.handle('accounts.list', accountsList);
 ipcMain.handle('git.identity.get', () => getIdentity(activePath()));
 ipcMain.handle('git.identity.set', (_e, payload) => setIdentity(activePath(), payload || {}));
-ipcMain.handle('lane.remove', (_e, laneIndex) => withRoot(ops.removeLane, laneIndex));
-ipcMain.handle('lane.commit', (_e, laneIndex, message) => withRoot(ops.commitLane, laneIndex, message));
-ipcMain.handle('lane.push', (_e, laneIndex) => withRoot(ops.pushLane, laneIndex));
-ipcMain.handle('lane.pull', (_e, laneIndex) => withRoot(ops.pullLane, laneIndex));
-ipcMain.handle('lane.rebase', async (_e, laneIndex, onto) => {
+ipcMain.handle('lane.remove', (_e, ...args) => withRoot(ops.removeLane, ...args));
+ipcMain.handle('lane.commit', (_e, ...args) => withRoot(ops.commitLane, ...args));
+ipcMain.handle('lane.push', (_e, ...args) => withRoot(ops.pushLane, ...args));
+ipcMain.handle('lane.pull', (_e, ...args) => withRoot(ops.pullLane, ...args));
+ipcMain.handle('lane.rebase', async (_e, ...args) => {
   try {
-    return await withRoot(ops.rebaseLane, laneIndex, onto);
+    return await withRoot(ops.rebaseLane, ...args);
   } catch (e) {
     if (e.code === 'CONFLICT') return { conflict: true, conflicts: e.conflicts, operation: e.operation, conflictRoot: e.conflictRoot };
     throw e;
   }
 });
-ipcMain.handle('branch.checkout', (_e, payload) => withRoot((root) => ops.checkoutBranch(root, payload || {})));
-ipcMain.handle('branch.rename', (_e, from, to) => withRoot(ops.renameBranch, from, to));
-ipcMain.handle('branch.delete', (_e, name, opts) => withRoot(ops.deleteBranch, name, opts || {}));
-ipcMain.handle('lane.merge', async (_e, laneIndex, opts) => {
+ipcMain.handle('branch.checkout', (_e, ...args) => withRoot((root, payload) => ops.checkoutBranch(root, payload || {}), ...args));
+ipcMain.handle('branch.rename', (_e, ...args) => withRoot(ops.renameBranch, ...args));
+ipcMain.handle('branch.delete', (_e, ...args) => withRoot(ops.deleteBranch, ...args));
+ipcMain.handle('lane.merge', async (_e, ...args) => {
   try {
-    return await withRoot(ops.mergeLaneIntoMain, laneIndex, opts);
+    return await withRoot(ops.mergeLaneIntoMain, ...args);
   } catch (e) {
     if (e.code === 'CONFLICT') {
       return { conflict: true, conflicts: e.conflicts, operation: e.operation, conflictRoot: e.conflictRoot };
@@ -379,14 +388,14 @@ ipcMain.handle('lane.merge', async (_e, laneIndex, opts) => {
     throw e;
   }
 });
-ipcMain.handle('lane.conflicts', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictStatus, laneIndex, conflictRoot));
-ipcMain.handle('lane.conflictStage', (_e, laneIndex, file, conflictRoot) => withRoot(ops.conflictStage, laneIndex, file, conflictRoot));
-ipcMain.handle('lane.conflictContinue', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictContinue, laneIndex, conflictRoot));
-ipcMain.handle('lane.conflictAbort', (_e, laneIndex, conflictRoot) => withRoot(ops.conflictAbort, laneIndex, conflictRoot));
-ipcMain.handle('lane.stash', (_e, laneIndex) => withRoot(ops.stashLane, laneIndex));
-ipcMain.handle('lane.stashPop', (_e, laneIndex, ref) => withRoot(ops.stashPopLane, laneIndex, ref));
-ipcMain.handle('lane.stashShow', (_e, ref) => withRoot(ops.stashShow, ref));
-ipcMain.handle('lane.up', (_e, laneIndex, opts) => withRoot(async (root, idx) => {
+ipcMain.handle('lane.conflicts', (_e, ...args) => withRoot(ops.conflictStatus, ...args));
+ipcMain.handle('lane.conflictStage', (_e, ...args) => withRoot(ops.conflictStage, ...args));
+ipcMain.handle('lane.conflictContinue', (_e, ...args) => withRoot(ops.conflictContinue, ...args));
+ipcMain.handle('lane.conflictAbort', (_e, ...args) => withRoot(ops.conflictAbort, ...args));
+ipcMain.handle('lane.stash', (_e, ...args) => withRoot(ops.stashLane, ...args));
+ipcMain.handle('lane.stashPop', (_e, ...args) => withRoot(ops.stashPopLane, ...args));
+ipcMain.handle('lane.stashShow', (_e, ...args) => withRoot(ops.stashShow, ...args));
+ipcMain.handle('lane.up', (_e, ...args) => withRoot(async (root, idx, opts) => {
   try {
     await supervisor.up(root, idx, opts);
     return loadBoard(root);
@@ -394,20 +403,20 @@ ipcMain.handle('lane.up', (_e, laneIndex, opts) => withRoot(async (root, idx) =>
     if (e.code === 'DRIFT') return { drift: true, pending: e.pending ?? [] };
     throw e;
   }
-}));
-ipcMain.handle('lane.down', (_e, laneIndex) => withRoot(async (root, idx) => {
+}, ...args));
+ipcMain.handle('lane.down', (_e, ...args) => withRoot(async (root, idx) => {
   await supervisor.down(root, idx);
   return loadBoard(root);
-}));
-ipcMain.handle('lane.status', (_e, laneIndex) => withRoot((root, idx) => supervisor.getProc(root, idx)));
-ipcMain.handle('lane.test', (_e, laneIndex) => withRoot(async (root, idx) => {
+}, ...args));
+ipcMain.handle('lane.status', (_e, ...args) => withRoot((root, idx) => supervisor.getProc(root, idx), ...args));
+ipcMain.handle('lane.test', (_e, ...args) => withRoot(async (root, idx) => {
   await supervisor.test(root, idx);
   return loadBoard(root);
-}));
-ipcMain.handle('commit.changes', (_e, sha) => withRoot(loadCommitChanges, sha));
-ipcMain.handle('file.diff', (_e, sha, filePath) => withRoot(loadFileDiff, sha, filePath));
-ipcMain.handle('file.workingDiff', async (_e, filePath, cwdArg) => {
-  const root = activePath();
+}, ...args));
+ipcMain.handle('commit.changes', (_e, ...args) => withRoot(loadCommitChanges, ...args));
+ipcMain.handle('file.diff', (_e, ...args) => withRoot(loadFileDiff, ...args));
+ipcMain.handle('file.workingDiff', async (_e, filePath, cwdArg, pin) => {
+  const root = (pin && pin.__root) ? tabRoot(pin.__root) : activePath();
   if (!root) throw new Error('No repository open.');
   const cwd = path.resolve(String(cwdArg || root));
   const board = await loadBoard(root);
@@ -416,8 +425,8 @@ ipcMain.handle('file.workingDiff', async (_e, filePath, cwdArg) => {
   }
   return loadWorkingDiff(cwd, filePath);
 });
-ipcMain.handle('file.workingShow', async (_e, filePath, cwdArg) => {
-  const root = activePath();
+ipcMain.handle('file.workingShow', async (_e, filePath, cwdArg, pin) => {
+  const root = (pin && pin.__root) ? tabRoot(pin.__root) : activePath();
   if (!root) throw new Error('No repository open.');
   const cwd = path.resolve(String(cwdArg || root));
   const board = await loadBoard(root);
@@ -426,6 +435,6 @@ ipcMain.handle('file.workingShow', async (_e, filePath, cwdArg) => {
   }
   return loadWorkingShow(cwd, filePath);
 });
-ipcMain.handle('file.history', (_e, filePath) => withRoot(loadFileHistory, filePath));
-ipcMain.handle('file.blame', (_e, sha, filePath) => withRoot(loadFileBlame, sha, filePath));
-ipcMain.handle('file.show', (_e, sha, filePath) => withRoot(loadFileShow, sha, filePath));
+ipcMain.handle('file.history', (_e, ...args) => withRoot(loadFileHistory, ...args));
+ipcMain.handle('file.blame', (_e, ...args) => withRoot(loadFileBlame, ...args));
+ipcMain.handle('file.show', (_e, ...args) => withRoot(loadFileShow, ...args));

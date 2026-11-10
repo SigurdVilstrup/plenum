@@ -1,7 +1,16 @@
 import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
 import { authorshipPillHTML, authorIcon, authorLabel } from './lib/authorship-pill.js';
-import { shouldFreeze, evictOldest, markFrozen, WARM_MAX, WARM_REFRESH_MS } from './lib/warm-tabs.js';
+import {
+  shouldFreeze,
+  evictOldest,
+  markFrozen,
+  WARM_MAX,
+  WARM_REFRESH_MS,
+  emptyViewChrome,
+  captureViewChrome,
+  applyChromeToEntry,
+} from './lib/warm-tabs.js';
 import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-pane.js';
 
 const api = window.overlook;
@@ -45,6 +54,8 @@ const state = {
   enteringLanes: new Set(),
   flashMarks: new Set(),
   busy: false,
+  /** @type {Map<string, { act?: string }>} in-flight git/lane ops keyed by tab id */
+  opsByTab: new Map(),
   conflictRoot: null,
   branchesOpen: true,
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
@@ -66,6 +77,9 @@ const state = {
   historyLimit: 120,
   editors: [],
   loadingOlder: false,
+  /** Bumped on every tab switch so superseded select/load work stops painting. */
+  switchSeq: 0,
+  pendingGraphScroll: null,
 };
 
 const el = {
@@ -204,18 +218,23 @@ function dropWarm(id) {
   state.warmTabs.delete(id);
 }
 
+function graphScrollTop() {
+  return el.graph?.querySelector('.rows')?.scrollTop ?? 0;
+}
+
 function snapshotWarm(id) {
   if (!id || !state.board) return;
   const tab = state.store.tabs.find((t) => t.id === id);
   const prev = state.warmTabs.get(id);
   if (prev?.timerId) clearInterval(prev.timerId);
+  const chrome = captureViewChrome(state, graphScrollTop());
   const entry = {
     path: tab?.path || state.board.root,
     board: state.board,
-    selectedLane: state.selectedLane,
     leftAt: Date.now(),
     timerId: null,
     frozen: false,
+    ...chrome,
   };
   entry.timerId = setInterval(() => warmRefresh(id), WARM_REFRESH_MS);
   state.warmTabs.set(id, entry);
@@ -224,12 +243,95 @@ function snapshotWarm(id) {
     if (k === id) continue;
     if (shouldFreeze(v.leftAt, Date.now(), state.warmTtlMs) && !v.frozen) markFrozen(v);
   }
-  // schedule freeze check
   setTimeout(() => {
     const e = state.warmTabs.get(id);
     if (!e || e.frozen) return;
     if (shouldFreeze(e.leftAt, Date.now(), state.warmTtlMs)) markFrozen(e);
   }, state.warmTtlMs + 50);
+}
+
+function resetViewChrome() {
+  const chrome = emptyViewChrome();
+  state.selectedLane = chrome.selectedLane;
+  state.changes = null;
+  state.filePane = null;
+  state.collapsedDirs = new Set();
+  state.commitDraft = '';
+  state.historyLimit = chrome.historyLimit;
+  state.branchesOpen = chrome.branchesOpen;
+  state.conflictRoot = null;
+  state.changesPaintKey = '';
+  state.changesCache = null;
+  state.pendingGraphScroll = null;
+  el.changes.hidden = true;
+  el.changes.innerHTML = '';
+  el.body.classList.remove('with-changes');
+  el.fileStage.hidden = true;
+  el.fileStage.innerHTML = '';
+  el.body.classList.remove('with-file-pane');
+}
+
+function restoreViewChrome(entry) {
+  const chrome = entry
+    ? captureViewChrome(entry, entry.graphScrollTop || 0)
+    : emptyViewChrome();
+  state.selectedLane = chrome.selectedLane;
+  state.changes = chrome.changes;
+  state.filePane = chrome.filePane;
+  state.collapsedDirs = new Set(chrome.collapsedDirs || []);
+  state.commitDraft = chrome.commitDraft || '';
+  state.historyLimit = chrome.historyLimit || 120;
+  state.branchesOpen = chrome.branchesOpen !== false;
+  state.conflictRoot = chrome.conflictRoot || null;
+  state.changesPaintKey = '';
+  state.changesCache = null;
+  state.pendingGraphScroll = chrome.graphScrollTop || 0;
+  if (!state.changes) {
+    el.changes.hidden = true;
+    el.changes.innerHTML = '';
+    el.body.classList.remove('with-changes');
+  }
+  if (!state.filePane) {
+    el.fileStage.hidden = true;
+    el.fileStage.innerHTML = '';
+    el.body.classList.remove('with-file-pane');
+  }
+}
+
+/** Apply a board only if this tab is still visible; otherwise refresh its warm cache. */
+function settleBoard(tabId, root, board, opts) {
+  if (!board) return false;
+  if (state.store.activeId === tabId) {
+    applyBoard(board, opts);
+    return true;
+  }
+  const w = state.warmTabs.get(tabId);
+  if (w && (!root || w.path === root || board.root === w.path)) {
+    w.board = board;
+    if (board.historyLimit) w.historyLimit = board.historyLimit;
+  }
+  return false;
+}
+
+function beginOp(act) {
+  const id = state.store.activeId;
+  if (!id || state.opsByTab.has(id)) return null;
+  state.opsByTab.set(id, { act });
+  state.busy = true;
+  if (act) setActionBusy(act, true);
+  return id;
+}
+
+function endOp(tabId, act) {
+  if (tabId) state.opsByTab.delete(tabId);
+  state.busy = state.opsByTab.has(state.store.activeId);
+  if (act && state.store.activeId === tabId) setActionBusy(act, false);
+}
+
+/** Pin IPC to the repo root that started the call (survives tab switches). */
+function pin(...args) {
+  const root = state.board?.root;
+  return root ? [...args, { __root: root }] : args;
 }
 
 async function warmRefresh(id) {
@@ -240,11 +342,12 @@ async function warmRefresh(id) {
     return;
   }
   try {
-    const board = await invoke('board.get', e.path, { historyLimit: state.historyLimit || 120 });
+    const board = await invoke('board.get', e.path, { historyLimit: e.historyLimit || 120 });
     if (!board) return;
     const cur = state.warmTabs.get(id);
     if (!cur || cur.frozen) return;
     cur.board = board;
+    if (board.historyLimit) cur.historyLimit = board.historyLimit;
     if (state.store.activeId === id) applyBoard(board);
   } catch { /* silent */ }
 }
@@ -273,6 +376,13 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
   requestAnimationFrame(() => {
     state.enteringLanes.clear();
     state.flashMarks.clear();
+    if (state.pendingGraphScroll != null) {
+      const rows = el.graph?.querySelector('.rows');
+      if (rows) rows.scrollTop = state.pendingGraphScroll;
+      state.pendingGraphScroll = null;
+    }
+    const op = state.opsByTab.get(state.store.activeId);
+    if (op?.act) setActionBusy(op.act, true);
   });
 }
 
@@ -443,10 +553,31 @@ function openCtxMenu(x, y, tab, anchor) {
   close.textContent = 'Close Tab';
   close.addEventListener('click', async () => {
     menu.remove();
+    const wasActive = tab.id === state.store.activeId;
+    if (wasActive) snapshotWarm(tab.id);
     dropWarm(tab.id);
+    state.opsByTab.delete(tab.id);
     const res = await invoke('tabs.close', tab.id);
     applyStore(res.store);
-    applyBoard(res.board);
+    if (!wasActive) {
+      paintTabs();
+      return;
+    }
+    const nextId = res.store.activeId;
+    const warm = nextId ? state.warmTabs.get(nextId) : null;
+    if (warm?.board) {
+      restoreViewChrome(warm);
+      if (warm.timerId) { clearInterval(warm.timerId); warm.timerId = null; }
+      applyBoard(warm.board, { selectLane: warm.selectedLane });
+      refresh().catch(() => {});
+    } else if (res.board) {
+      resetViewChrome();
+      applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
+    } else {
+      resetViewChrome();
+      state.board = null;
+      paint();
+    }
   });
   menu.append(rename, close);
   document.body.appendChild(menu);
@@ -840,18 +971,18 @@ async function handleAction(act, lane, url) {
       return runGit('lane.down', lane.index, `Stopped ${lane.name}`, 'down');
     }
     if (act === 'test') {
-      if (state.busy) return;
-      state.busy = true;
-      setActionBusy('test', true);
+      const tabId = beginOp('test');
+      if (!tabId) return;
+      const root = state.board?.root;
       try {
-        const board = await invoke('lane.test', lane.index);
-        state.flashMarks.add(lane.index);
-        applyBoard(board);
-        const ok = board?.lanes?.find((x) => x.index === lane.index)?.lastTest?.ok;
-        toast(ok ? `Tests passed for ${lane.name}` : `Tests failed for ${lane.name}`, ok ? 'ok' : 'bad');
+        const board = await invoke('lane.test', ...pin(lane.index));
+        if (settleBoard(tabId, root, board)) {
+          state.flashMarks.add(lane.index);
+          const ok = board?.lanes?.find((x) => x.index === lane.index)?.lastTest?.ok;
+          toast(ok ? `Tests passed for ${lane.name}` : `Tests failed for ${lane.name}`, ok ? 'ok' : 'bad');
+        }
       } finally {
-        state.busy = false;
-        setActionBusy('test', false);
+        endOp(tabId, 'test');
       }
       return;
     }
@@ -875,36 +1006,36 @@ function setActionBusy(act, on) {
 }
 
 async function runGit(channel, laneIndex, okMsg, act) {
-  if (state.busy) return;
-  state.busy = true;
-  if (act) setActionBusy(act, true);
+  const tabId = beginOp(act);
+  if (!tabId) return;
+  const root = state.board?.root;
   try {
-    const board = await invoke(channel, laneIndex);
-    state.flashMarks.add(laneIndex);
-    applyBoard(board);
-    toast(okMsg, 'ok');
+    const board = await invoke(channel, ...pin(laneIndex));
+    if (settleBoard(tabId, root, board)) {
+      state.flashMarks.add(laneIndex);
+      toast(okMsg, 'ok');
+    }
   } finally {
-    state.busy = false;
-    if (act) setActionBusy(act, false);
+    endOp(tabId, act);
   }
 }
 
 async function runUp(lane, { force = false } = {}) {
-  if (state.busy) return;
-  state.busy = true;
-  setActionBusy('up', true);
+  const tabId = beginOp('up');
+  if (!tabId) return;
+  const root = state.board?.root;
   try {
-    const res = await invoke('lane.up', lane.index, force ? { force: true } : undefined);
+    const res = await invoke('lane.up', ...pin(lane.index, force ? { force: true } : undefined));
     if (res?.drift) {
-      openDriftSheet(lane, res.pending || []);
+      if (state.store.activeId === tabId) openDriftSheet(lane, res.pending || []);
       return;
     }
-    state.flashMarks.add(lane.index);
-    applyBoard(res);
-    toast(`Started ${lane.name}`, 'ok');
+    if (settleBoard(tabId, root, res)) {
+      state.flashMarks.add(lane.index);
+      toast(`Started ${lane.name}`, 'ok');
+    }
   } finally {
-    state.busy = false;
-    setActionBusy('up', false);
+    endOp(tabId, 'up');
   }
 }
 
@@ -950,25 +1081,27 @@ function openDriftSheet(lane, pending) {
 }
 
 async function runConflictable(channel, lane, extra, act, okMsg) {
-  if (state.busy) return;
-  state.busy = true;
-  if (act) setActionBusy(act, true);
+  const tabId = beginOp(act);
+  if (!tabId) return;
+  const root = state.board?.root;
   try {
-    const res = await invoke(channel, lane.index, extra);
+    const res = await invoke(channel, ...pin(lane.index, extra));
     if (res?.conflict) {
-      state.conflictRoot = res.conflictRoot || null;
-      openConflictSheet(lane, res);
+      if (state.store.activeId === tabId) {
+        state.conflictRoot = res.conflictRoot || null;
+        openConflictSheet(lane, res);
+      }
       return;
     }
-    state.flashMarks.add(lane.index);
-    applyBoard(res);
-    const team = state.board?.teamBranch || 'main';
-    toast(okMsg || (channel.includes('rebase')
-      ? `Rebased ${lane.name} onto ${team}`
-      : `Merged ${lane.name} into ${team}`), 'ok');
+    if (settleBoard(tabId, root, res)) {
+      state.flashMarks.add(lane.index);
+      const team = state.board?.teamBranch || 'main';
+      toast(okMsg || (channel.includes('rebase')
+        ? `Rebased ${lane.name} onto ${team}`
+        : `Merged ${lane.name} into ${team}`), 'ok');
+    }
   } finally {
-    state.busy = false;
-    if (act) setActionBusy(act, false);
+    endOp(tabId, act);
   }
 }
 
@@ -1197,7 +1330,7 @@ async function openStashPopSheet(lane) {
   const loadPreview = async (ref) => {
     filesEl.innerHTML = '<p class="lede">Loading…</p>';
     try {
-      const data = await invoke('lane.stashShow', ref);
+      const data = await invoke('lane.stashShow', ...pin(ref));
       filesEl.innerHTML = renderFiles(data.files || []);
     } catch (e) {
       filesEl.innerHTML = `<p class="lede">${esc(e.message || 'Could not load stash')}</p>`;
@@ -1212,11 +1345,12 @@ async function openStashPopSheet(lane) {
   });
   modal.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const tabId = state.store.activeId;
+    const root = state.board?.root;
     try {
-      const board = await invoke('lane.stashPop', lane.index, selected);
+      const board = await invoke('lane.stashPop', ...pin(lane.index, selected));
       closeSheet();
-      applyBoard(board);
-      toast(`Popped ${selected} onto ${lane.name}`, 'ok');
+      if (settleBoard(tabId, root, board)) toast(`Popped ${selected} onto ${lane.name}`, 'ok');
     } catch { /* toasted */ }
   });
 }
@@ -1240,10 +1374,13 @@ async function checkoutBranchRow(name) {
   }
   const lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
   if (!lane) return;
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
   try {
-    const board = await invoke('branch.checkout', { branch: br.name, laneIndex: lane.index });
-    applyBoard(board, { selectLane: lane.index });
-    toast(`Checked out ${br.short || br.name}`, 'ok');
+    const board = await invoke('branch.checkout', ...pin({ branch: br.name, laneIndex: lane.index }));
+    if (settleBoard(tabId, root, board, { selectLane: lane.index })) {
+      toast(`Checked out ${br.short || br.name}`, 'ok');
+    }
   } catch { /* toasted */ }
 }
 
@@ -1302,11 +1439,12 @@ function openRenameBranchSheet(br) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const to = form.querySelector('[name=to]').value.trim();
+    const tabId = state.store.activeId;
+    const root = state.board?.root;
     try {
-      const board = await invoke('branch.rename', br.name, to);
+      const board = await invoke('branch.rename', ...pin(br.name, to));
       closeSheet();
-      applyBoard(board);
-      toast(`Renamed ${br.name} → ${to}`, 'ok');
+      if (settleBoard(tabId, root, board)) toast(`Renamed ${br.name} → ${to}`, 'ok');
     } catch { /* toasted */ }
   });
 }
@@ -1329,14 +1467,15 @@ function openDeleteBranchSheet(br) {
     e.preventDefault();
     const force = Boolean(form.querySelector('[name=force]')?.checked);
     const alsoRemote = Boolean(form.querySelector('[name=remote]')?.checked);
+    const tabId = state.store.activeId;
+    const root = state.board?.root;
     try {
-      let board = await invoke('branch.delete', br.name, { force, remote: br.remote });
+      let board = await invoke('branch.delete', ...pin(br.name, { force, remote: br.remote }));
       if (alsoRemote && !br.remote) {
-        board = await invoke('branch.delete', `origin/${br.short || br.name}`, { remote: true });
+        board = await invoke('branch.delete', ...pin(`origin/${br.short || br.name}`, { remote: true }));
       }
       closeSheet();
-      applyBoard(board);
-      toast(`Deleted ${br.name}`, 'ok');
+      if (settleBoard(tabId, root, board)) toast(`Deleted ${br.name}`, 'ok');
     } catch { /* toasted */ }
   });
 }
@@ -1370,12 +1509,15 @@ function openRebaseOntoSheet(lane) {
 async function openLaneFromBranch(branch) {
   const name = String(branch || '').trim();
   if (!name) return;
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
   try {
-    const board = await invoke('lane.create', { existing: true, branch: name });
+    const board = await invoke('lane.create', ...pin({ existing: true, branch: name }));
     const created = board.lanes.find((l) => l.branch === name) || board.lanes[board.lanes.length - 1];
-    applyBoard(board, { selectLane: created?.index, enterLane: created?.index });
-    toast(`Lane ${created?.name || name} opened`, 'ok');
-    if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
+    if (settleBoard(tabId, root, board, { selectLane: created?.index, enterLane: created?.index })) {
+      toast(`Lane ${created?.name || name} opened`, 'ok');
+      if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
+    }
   } catch { /* toasted */ }
 }
 
@@ -1413,14 +1555,17 @@ function openCreateLane() {
     e.preventDefault();
     const name = nameInput.value.trim();
     const branch = branchInput.value.trim();
+    const tabId = state.store.activeId;
+    const root = state.board?.root;
     try {
-      const board = await invoke('lane.create', { name, branch });
+      const board = await invoke('lane.create', ...pin({ name, branch }));
       const created = board.lanes.find((l) => l.branch === branch || l.name.includes(name))
         || board.lanes[board.lanes.length - 1];
       closeSheet();
-      applyBoard(board, { selectLane: created?.index, enterLane: created?.index });
-      toast(`Lane ${created?.name || name} created`, 'ok');
-      if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
+      if (settleBoard(tabId, root, board, { selectLane: created?.index, enterLane: created?.index })) {
+        toast(`Lane ${created?.name || name} created`, 'ok');
+        if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
+      }
     } catch { /* toasted */ }
   });
   nameInput.focus();
@@ -1455,11 +1600,14 @@ function openRemoveSheet(lane) {
     </form>`);
   el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const tabId = state.store.activeId;
+    const root = state.board?.root;
     try {
-      const board = await invoke('lane.remove', lane.index);
+      const board = await invoke('lane.remove', ...pin(lane.index));
       closeSheet();
-      applyBoard(board, { selectLane: 0 });
-      toast(`Removed worktree for ${lane.name}`, 'ok');
+      if (settleBoard(tabId, root, board, { selectLane: 0 })) {
+        toast(`Removed worktree for ${lane.name}`, 'ok');
+      }
     } catch { /* toasted */ }
   });
 }
@@ -1638,7 +1786,7 @@ async function paintFilePane(pane) {
   const body = el.fileStage.querySelector('.file-pane-body');
   try {
     if (wip && mode === 'diff') {
-      const data = await invoke('file.workingDiff', pane.path, pane.cwd);
+      const data = await invoke('file.workingDiff', ...pin(pane.path, pane.cwd));
       if (!filePaneStill(pane) || !body) return;
       if (data.binary || data.tooLarge) {
         body.innerHTML = `<div class="fx-empty">${data.binary ? 'Binary file' : 'File too large'} — use Editor.</div>`;
@@ -1648,7 +1796,7 @@ async function paintFilePane(pane) {
         body.innerHTML = `<div class="file-pane-diff">${renderDiffBody(data.hunks)}</div>`;
       }
     } else if (wip && mode === 'read') {
-      const shown = await invoke('file.workingShow', pane.path, pane.cwd);
+      const shown = await invoke('file.workingShow', ...pin(pane.path, pane.cwd));
       if (!filePaneStill(pane) || !body) return;
       if (shown.binary || shown.tooLarge || shown.missing) {
         body.innerHTML = `<div class="fx-empty">${shown.missing ? 'Missing on disk' : shown.binary ? 'Binary file' : 'File too large'} — use Editor.</div>`;
@@ -1656,19 +1804,19 @@ async function paintFilePane(pane) {
         body.innerHTML = `<pre class="file-read mono">${esc(shown.text)}</pre>`;
       }
     } else if (mode === 'diff') {
-      const data = await invoke('file.diff', pane.sha, pane.path);
+      const data = await invoke('file.diff', ...pin(pane.sha, pane.path));
       if (!filePaneStill(pane) || !body) return;
       body.innerHTML = `<div class="file-pane-diff">${renderDiffBody(data.hunks)}</div>`;
     } else if (mode === 'history') {
-      const history = await invoke('file.history', pane.path);
+      const history = await invoke('file.history', ...pin(pane.path));
       if (!filePaneStill(pane) || !body) return;
       body.innerHTML = `<div class="file-history">${renderHistoryList(history, pane.sha)}</div>`;
       bindFilePaneJumps();
     } else {
       const [history, blame, shown] = await Promise.all([
-        invoke('file.history', pane.path),
-        invoke('file.blame', pane.sha, pane.path),
-        invoke('file.show', pane.sha, pane.path),
+        invoke('file.history', ...pin(pane.path)),
+        invoke('file.blame', ...pin(pane.sha, pane.path)),
+        invoke('file.show', ...pin(pane.sha, pane.path)),
       ]);
       if (!filePaneStill(pane) || !body) return;
       body.innerHTML = `
@@ -1700,11 +1848,13 @@ async function commitLaneMessage(lane, message) {
     toast('Commit message required', 'bad');
     return false;
   }
-  const board = await invoke('lane.commit', lane.index, msg);
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
+  const board = await invoke('lane.commit', ...pin(lane.index, msg));
+  if (!settleBoard(tabId, root, board)) return true;
   state.flashMarks.add(lane.index);
   state.commitDraft = '';
   if (state.changes?.kind === 'wip') closeChanges();
-  applyBoard(board);
   toast(`Committed on ${lane.name}`, 'ok');
   return true;
 }
@@ -1827,8 +1977,10 @@ async function paintChanges() {
       </div>
       <div class="changes-tree"><div class="fx-empty">Loading changes…</div></div>`;
     el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => { closeChanges(); paint(); });
+    const tabId = state.store.activeId;
     try {
-      const data = await invoke('commit.changes', token);
+      const data = await invoke('commit.changes', ...pin(token));
+      if (state.store.activeId !== tabId) return;
       if (state.changes?.kind !== 'commit' || state.changes.sha !== token) return;
       state.changesCache = { sha: token, data };
       // Key may match before render finished; force tree paint after load.
@@ -1905,8 +2057,10 @@ function openMergeSheet(lane) {
 async function openConflictSheet(lane, snapshot) {
   let status = snapshot;
   const rootArg = status?.conflictRoot || status?.path || state.conflictRoot || null;
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
   if (!status?.conflicts && status?.operation == null) {
-    status = await invoke('lane.conflicts', lane.index, rootArg);
+    status = await invoke('lane.conflicts', ...pin(lane.index, rootArg));
   }
   if (status?.path || status?.conflictRoot) state.conflictRoot = status.conflictRoot || status.path;
   const files = status.conflicts || [];
@@ -1944,31 +2098,29 @@ async function openConflictSheet(lane, snapshot) {
     btn.addEventListener('click', async () => {
       const file = btn.closest('[data-file]').dataset.file;
       try {
-        const next = await invoke('lane.conflictStage', lane.index, file, croot);
+        const next = await invoke('lane.conflictStage', ...pin(lane.index, file, croot));
         openConflictSheet(lane, next);
       } catch { /* toasted */ }
     });
   });
   modal.querySelector('[data-continue]')?.addEventListener('click', async () => {
     try {
-      const res = await invoke('lane.conflictContinue', lane.index, croot);
+      const res = await invoke('lane.conflictContinue', ...pin(lane.index, croot));
       if (res?.conflict) {
         openConflictSheet(lane, res);
         return;
       }
       state.conflictRoot = null;
       closeSheet();
-      applyBoard(res);
-      toast('Conflicts resolved — continued', 'ok');
+      if (settleBoard(tabId, root, res)) toast('Conflicts resolved — continued', 'ok');
     } catch { /* toasted */ }
   });
   modal.querySelector('[data-abort]')?.addEventListener('click', async () => {
     try {
-      const board = await invoke('lane.conflictAbort', lane.index, croot);
+      const board = await invoke('lane.conflictAbort', ...pin(lane.index, croot));
       state.conflictRoot = null;
       closeSheet();
-      applyBoard(board);
-      toast('Aborted — branch restored', 'ok');
+      if (settleBoard(tabId, root, board)) toast('Aborted — branch restored', 'ok');
     } catch { /* toasted */ }
   });
 }
@@ -2464,9 +2616,18 @@ async function openRepo() {
   setLoading(true, 'Opening repository…', path);
   try {
     state.settings.open = false;
+    if (state.store.activeId && state.board) snapshotWarm(state.store.activeId);
     const res = await invoke('tabs.open', path);
     applyStore(res.store);
-    applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
+    // Re-selecting an already-open tab should restore its warm chrome.
+    const warm = state.warmTabs.get(res.store.activeId);
+    if (warm?.board && warm.path === res.board?.root) {
+      restoreViewChrome(warm);
+      applyBoard(res.board || warm.board, { selectLane: warm.selectedLane });
+    } else {
+      resetViewChrome();
+      applyBoard(res.board, { selectLane: res.board.lanes[1]?.index ?? 0 });
+    }
   } catch {
     setLoading(false);
     paint();
@@ -2478,23 +2639,28 @@ async function selectTab(id) {
   const prevId = state.store.activeId;
   state.settings.open = false;
   snapshotWarm(prevId);
+  const seq = ++state.switchSeq;
   state.store = { ...state.store, activeId: id };
+  state.busy = state.opsByTab.has(id);
   paintTabs();
   const warm = state.warmTabs.get(id);
   const tab = state.store.tabs.find((t) => t.id === id);
   let usedWarm = false;
   if (warm?.board) {
     usedWarm = true;
+    restoreViewChrome(warm);
     applyBoard(warm.board, { selectLane: warm.selectedLane });
     if (warm.timerId) { clearInterval(warm.timerId); warm.timerId = null; }
   } else {
-    // Cold tab: show skeleton instead of leaving the previous board painted (stutter).
+    // Cold tab: clear previous chrome instead of leaving the last repo painted.
+    resetViewChrome();
     state.board = null;
     setLoading(true, 'Opening repository…', tab?.path || '');
     paint();
   }
   try {
     const res = await invoke('tabs.select', id);
+    if (seq !== state.switchSeq || state.store.activeId !== id) return;
     applyStore(res.store);
     if (!usedWarm) {
       setLoading(false);
@@ -2507,21 +2673,22 @@ async function selectTab(id) {
       warm.frozen = false;
       warm.leftAt = Date.now();
       await refresh();
+      if (seq !== state.switchSeq || state.store.activeId !== id) return;
       const e = state.warmTabs.get(id);
       if (e) {
+        applyChromeToEntry(e, captureViewChrome(state, graphScrollTop()));
         e.board = state.board;
-        e.selectedLane = state.selectedLane;
+        e.path = state.board?.root || e.path;
         e.leftAt = Date.now();
         e.frozen = false;
         if (e.timerId) clearInterval(e.timerId);
         e.timerId = setInterval(() => warmRefresh(id), WARM_REFRESH_MS);
       }
     } else {
-      // showing cache; optional background refresh for active
       refresh().catch(() => {});
     }
   } catch {
-    if (!usedWarm) {
+    if (seq === state.switchSeq && !usedWarm) {
       setLoading(false);
       paint();
     }
@@ -2529,15 +2696,20 @@ async function selectTab(id) {
 }
 
 async function refresh() {
-  if (!state.board) return;
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
+  if (!root || !tabId) return;
+  const limit = state.historyLimit || 120;
   try {
-    const board = await invoke('repo.refresh', { historyLimit: state.historyLimit || 120 });
-    if (board) applyBoard(board);
+    const board = await invoke('board.get', root, { historyLimit: limit });
+    settleBoard(tabId, root, board);
   } catch { /* toasted */ }
 }
 
 async function loadOlderHistory() {
   if (!state.board?.historyHasMore || state.loadingOlder) return;
+  const tabId = state.store.activeId;
+  const root = state.board.root;
   const next = Math.min(5000, (state.historyLimit || 120) + 120);
   state.historyLimit = next;
   state.loadingOlder = true;
@@ -2545,8 +2717,17 @@ async function loadOlderHistory() {
   if (foot) foot.textContent = 'Loading…';
   let board = null;
   try {
-    board = await invoke('board.get', state.board.root, { historyLimit: next });
+    board = await invoke('board.get', root, { historyLimit: next });
   } catch { /* toasted */ }
+  if (state.store.activeId !== tabId) {
+    state.loadingOlder = false;
+    const w = state.warmTabs.get(tabId);
+    if (w && board) {
+      w.board = board;
+      w.historyLimit = next;
+    }
+    return;
+  }
   state.loadingOlder = false;
   if (board) applyBoard(board);
   else {
