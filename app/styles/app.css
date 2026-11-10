@@ -383,6 +383,21 @@ button.env-link {
   animation: toast-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+.app-version {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 11px;
+  line-height: 1;
+  z-index: 5;
+  opacity: 0.65;
+  cursor: default;
+}
+
+.app-version[hidden] {
+  display: none;
+}
+
 .toast.bad {
   border-color: var(--danger);
   color: var(--danger);

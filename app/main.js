@@ -109,6 +109,7 @@ const el = {
   paletteResults: document.getElementById('palette-results'),
   sheetLayer: document.getElementById('sheet-layer'),
   toast: document.getElementById('toast'),
+  appVersion: document.getElementById('app-version'),
 };
 
 function applyTheme() {
@@ -194,6 +195,22 @@ function versionDetailHTML() {
   const when = formatCommitAt(committedAt);
   const line2 = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
   return `<span class="mono">${ver}<br>${line2}</span>`;
+}
+
+function paintVersion() {
+  const { version, commit, committedAt } = state.appInfo;
+  if (!version) {
+    el.appVersion.hidden = true;
+    el.appVersion.textContent = '';
+    el.appVersion.removeAttribute('title');
+    return;
+  }
+  el.appVersion.hidden = false;
+  el.appVersion.textContent = version;
+  const when = formatCommitAt(committedAt);
+  el.appVersion.title = commit
+    ? (when ? `${commit} · ${when}` : commit)
+    : '';
 }
 
 function activeTab() {
@@ -2978,6 +2995,7 @@ async function boot() {
   } catch {
     state.appInfo = { version: '', commit: '', committedAt: '' };
   }
+  paintVersion();
   try {
     state.editors = await invoke('os.editors');
   } catch { state.editors = []; }
