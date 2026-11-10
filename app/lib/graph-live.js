@@ -147,7 +147,10 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       : '');
     const tip = tips.has(c.id);
     const kind = authorLabel[c.kind] ? c.kind : 'human';
-    const whoTitle = [c.author, tip && (c.tool || authorLabel[kind])].filter(Boolean).join(' · ');
+    const whoName = c.author && c.email
+      ? `${c.author} <${c.email}>`
+      : (c.author || c.email || '');
+    const whoTitle = [whoName, tip && (c.tool || authorLabel[kind])].filter(Boolean).join(' · ');
     const hue = authorHue(c.email || c.author);
     const face = gravatar ? gravatarUrl(c.avatarHash) : '';
     const img = face
@@ -161,12 +164,13 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const whenTitle = c.at
       ? `${new Date(c.at * 1000).toISOString()}${c.unpushed ? ' · not on remote' : ''} · Show commit changes`
       : (c.unpushed ? 'Not on remote · Show commit changes' : 'Show commit changes');
-    parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}" title="${esc(whenTitle)}">
+    // Keep author tooltip on `.who` only — a title on the row steals hover from the avatar.
+    parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}">
         <span></span>
         <span class="who" title="${esc(whoTitle)}">${who}</span>
-        <span class="msg">${refs}<span class="text">${esc(c.subject)}</span></span>
-        <span class="sha">${sha}</span>
-        <span class="time">${esc(c.when)}</span>
+        <span class="msg" title="${esc(whenTitle)}">${refs}<span class="text">${esc(c.subject)}</span></span>
+        <span class="sha" title="${esc(whenTitle)}">${sha}</span>
+        <span class="time" title="${esc(whenTitle)}">${esc(c.when)}</span>
       </div>`);
   });
 
