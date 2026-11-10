@@ -278,6 +278,7 @@ test('listBranches overview: locals remotes lane flags', async () => {
     fs.writeFileSync(path.join(root, 'b.txt'), 'b\n');
     git(['add', 'b.txt'], root);
     git(['commit', '-m', 'local ahead'], root);
+    git(['checkout', 'main'], root); // leave feat/local as a non-lane tip with upstream drift
 
     const board = await loadBoard(root);
     const local = board.branches.find((b) => b.name === 'feat/local');
