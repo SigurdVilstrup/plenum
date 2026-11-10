@@ -967,7 +967,6 @@ function renderBranchListHTML(branches, board, selectedLane) {
     parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(entry.key)}" aria-expanded="${open}">
       <span class="mark">${iconHTML('caret-right', 'sm')}</span>
       <span class="name">${esc(entry.key)}/</span>
-      <span class="meta">${entry.items.length}</span>
     </button>`);
     if (open) {
       parts.push(`<div class="branch-folder-kids">${entry.items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane)).join('')}</div>`);
