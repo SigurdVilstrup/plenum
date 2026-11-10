@@ -305,6 +305,26 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
   return loadBoard(root);
 }
 
+/** Push a local tip to origin (no checkout required). Sets upstream on first push. */
+export async function pushBranchToRemote(root, { branch } = {}) {
+  const board = await loadBoard(root);
+  const name = assertBranchName(branch);
+  if (name.startsWith('origin/')) throw new Error('That tip is already on origin.');
+  if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
+    throw new Error(`Local branch ${name} not found.`);
+  }
+  try {
+    await git(['push', '-u', 'origin', name], board.root);
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/non-fast-forward|rejected/i.test(msg)) {
+      throw new Error(`${name} was rejected by origin. Pull (or rebase) first.`);
+    }
+    throw e;
+  }
+  return loadBoard(root);
+}
+
 /** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate. */
 export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   const board = await loadBoard(root);

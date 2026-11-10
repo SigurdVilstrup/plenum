@@ -341,7 +341,8 @@ function settleBoard(tabId, root, board, opts) {
 
 const OP_LABELS = {
   checkout: 'Checking out…',
-  'branch-update': 'Updating from remote…',
+  'branch-update': 'Pulling from remote…',
+  'branch-push': 'Pushing to remote…',
   push: 'Pushing…',
   pull: 'Pulling…',
   rebase: 'Rebasing…',
@@ -552,21 +553,48 @@ async function applyTabOrder(fromId, overId, after) {
   paintTabs();
 }
 
-function tabstripOverflows() {
-  return el.tabstrip.scrollWidth > el.tabstrip.clientWidth + 1;
+/** Spare room tabs should keep before we reclaim the search label. */
+const SEARCH_COLLAPSE_CUSHION = 48;
+let searchLabelWidth = 0;
+
+/** Natural width tabs want before flex-shrinking / ellipsis. */
+function tabsPreferredWidth() {
+  const gap = parseFloat(getComputedStyle(el.tabstrip).gap) || 0;
+  const tabs = el.tabstrip.querySelectorAll('.tab:not(.add)');
+  let need = 0;
+  for (const n of tabs) {
+    const title = n.querySelector('.tab-title');
+    const ic = n.querySelector('.icon');
+    const padL = parseFloat(getComputedStyle(n).paddingLeft) || 0;
+    const padR = parseFloat(getComputedStyle(n).paddingRight) || 0;
+    const g = parseFloat(getComputedStyle(n).gap) || 0;
+    const natural = (ic?.offsetWidth || 16) + (title ? g + title.scrollWidth : 0) + padL + padR;
+    need += Math.min(220, Math.ceil(natural));
+  }
+  const add = el.tabstrip.querySelector('.tab.add');
+  if (add) need += add.offsetWidth;
+  const parts = tabs.length + (add ? 1 : 0);
+  if (parts > 1) need += gap * (parts - 1);
+  return need;
 }
 
 /** Collapse the palette label when open tabs need the room; expand when they don't. */
 function syncSearchCollapse() {
   const btn = el.searchbtn;
   if (!btn) return;
-  if (tabstripOverflows()) {
-    btn.classList.add('compact');
-    return;
+  const label = btn.querySelector('span');
+  if (label && !btn.classList.contains('compact')) {
+    const gap = parseFloat(getComputedStyle(btn).gap) || 0;
+    searchLabelWidth = label.offsetWidth + gap;
   }
-  if (!btn.classList.contains('compact')) return;
-  btn.classList.remove('compact');
-  if (tabstripOverflows()) btn.classList.add('compact');
+  const labelW = searchLabelWidth || 160;
+  const need = tabsPreferredWidth();
+  const avail = el.tabstrip.clientWidth;
+  if (btn.classList.contains('compact')) {
+    if (need + SEARCH_COLLAPSE_CUSHION <= avail - labelW) btn.classList.remove('compact');
+  } else if (need + SEARCH_COLLAPSE_CUSHION > avail) {
+    btn.classList.add('compact');
+  }
 }
 
 function paintTabs() {
@@ -579,7 +607,10 @@ function paintTabs() {
     btn.draggable = true;
     if (t.id === state.store.activeId) btn.setAttribute('aria-current', 'page');
     btn.appendChild(icon(t.icon || 'folder-simple', 'sm'));
-    btn.appendChild(document.createTextNode(` ${t.title}`));
+    const title = document.createElement('span');
+    title.className = 'tab-title';
+    title.textContent = t.title;
+    btn.appendChild(title);
     btn.addEventListener('click', () => {
       if (tabDidDrag) { tabDidDrag = false; return; }
       selectTab(t.id);
@@ -1541,10 +1572,25 @@ async function updateBranchRow(name) {
   try {
     const board = await invoke('branch.update', ...pin({ branch: br.name }));
     if (settleBoard(tabId, root, board)) {
-      toast(br.remote ? `Fetched ${br.name}` : `Updated ${br.short || br.name} from origin`, 'ok');
+      toast(br.remote ? `Fetched ${br.name}` : `Pulled ${br.short || br.name} from origin`, 'ok');
     }
   } catch { /* toasted */ }
   finally { endOp(tabId, 'branch-update'); }
+}
+
+async function pushBranchRow(name) {
+  const br = branchByName(name);
+  if (!br || br.remote) return;
+  const tabId = beginOp('branch-push', br.short || br.name);
+  if (!tabId) return;
+  const root = state.board?.root;
+  try {
+    const board = await invoke('branch.push', ...pin({ branch: br.name }));
+    if (settleBoard(tabId, root, board)) {
+      toast(`Pushed ${br.short || br.name} to origin`, 'ok');
+    }
+  } catch { /* toasted */ }
+  finally { endOp(tabId, 'branch-push'); }
 }
 
 async function checkoutBranchRow(name) {
@@ -1607,10 +1653,11 @@ function openBranchCtxMenu(x, y, name) {
     });
     menu.appendChild(btn);
   };
-  add('Check out', () => checkoutBranchRow(br.name));
+  add('Checkout', () => checkoutBranchRow(br.name));
   if (!br.hasLane) {
-    add(br.remote ? 'Fetch tip' : 'Update from remote', () => updateBranchRow(br.name));
+    add(br.remote ? 'Fetch' : 'Pull from remote', () => updateBranchRow(br.name));
   }
+  if (!br.remote && !br.hasLane) add('Push to remote', () => pushBranchRow(br.name));
   if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
   if (canRename) add('Rename…', () => openRenameBranchSheet(br));
   if (canDelete) add('Delete…', () => openDeleteBranchSheet(br), true);

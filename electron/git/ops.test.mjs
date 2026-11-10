@@ -419,3 +419,22 @@ test('updateBranchFromRemote fast-forwards a free local tip', async () => {
     /checked out/,
   );
 });
+
+test('pushBranchToRemote publishes a free local tip', async () => {
+  const { root } = await fixture();
+  sh(['checkout', '-b', 'feat/push-me'], root);
+  fs.writeFileSync(path.join(root, 'push-me.txt'), 'x');
+  sh(['add', 'push-me.txt'], root);
+  sh(['commit', '-m', 'local only'], root);
+  sh(['checkout', 'main'], root);
+
+  await ops.pushBranchToRemote(root, { branch: 'feat/push-me' });
+  const local = (await git(['rev-parse', 'feat/push-me'], root)).trim();
+  const remote = (await git(['rev-parse', 'origin/feat/push-me'], root)).trim();
+  assert.equal(local, remote);
+
+  const board = await loadBoard(root);
+  const br = board.branches.find((b) => b.name === 'feat/push-me');
+  assert.equal(br?.upstream, 'origin/feat/push-me');
+  assert.equal(br?.upstreamAhead, 0);
+});

@@ -65,7 +65,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 18 },
+    trafficLightPosition: { x: 16, y: 14 },
     backgroundColor: '#010102',
     ...(icon ? { icon } : {}),
     webPreferences: {
@@ -386,6 +386,7 @@ ipcMain.handle('lane.rebase', async (_e, ...args) => {
 });
 ipcMain.handle('branch.checkout', (_e, ...args) => withRoot((root, payload) => ops.checkoutBranch(root, payload || {}), ...args));
 ipcMain.handle('branch.update', (_e, ...args) => withRoot((root, payload) => ops.updateBranchFromRemote(root, payload || {}), ...args));
+ipcMain.handle('branch.push', (_e, ...args) => withRoot((root, payload) => ops.pushBranchToRemote(root, payload || {}), ...args));
 ipcMain.handle('branch.rename', (_e, ...args) => withRoot(ops.renameBranch, ...args));
 ipcMain.handle('branch.delete', (_e, ...args) => withRoot(ops.deleteBranch, ...args));
 ipcMain.handle('lane.merge', async (_e, ...args) => {
