@@ -61,30 +61,15 @@ input, textarea, [contenteditable="true"] {
   align-self: stretch;
 }
 
-.window.app .titlebar .appmark {
+.window.app .title-actions {
   align-self: center;
-  margin-left: 2px;
-  margin-right: 6px;
-  /* Match native traffic-light centers; the mark reads a hair high in its box. */
-  transform: translateY(1px);
-  -webkit-app-region: drag;
+  gap: 14px;
+  padding-left: 12px;
+  padding-right: 14px;
 }
 
-.window.app .titlebar .app-version {
-  align-self: center;
-  position: static;
-  right: auto;
-  bottom: auto;
-  margin-right: 10px;
-  z-index: auto;
-  transform: translateY(1px);
+.window.app .titlebar .brand {
   -webkit-app-region: drag;
-}
-
-.window.app .titlebar .searchbtn.compact {
-  align-self: center;
-  margin: 0 6px 0 2px;
-  -webkit-app-region: no-drag;
 }
 
 .window.app .titlebar .tabstrip {
@@ -92,7 +77,8 @@ input, textarea, [contenteditable="true"] {
   padding-top: 6px;
   padding-left: 2px;
   height: 100%;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
   gap: 10px;
 }
 
@@ -146,13 +132,6 @@ input, textarea, [contenteditable="true"] {
 
 .window.app .titlebar .tab.drop-after {
   box-shadow: inset -2px 0 0 var(--primary);
-}
-
-.window.app .title-actions {
-  align-self: center;
-  gap: 0;
-  padding-left: 10px;
-  padding-right: 14px;
 }
 
 .window.app .iconbtn.framed.primary {
@@ -749,11 +728,6 @@ button.env-link {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-.window.app .panel .branch-row .meta.upstream {
-  color: var(--ink-tertiary);
-  padding-left: 6px;
-  border-left: 1px solid var(--hairline);
 }
 .window.app .panel .branch-folder {
   grid-template-columns: 14px minmax(0, 1fr) auto;

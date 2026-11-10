@@ -821,7 +821,6 @@ function paintPanel() {
   const allBranches = b.branches || [];
   const locals = allBranches.filter((br) => !br.remote);
   const remotes = allBranches.filter((br) => br.remote);
-  const vsLabel = b.teamBranch ? ` · vs ${esc(b.teamBranch)}` : '';
   const localBody = locals.length
     ? renderBranchListHTML(locals, b, selected)
     : `<div class="empty-note">None</div>`;
@@ -829,10 +828,10 @@ function paintPanel() {
     ? renderBranchListHTML(remotes, b, selected)
     : `<div class="empty-note">None</div>`;
   html += `<div class="section section-branches">
-    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips — ↓↑ vs protected${b.teamBranch ? ` (${esc(b.teamBranch)})` : ''}; a second chip appears when the branch has drifted from its upstream">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips — ↓↑ only when drifted from upstream (origin/…). Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
-      <span class="meta">${locals.length}${vsLabel}</span>
+      <span class="meta">${locals.length}</span>
     </button>
     <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${localBody}</div>
   </div>`;
@@ -897,26 +896,16 @@ function paintPanel() {
   });
 }
 
-function branchMetaHTML(br, board) {
+function branchMetaHTML(br) {
   if (br.isTeam) return `<span class="metas"><span class="meta">team</span></span>`;
-  const vs = board.teamBranch || 'team';
-  const teamBits = [];
-  if (br.behind) teamBits.push(`${br.behind}↓`);
-  if (br.ahead) teamBits.push(`${br.ahead}↑`);
-  const upBits = [];
-  if (br.upstreamBehind) upBits.push(`${br.upstreamBehind}↓`);
-  if (br.upstreamAhead) upBits.push(`${br.upstreamAhead}↑`);
-  const parts = [];
-  if (teamBits.length) {
-    const cls = br.behind >= 3 ? 'bad' : br.behind ? 'warn' : '';
-    parts.push(`<span class="meta ${cls}" title="vs ${esc(vs)}">${esc(teamBits.join(' '))}</span>`);
-  }
-  // Upstream chip only when drifted — “do I need to pull/push?”
-  if (upBits.length) {
-    const cls = br.upstreamBehind >= 3 ? 'bad' : br.upstreamBehind ? 'warn' : '';
-    parts.push(`<span class="meta upstream ${cls}" title="vs ${esc(br.upstream)}">${esc(upBits.join(' '))}</span>`);
-  }
-  return `<span class="metas">${parts.join('')}</span>`;
+  // Branch list: vs upstream only (pull/push). Vs-team lives on lanes / header, not here.
+  if (!br.upstream) return `<span class="metas"></span>`;
+  const bits = [];
+  if (br.upstreamBehind) bits.push(`${br.upstreamBehind}↓`);
+  if (br.upstreamAhead) bits.push(`${br.upstreamAhead}↑`);
+  if (!bits.length) return `<span class="metas"></span>`;
+  const cls = br.upstreamBehind >= 3 ? 'bad' : br.upstreamBehind ? 'warn' : '';
+  return `<span class="metas"><span class="meta ${cls}" title="vs ${esc(br.upstream)}">${esc(bits.join(' '))}</span></span>`;
 }
 
 function branchRowHTML(br, label, board, selectedLane) {
@@ -927,7 +916,6 @@ function branchRowHTML(br, label, board, selectedLane) {
       : br.remote
         ? 'remote-only'
         : 'local';
-  const vs = board.teamBranch || 'team';
   const current = laneByIndex(selectedLane);
   const isCurrent = (br.hasLane && br.laneIndex === selectedLane)
     || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
@@ -935,11 +923,10 @@ function branchRowHTML(br, label, board, selectedLane) {
     br.name,
     isCurrent ? 'checked out here' : where,
     isCurrent ? '' : 'Click to check out in the selected worktree · right-click for more',
-    br.upstream ? `tracks ${br.upstream}` : '',
-    br.behind || br.ahead ? `vs ${vs}: ${br.behind || 0} behind, ${br.ahead || 0} ahead` : '',
+    br.upstream ? `tracks ${br.upstream}` : 'no upstream',
     br.upstreamBehind || br.upstreamAhead
       ? `vs ${br.upstream}: ${br.upstreamBehind || 0} behind, ${br.upstreamAhead || 0} ahead`
-      : '',
+      : (br.upstream ? 'in sync with upstream' : ''),
   ].filter(Boolean).join(' · ');
   const mark = isCurrent
     ? iconHTML('check-circle', 'sm current')
@@ -947,7 +934,7 @@ function branchRowHTML(br, label, board, selectedLane) {
   return `<button class="lane-row branch-row${isCurrent ? ' selected current' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}">
     ${mark}
     <span class="name">${esc(label)}</span>
-    ${branchMetaHTML(br, board)}
+    ${branchMetaHTML(br)}
   </button>`;
 }
 
