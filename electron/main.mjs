@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, protocol, screen, shell } from 'electron';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
+import { isPathUnderRepos } from './repo-favicon.mjs';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch } from './git/board.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
@@ -20,6 +21,20 @@ import { env as brandEnv } from './paths.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const buildInfoPath = path.join(__dirname, 'build-info.json');
+
+// Must run before app ready — lets the sandboxed UI load local repo images.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'plenum-img',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      stream: true,
+    },
+  },
+]);
 
 /** `~` and `~/x` to the home dir; anything else unchanged. */
 function expandHome(p) {
@@ -85,6 +100,18 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  protocol.handle('plenum-img', (request) => {
+    try {
+      const abs = new URL(request.url).searchParams.get('p');
+      if (!abs || !path.isAbsolute(abs)) return new Response('Bad path', { status: 400 });
+      const roots = tabs.listTabs().tabs.map((t) => t.path);
+      if (!isPathUnderRepos(abs, roots)) return new Response('Forbidden', { status: 403 });
+      return net.fetch(pathToFileURL(abs).href);
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
+  });
+
   if (process.platform === 'darwin') {
     app.setName('Plenum');
     const icon = appIcon();
@@ -95,11 +122,14 @@ app.whenReady().then(async () => {
     for (const t of tabs.listTabs().tabs) tabs.closeTab(t.id);
   }
 
+  // Sync favicon cache with the pref (clear stale data URLs when off).
+  tabs.refreshFavicons(getPrefs(prefsDir()).tabFavicons !== false);
+
   const openPath = brandEnv('OPEN');
   if (openPath && fs.existsSync(openPath)) {
     try {
       const board = await loadBoard(openPath);
-      tabs.openTab(board.root, board.repoName);
+      tabs.openTab(board.root, board.repoName, { favicons: getPrefs(prefsDir()).tabFavicons !== false });
     } catch (e) {
       console.error('[plenum] PLENUM_OPEN failed', e.message);
     }
@@ -126,7 +156,8 @@ function activePath() {
 ipcMain.handle('tabs.list', () => tabs.listTabs());
 ipcMain.handle('tabs.open', async (_e, repoPath) => {
   const board = await loadBoard(repoPath);
-  return { store: tabs.openTab(board.root, board.repoName), board };
+  const favicons = getPrefs(prefsDir()).tabFavicons !== false;
+  return { store: tabs.openTab(board.root, board.repoName, { favicons }), board };
 });
 // Select is sync — board loads in the renderer via board.get so rapid switches
 // do not pile up loadBoard work against the wrong active tab.
@@ -139,10 +170,16 @@ ipcMain.handle('tabs.close', async (_e, id) => {
 });
 ipcMain.handle('tabs.rename', (_e, id, title, icon) => tabs.renameTab(id, title, icon));
 ipcMain.handle('tabs.setIcon', (_e, id, icon) => tabs.setIcon(id, icon));
+ipcMain.handle('tabs.listImages', (_e, id) => tabs.listTabImages(id));
+ipcMain.handle('tabs.setImage', (_e, id, relPath) => tabs.setTabImage(id, relPath));
 ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds));
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
-ipcMain.handle('prefs.set', (_e, partial) => setPrefs(partial, prefsDir()));
+ipcMain.handle('prefs.set', (_e, partial) => {
+  const next = setPrefs(partial, prefsDir());
+  if ('tabFavicons' in (partial || {})) tabs.refreshFavicons(next.tabFavicons !== false);
+  return next;
+});
 ipcMain.handle('app.version', () => {
   const info = readBuildInfo(buildInfoPath);
   return {

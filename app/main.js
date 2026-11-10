@@ -142,10 +142,30 @@ async function setPref(partial, render = true) {
   clearTimeout(setPref._toast);
   setPref._toast = setTimeout(() => toast('Saved', 'ok'), 320);
   if ('gravatar' in partial) paint();
+  if ('tabFavicons' in partial) {
+    applyStore(await invoke('tabs.list'));
+    paintTabs();
+  }
   if (!render) return;
   const top = el.settingsBody.scrollTop;
   renderSettings();
   el.settingsBody.scrollTop = top;
+}
+
+/** Glyph for a repo tab: custom/auto favicon when present, else preset SVG. */
+function tabGlyph(tab) {
+  if (state.prefs.tabFavicons !== false && tab.favicon) {
+    const img = document.createElement('img');
+    img.className = 'tab-favicon';
+    img.alt = '';
+    img.draggable = false;
+    img.src = tab.favicon;
+    img.addEventListener('error', () => {
+      img.replaceWith(icon(tab.icon || 'folder-simple', 'sm'));
+    });
+    return img;
+  }
+  return icon(tab.icon || 'folder-simple', 'sm');
 }
 applyTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
@@ -603,11 +623,26 @@ function syncSearchCollapse() {
   syncTabScrollFades();
 }
 
+/**
+ * Max scroll from tab boxes only. Active-tab ear ::before/::after are absolute and
+ * inflate scrollWidth, which used to flash the left arrow on the rightmost tab.
+ */
+function tabStripScrollMax(scroller = el.tabstripScroll) {
+  if (!scroller) return 0;
+  const tabs = scroller.querySelectorAll('.tab');
+  if (!tabs.length) return 0;
+  const last = tabs[tabs.length - 1];
+  const padRight = parseFloat(getComputedStyle(scroller).paddingRight) || 0;
+  return Math.max(0, last.offsetLeft + last.offsetWidth + padRight - scroller.clientWidth);
+}
+
 function syncTabScrollFades() {
   const scroller = el.tabstripScroll;
   if (!scroller) return;
-  const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-  const canLeft = scroller.scrollLeft > 2;
+  const max = tabStripScrollMax(scroller);
+  // Pin to start when tabs fit; ear overhang can leave a stray scrollLeft.
+  if (max <= 2 && scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
+  const canLeft = max > 2 && scroller.scrollLeft > 2;
   const canRight = max > 2 && scroller.scrollLeft < max - 2;
   if (el.tabScrollPrev) el.tabScrollPrev.hidden = !canLeft;
   if (el.tabScrollNext) el.tabScrollNext.hidden = !canRight;
@@ -624,8 +659,27 @@ function scrollTabsBy(dir) {
 }
 
 function scrollActiveTabIntoView() {
-  const active = el.tabstripScroll?.querySelector('.tab.active');
-  active?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  const scroller = el.tabstripScroll;
+  const active = scroller?.querySelector('.tab.active');
+  if (!scroller || !active) {
+    syncTabScrollFades();
+    return;
+  }
+  const max = tabStripScrollMax(scroller);
+  if (max <= 2) {
+    if (scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
+    syncTabScrollFades();
+    return;
+  }
+  // Manual nearest-inline scroll so absolute ears / scroll-padding don't nudge.
+  const sRect = scroller.getBoundingClientRect();
+  const tRect = active.getBoundingClientRect();
+  const pad = 8;
+  if (tRect.left < sRect.left + pad) {
+    scroller.scrollLeft -= (sRect.left + pad) - tRect.left;
+  } else if (tRect.right > sRect.right - pad) {
+    scroller.scrollLeft += tRect.right - (sRect.right - pad);
+  }
   syncTabScrollFades();
 }
 
@@ -638,7 +692,7 @@ function paintTabs() {
     btn.dataset.id = t.id;
     btn.draggable = true;
     if (t.id === state.store.activeId) btn.setAttribute('aria-current', 'page');
-    btn.appendChild(icon(t.icon || 'folder-simple', 'sm'));
+    btn.appendChild(tabGlyph(t));
     const title = document.createElement('span');
     title.className = 'tab-title';
     title.textContent = t.title;
@@ -760,16 +814,42 @@ function openRename(tab, anchor) {
   // Rebuild this tab as an inline rename field (mock: .tab.renaming).
   const btn = el.tabstrip.querySelector(`.tab[data-id="${CSS.escape(tab.id)}"]`);
   if (!btn) return;
-  let chosen = tab.icon || 'folder-simple';
+  const autoOn = state.prefs.tabFavicons !== false;
+  // 'auto' | 'image' | preset name
+  let chosen = tab.iconManual
+    ? (tab.favicon && autoOn ? 'image' : (tab.icon || 'folder-simple'))
+    : (autoOn ? 'auto' : (tab.icon || 'folder-simple'));
   let saving = false;
+  let pickingImage = false;
   const wrap = document.createElement('div');
   wrap.className = 'tab renaming';
   wrap.setAttribute('aria-label', 'Renaming repository tab');
   wrap.dataset.id = tab.id;
-  wrap.appendChild(icon(chosen, 'sm'));
+  const imgGlyph = (src) => {
+    const img = document.createElement('img');
+    img.className = 'tab-favicon';
+    img.alt = '';
+    img.draggable = false;
+    img.src = src;
+    return img;
+  };
+  const autoGlyph = () => {
+    if (tab.favicon && autoOn) return imgGlyph(tab.favicon);
+    return icon(tab.icon || 'folder-simple', 'sm');
+  };
+  const previewGlyph = () => {
+    if (chosen === 'auto') return autoGlyph();
+    if (chosen === 'image' && tab.favicon) return imgGlyph(tab.favicon);
+    return icon(chosen, 'sm');
+  };
+  const syncPreview = () => {
+    wrap.replaceChildren(previewGlyph(), input);
+    paintIcons();
+  };
   const input = document.createElement('input');
   input.value = tab.title;
   input.setAttribute('aria-label', 'Repository display name');
+  wrap.appendChild(previewGlyph());
   wrap.appendChild(input);
 
   const pop = document.createElement('div');
@@ -778,6 +858,37 @@ function openRename(tab, anchor) {
   grid.className = 'icon-grid inline';
   const paintIcons = () => {
     grid.replaceChildren();
+    if (autoOn) {
+      const autoBtn = document.createElement('button');
+      autoBtn.type = 'button';
+      autoBtn.className = 'icon-auto';
+      autoBtn.title = 'Auto — use repo favicon when found';
+      autoBtn.setAttribute('aria-label', 'Auto — use repo favicon when found');
+      if (chosen === 'auto') autoBtn.classList.add('on');
+      autoBtn.appendChild(autoGlyph());
+      const tag = document.createElement('span');
+      tag.className = 'icon-auto-tag';
+      tag.textContent = 'A';
+      autoBtn.appendChild(tag);
+      autoBtn.addEventListener('mousedown', (e) => e.preventDefault());
+      autoBtn.addEventListener('click', () => {
+        chosen = 'auto';
+        syncPreview();
+        input.focus();
+      });
+      grid.appendChild(autoBtn);
+      if (chosen === 'image' && tab.favicon) {
+        const imgBtn = document.createElement('button');
+        imgBtn.type = 'button';
+        imgBtn.className = 'icon-auto';
+        imgBtn.title = 'Custom image from repo';
+        imgBtn.setAttribute('aria-label', 'Custom image from repo');
+        imgBtn.classList.add('on');
+        imgBtn.appendChild(imgGlyph(tab.favicon));
+        imgBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        grid.appendChild(imgBtn);
+      }
+    }
     for (const name of TAB_ICONS) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -786,8 +897,7 @@ function openRename(tab, anchor) {
       b.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus on input
       b.addEventListener('click', () => {
         chosen = name;
-        wrap.replaceChildren(icon(chosen, 'sm'), input);
-        paintIcons();
+        syncPreview();
         input.focus();
       });
       grid.appendChild(b);
@@ -795,6 +905,27 @@ function openRename(tab, anchor) {
   };
   paintIcons();
   pop.appendChild(grid);
+  if (autoOn) {
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'rename-pick-image';
+    pick.textContent = 'Choose image from repo…';
+    pick.addEventListener('mousedown', (e) => e.preventDefault());
+    pick.addEventListener('click', async () => {
+      pickingImage = true;
+      document.removeEventListener('mousedown', off);
+      pop.remove();
+      const title = input.value.trim() || tab.title;
+      wrap.replaceWith(btn);
+      try {
+        if (title !== tab.title) applyStore(await invoke('tabs.rename', tab.id, title));
+      } catch { /* toasted */ }
+      paintTabs();
+      const fresh = state.store.tabs.find((t) => t.id === tab.id) || tab;
+      await openTabImageSheet(fresh);
+    });
+    pop.appendChild(pick);
+  }
   document.body.appendChild(pop);
   const placePop = () => {
     const r = wrap.getBoundingClientRect();
@@ -805,7 +936,7 @@ function openRename(tab, anchor) {
   };
 
   const finish = async (commit) => {
-    if (saving) return;
+    if (saving || pickingImage) return;
     saving = true;
     document.removeEventListener('mousedown', off);
     pop.remove();
@@ -814,7 +945,10 @@ function openRename(tab, anchor) {
       return;
     }
     try {
-      const iconArg = chosen !== (tab.icon || 'folder-simple') ? chosen : undefined;
+      let iconArg;
+      if (chosen === 'image') iconArg = undefined; // already applied via tabs.setImage
+      else if (chosen === 'auto') iconArg = tab.iconManual ? 'auto' : undefined;
+      else if (chosen !== (tab.icon || 'folder-simple') || !tab.iconManual || tab.favicon) iconArg = chosen;
       const store = await invoke('tabs.rename', tab.id, input.value, iconArg);
       applyStore(store);
     } catch { /* toasted */ }
@@ -822,6 +956,7 @@ function openRename(tab, anchor) {
   };
   const off = (ev) => {
     if (wrap.contains(ev.target) || pop.contains(ev.target)) return;
+    if (el.sheetLayer?.classList.contains('open')) return;
     finish(true);
   };
   input.addEventListener('keydown', (e) => {
@@ -833,6 +968,73 @@ function openRename(tab, anchor) {
   input.focus();
   input.select();
   setTimeout(() => document.addEventListener('mousedown', off), 0);
+}
+
+/** Modal: pick a PNG / JPEG / SVG from the checkout as the tab icon. */
+async function openTabImageSheet(tab) {
+  openSheet(`
+    <form class="modal wide" role="dialog" aria-labelledby="tab-img-title">
+      <div class="eyebrow">${iconHTML('globe-simple', 'sm')}Tab icon</div>
+      <h1 id="tab-img-title">Choose an image</h1>
+      <p>PNG, JPEG, or SVG in this repo. Names with icon / logo / glyph rise to the top. Skips node_modules and build folders.</p>
+      <div class="tab-image-scroll" data-tab-images>
+        <div class="muted">Scanning…</div>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+      </div>
+    </form>`);
+  const root = el.sheetLayer.querySelector('[data-tab-images]');
+  let images = [];
+  try {
+    images = await invoke('tabs.listImages', tab.id);
+  } catch {
+    root.innerHTML = `<div class="muted">Couldn’t scan the repo.</div>`;
+    return;
+  }
+  if (!images.length) {
+    root.innerHTML = `<div class="muted">No PNG, JPEG, or SVG found. Drop a logo.png or favicon.svg in the project.</div>`;
+    return;
+  }
+  const suggested = images.filter((x) => x.suggested);
+  const rest = images.filter((x) => !x.suggested);
+  const mountSection = (title, items) => {
+    if (!items.length) return;
+    const head = document.createElement('div');
+    head.className = 'tab-image-section';
+    head.textContent = title;
+    root.appendChild(head);
+    const grid = document.createElement('div');
+    grid.className = 'tab-image-grid';
+    for (const item of items) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tab-image-opt';
+      b.title = item.rel;
+      b.setAttribute('aria-label', item.rel);
+      const img = document.createElement('img');
+      img.src = item.fileUrl;
+      img.alt = '';
+      b.appendChild(img);
+      const cap = document.createElement('span');
+      cap.textContent = item.rel;
+      b.appendChild(cap);
+      b.addEventListener('click', async () => {
+        try {
+          applyStore(await invoke('tabs.setImage', tab.id, item.rel));
+          closeSheet();
+          paintTabs();
+          toast('Tab icon updated', 'ok');
+        } catch { /* toasted */ }
+      });
+      grid.appendChild(b);
+    }
+    root.appendChild(grid);
+  };
+  root.replaceChildren();
+  mountSection('Suggested', suggested);
+  if (rest.length) mountSection(suggested.length ? 'All' : 'Images', rest);
+  else if (!suggested.length) mountSection('Images', images);
 }
 
 
@@ -2657,6 +2859,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">Tabs</div>
       <div class="list">
         ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list when Plenum starts, so you begin empty.')}
+        ${settingsRow('globe-simple', 'Repo favicons', '', 'Auto-detect, or rename a tab → Choose image from repo', switchHTML('tabFavicons', p.tabFavicons !== false, 'Repo favicons'), 'Looks for favicon.ico / .svg / .png automatically. Rename a tab to pick a preset or any PNG / JPEG / SVG from the checkout. Off always uses the preset icons.')}
         ${settingsRow('clock', 'Tab warm time', '', 'How long a left tab stays hot', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }), 'Within this window, switching back to a tab paints the last board instantly while git refreshes in the background. After it freezes you still get one instant paint, then a full reload.')}
       </div>
 `;
@@ -3256,7 +3459,7 @@ async function boot() {
   el.tabstripScroll?.addEventListener('scroll', syncTabScrollFades, { passive: true });
   el.tabstripScroll?.addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    if (el.tabstripScroll.scrollWidth <= el.tabstripScroll.clientWidth) return;
+    if (tabStripScrollMax(el.tabstripScroll) <= 2) return;
     e.preventDefault();
     el.tabstripScroll.scrollLeft += e.deltaY;
   }, { passive: false });

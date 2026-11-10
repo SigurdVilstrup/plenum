@@ -503,6 +503,122 @@ button.env-link {
   color: var(--primary);
 }
 
+.icon-grid button.icon-auto {
+  position: relative;
+  border: 1px dashed var(--hairline-strong, var(--hairline));
+  margin-right: 4px;
+}
+
+.icon-grid button.icon-auto .icon-auto-tag {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-subtle);
+  pointer-events: none;
+}
+
+.icon-grid button.icon-auto.on .icon-auto-tag {
+  color: var(--primary);
+}
+
+.rename-pop .rename-pick-image {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--hairline);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-subtle);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rename-pop .rename-pick-image:hover {
+  color: var(--ink);
+  border-color: var(--ink-tertiary);
+  background: var(--surface-2);
+}
+
+.modal.wide {
+  width: min(560px, calc(100vw - 48px));
+}
+
+.tab-image-scroll {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0 0 16px;
+  padding: 2px;
+}
+
+.tab-image-scroll .muted {
+  color: var(--ink-subtle);
+  font-size: 13px;
+  padding: 12px 4px;
+}
+
+.tab-image-section {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 10px 2px 6px;
+}
+
+.tab-image-section:first-child {
+  margin-top: 0;
+}
+
+.tab-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.tab-image-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-subtle);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.tab-image-opt:hover {
+  border-color: var(--ink-tertiary);
+  color: var(--ink);
+}
+
+.tab-image-opt img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hairline) 80%, transparent);
+}
+
+.tab-image-opt span {
+  font-size: 10px;
+  line-height: 1.25;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
 .conflict-list {
   max-height: 240px;
   overflow: auto;

@@ -22,6 +22,7 @@ export function defaultPrefs() {
     cloneDefaultPath: '',
     defaultLanesFolder: '.worktrees',
     reopenTabs: true,
+    tabFavicons: true,
     gravatar: true,
     warmTabTtlMs: 120_000,
     credentialHosts: [],
@@ -69,7 +70,7 @@ const ENUMS = {
   mergeTool: ['internal', 'opendiff', 'vscode', 'cursor'],
 };
 const ABS_PATHS = ['editorPath', 'terminalPath', 'cloneDefaultPath', 'diffToolPath', 'mergeToolPath'];
-const BOOLS = ['openLaneInEditor', 'reopenTabs', 'gravatar'];
+const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar'];
 
 /** Keep only known keys with valid values; drop the rest silently. */
 function sanitize(partial) {
