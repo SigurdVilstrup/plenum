@@ -7,7 +7,7 @@ import { loadManifest } from '../lane/manifest.mjs';
 import { laneStatus } from '../lane/status.mjs';
 import { getProc, getLastTest } from '../lane/supervisor.mjs';
 import { assignColumns } from './graph-columns.mjs';
-import { LEGACY_TEAM_BRANCH_KEY, TEAM_BRANCH_KEY, manifestPath } from '../paths.mjs';
+import { BASELINE_KEY, LEGACY_TEAM_BRANCH_KEY, TEAM_BRANCH_KEY, manifestPath } from '../paths.mjs';
 import { probeOrigin } from './remote-health.mjs';
 
 /** SHA-256 of trimmed lowercase email for Gravatar (empty if no email). */
@@ -89,7 +89,7 @@ function parseWorktrees(text) {
 
 async function branchExists(name, cwd) {
   if (!name) return false;
-  return gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], cwd)
+  return (await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], cwd))
     || gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], cwd);
 }
 
@@ -135,6 +135,31 @@ export async function setTeamBranch(repoPath, name) {
   if (!(await branchExists(branch, cwd))) throw new Error(`Branch ${branch} not found locally or on origin.`);
   try { await git(['config', '--local', '--unset', LEGACY_TEAM_BRANCH_KEY], cwd); } catch { /* none */ }
   await git(['config', '--local', TEAM_BRANCH_KEY, branch], cwd);
+  return loadBoard(cwd);
+}
+
+/** Extra comparison tips from local `git config plenum.baseline` (multi-valued). Team branch and missing refs drop out. */
+async function baselines(cwd, team) {
+  let raw = '';
+  try { raw = await git(['config', '--local', '--get-all', BASELINE_KEY], cwd); } catch { return []; }
+  const out = [];
+  for (const name of new Set(raw.split(/\n/).map((s) => s.trim()).filter(Boolean))) {
+    if (name === team || !(await branchExists(name, cwd))) continue;
+    out.push({ name, ref: await resolveTeamRef(name, cwd) });
+  }
+  return out;
+}
+
+/** Replace the comparison baselines for this repo. Comparison only — no protected rules. */
+export async function setBaselines(repoPath, names) {
+  const cwd = path.resolve(repoPath);
+  const list = [...new Set((Array.isArray(names) ? names : []).map((n) => String(n || '').trim()).filter(Boolean))];
+  for (const name of list) {
+    if (!/^[A-Za-z0-9._/-]+$/.test(name)) throw new Error('Invalid branch name.');
+    if (!(await branchExists(name, cwd))) throw new Error(`Branch ${name} not found locally or on origin.`);
+  }
+  try { await git(['config', '--local', '--unset-all', BASELINE_KEY], cwd); } catch { /* none */ }
+  for (const name of list) await git(['config', '--local', '--add', BASELINE_KEY, name], cwd);
   return loadBoard(cwd);
 }
 
@@ -351,7 +376,7 @@ function pills(decoration, team, primaryBranch, laneBranches) {
 }
 
 /** All local + remote branches with where / vs-team / vs-upstream. */
-export async function listBranches(cwd, lanes, team, teamRef) {
+export async function listBranches(cwd, lanes, team, teamRef, extra = []) {
   const byLane = new Map(lanes.filter((l) => l.branch).map((l) => [l.branch, l]));
   const locals = new Map();
   try {
@@ -398,6 +423,15 @@ export async function listBranches(cwd, lanes, team, teamRef) {
       b.ahead = ahead;
       b.behind = behind;
     } catch { /* empty */ }
+    // Extra baselines (#46): one rev-list per branch per baseline.
+    b.vs = {};
+    await Promise.all(extra.map(async ({ name, ref }) => {
+      try {
+        const [behind, ahead] = (await git(['rev-list', '--left-right', '--count', `${ref}...${b.name}`], cwd))
+          .trim().split(/\s+/).map(Number);
+        b.vs[name] = { ahead: ahead || 0, behind: behind || 0 };
+      } catch { /* ref went away mid-read */ }
+    }));
   }));
 
   const remotes = [];
@@ -585,6 +619,7 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
   const team = teamInfo.name;
   const teamBranchSource = teamInfo.source;
   const teamRef = await resolveTeamRef(team, top);
+  const extraBaselines = await baselines(top, team);
   const hasCommit = await gitOk(['rev-parse', '--verify', '--quiet', 'HEAD'], top);
   let manifest = null;
   try {
@@ -642,7 +677,7 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
 
   let branches = [];
   try {
-    branches = await listBranches(top, lanes, team, teamRef);
+    branches = await listBranches(top, lanes, team, teamRef, extraBaselines);
   } catch { /* empty */ }
 
   let origin = { name: null, url: '', display: '', status: 'unknown', detail: '' };
@@ -683,6 +718,7 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
     teamBranch: team,
     teamBranchSource,
     teamRef,
+    baselines: extraBaselines,
     hasManifest: Boolean(manifest),
     manifestSummary: manifest
       ? {

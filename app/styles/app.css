@@ -1195,3 +1195,29 @@ button.env-link {
   white-space: nowrap;
   border: 0;
 }
+
+/* #46 — baseline picker beside the Branches toggle */
+.window.app .panel .branch-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.window.app .panel .branch-head .branch-toggle {
+  flex: 1;
+  min-width: 0;
+}
+.window.app .panel .branch-vs {
+  flex: none;
+  max-width: 45%;
+  margin-right: 6px;
+  padding: 1px 4px;
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--ink-tertiary);
+  font-size: 11px;
+}
+.window.app .panel .branch-vs:hover,
+.window.app .panel .branch-vs:focus-visible {
+  border-color: var(--hairline);
+  color: var(--ink);
+}

@@ -1128,6 +1128,7 @@ function paintPanel() {
   const remoteBody = remotes.length
     ? renderBranchListHTML(remotes, b, selected, refreshing)
     : `<div class="empty-note">None</div>`;
+  const vsRef = branchVsRef(b);
   const branchMeta = refreshing
     ? `<i class="spinner btn-spin" aria-hidden="true"></i><span class="sr-only">Refreshing</span>`
     : `${locals.length}`;
@@ -1146,11 +1147,14 @@ function paintPanel() {
     </div>`;
   }
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips. ↓↑ only when drifted from upstream (origin/…). Vs protected tip stays on the lane header.">
+    <div class="branch-head">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
       <span class="meta">${branchMeta}</span>
     </button>
+    ${branchVsSelectHTML(b)}
+    </div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
@@ -1195,6 +1199,10 @@ function paintPanel() {
     state.branchesOpen = !state.branchesOpen;
     paint();
   });
+  el.panel.querySelector('[data-branch-vs]')?.addEventListener('change', (e) => {
+    setBranchVs(b.root, e.target.value);
+    paint();
+  });
   el.panel.querySelector('[data-remotes]')?.addEventListener('click', () => {
     state.remotesOpen = !state.remotesOpen;
     paint();
@@ -1226,15 +1234,63 @@ function paintPanel() {
   });
 }
 
-function branchMetaHTML(br) {
-  // Branch list: vs upstream only (pull/push). No “team” badge — protected tip is Settings / lane header.
-  if (!br.upstream) return `<span class="metas"></span>`;
+// #46 — which tip the branch list counts against. '' = each branch's upstream (default).
+const BRANCH_VS_KEY = 'plenum.branchVs';
+
+function readBranchVs() {
+  try { return JSON.parse(localStorage.getItem(BRANCH_VS_KEY) || '{}') || {}; } catch { return {}; }
+}
+
+function setBranchVs(root, name) {
+  const all = readBranchVs();
+  if (name) all[root] = name;
+  else delete all[root];
+  try { localStorage.setItem(BRANCH_VS_KEY, JSON.stringify(all)); } catch { /* session only */ }
+}
+
+/** Chosen baseline name for this repo, or '' for upstream. Only offered once an extra baseline is configured. */
+function branchVs(board) {
+  if (!board?.baselines?.length) return '';
+  const v = readBranchVs()[board.root] || '';
+  return v === board.teamBranch || board.baselines.some((x) => x.name === v) ? v : '';
+}
+
+/** Resolved ref (origin/demo) for the chosen baseline, or '' for upstream. */
+function branchVsRef(board) {
+  const v = branchVs(board);
+  if (!v) return '';
+  return v === board.teamBranch ? board.teamRef : board.baselines.find((x) => x.name === v).ref;
+}
+
+function branchVsSelectHTML(board) {
+  if (!board?.baselines?.length) return '';
+  const cur = branchVs(board);
+  const opt = (value, label) => `<option value="${esc(value)}"${value === cur ? ' selected' : ''}>vs ${esc(label)}</option>`;
+  return `<select class="select branch-vs" data-branch-vs aria-label="Count branches ahead and behind against" title="What ↓↑ on each branch counts against. Add baselines in Settings → Repository.">
+    ${opt('', 'upstream')}${opt(board.teamBranch, board.teamBranch)}${board.baselines.map((x) => opt(x.name, x.name)).join('')}
+  </select>`;
+}
+
+/** { behind, ahead, ref } vs the chosen baseline (or upstream); null when there is nothing to compare to. */
+function branchDrift(br, board) {
+  const vs = branchVs(board);
+  if (!vs) {
+    return br.upstream ? { behind: br.upstreamBehind || 0, ahead: br.upstreamAhead || 0, ref: br.upstream } : null;
+  }
+  if (br.remote) return null; // counts are only read for local tips
+  const c = vs === board.teamBranch ? br : br.vs?.[vs];
+  return c ? { behind: c.behind || 0, ahead: c.ahead || 0, ref: branchVsRef(board) } : null;
+}
+
+function branchMetaHTML(br, board) {
+  // Branch list: vs upstream by default (pull/push); a named baseline when one is picked in the header (#46).
+  const d = branchDrift(br, board);
   const bits = [];
-  if (br.upstreamBehind) bits.push(`${br.upstreamBehind}↓`);
-  if (br.upstreamAhead) bits.push(`${br.upstreamAhead}↑`);
+  if (d?.behind) bits.push(`${d.behind}↓`);
+  if (d?.ahead) bits.push(`${d.ahead}↑`);
   if (!bits.length) return `<span class="metas"></span>`;
-  const cls = br.upstreamBehind >= 3 ? 'bad' : br.upstreamBehind ? 'warn' : '';
-  return `<span class="metas"><span class="meta ${cls}" title="vs ${esc(br.upstream)}">${esc(bits.join(' '))}</span></span>`;
+  const cls = d.behind >= 3 ? 'bad' : d.behind ? 'warn' : '';
+  return `<span class="metas"><span class="meta ${cls}" title="vs ${esc(d.ref)}">${esc(bits.join(' '))}</span></span>`;
 }
 
 function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
@@ -1248,15 +1304,16 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   const current = laneByIndex(selectedLane);
   const isCurrent = (br.hasLane && br.laneIndex === selectedLane)
     || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
+  const drift = branchDrift(br, board);
   const title = [
     br.name,
     refreshing ? 'list refreshing' : null,
     isCurrent ? 'checked out here' : where,
     br.hasLane ? 'Click to select this worktree' : 'Right-click → Switch branch',
     br.upstream ? `tracks ${br.upstream}` : 'no upstream',
-    br.upstreamBehind || br.upstreamAhead
-      ? `vs ${br.upstream}: ${br.upstreamBehind || 0} behind, ${br.upstreamAhead || 0} ahead`
-      : (br.upstream ? 'in sync with upstream' : ''),
+    drift && (drift.behind || drift.ahead)
+      ? `vs ${drift.ref}: ${drift.behind} behind, ${drift.ahead} ahead`
+      : (drift ? `in sync with ${drift.ref}` : ''),
   ].filter(Boolean).join(' · ');
   const mark = isCurrent
     ? iconHTML('check-circle', 'sm current')
@@ -1266,7 +1323,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   return `<button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
     ${mark}
     <span class="name">${esc(label)}</span>
-    ${branchMetaHTML(br)}
+    ${branchMetaHTML(br, board)}
   </button>`;
 }
 
@@ -3142,6 +3199,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
         ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
+        ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b?.baselines?.length ? b.baselines.map((x) => `<span class="mono">${esc(x.ref)}</span>`).join(', ') : 'None. The branch list counts against upstream.', b ? baselinesControlHTML(b, root, t.title) : '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Branches header. Stored as local git config plenum.baseline.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'This repo only. Relative paths sit under the checkout; absolute paths are fine.')}
         ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared = one instance for every lane; snapshot seeds a copy before Run.')}
@@ -3278,7 +3336,40 @@ function teamBranchControlHTML(board, root, title) {
   return `<select class="select mono" data-team-root="${esc(root)}" aria-label="Protected branch for ${esc(title)}">${opts.join('')}</select>`;
 }
 
+/** Removable baselines + an Add select of the remaining branch names (#46). */
+function baselinesControlHTML(board, root, title) {
+  const cur = (board.baselines || []).map((x) => x.name);
+  const names = new Set();
+  for (const br of board.branches || []) {
+    const short = br.short || String(br.name || '').replace(/^origin\//, '');
+    if (short && short !== board.teamBranch && !cur.includes(short)) names.add(short);
+  }
+  const chips = cur.map((n) => (
+    `<button class="btn mono" type="button" data-baseline-remove="${esc(n)}" data-baseline-root="${esc(root)}" title="Stop comparing against ${esc(n)}" aria-label="Remove baseline ${esc(n)}">${esc(n)}${iconHTML('x', 'sm')}</button>`
+  )).join('');
+  const opts = [...names].sort((a, b) => a.localeCompare(b)).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  return `<span class="row-actions">${chips}<select class="select mono" data-baseline-add="${esc(root)}" aria-label="Add comparison baseline for ${esc(title)}"${opts ? '' : ' disabled'}><option value="">Add…</option>${opts}</select></span>`;
+}
+
 function bindRepos(root) {
+  const saveBaselines = async (rootPath, change, msg) => {
+    try {
+      const cur = (state.repoBoards.get(rootPath)?.baselines || []).map((x) => x.name);
+      const board = await invoke('repo.setBaselines', change(cur), rootPath);
+      board.displayRoot = await prettyPath(board.root);
+      state.repoBoards.set(rootPath, board);
+      if (board.root === state.board?.root) applyBoard(board);
+      toast(msg, 'ok');
+      renderSettings();
+    } catch { /* toasted */ }
+  };
+  root.querySelectorAll('[data-baseline-add]').forEach((n) => n.addEventListener('change', () => {
+    if (n.value) saveBaselines(n.dataset.baselineAdd, (cur) => [...cur, n.value], `Comparing against ${n.value}`);
+  }));
+  root.querySelectorAll('[data-baseline-remove]').forEach((n) => n.addEventListener('click', () => {
+    const name = n.dataset.baselineRemove;
+    saveBaselines(n.dataset.baselineRoot, (cur) => cur.filter((x) => x !== name), `Baseline ${name} removed`);
+  }));
   root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => {
     openLaneSetup(b.dataset.setupRoot);
   }));

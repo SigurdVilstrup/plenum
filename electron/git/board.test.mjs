@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadBoard, classifyAuthorship, parseDirty, parseNumstat, loadCommitChanges, emailAvatarHash } from './board.mjs';
+import { loadBoard, setBaselines, classifyAuthorship, parseDirty, parseNumstat, loadCommitChanges, emailAvatarHash } from './board.mjs';
 
 function git(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
@@ -331,5 +331,42 @@ test('listBranches overview: locals remotes lane flags', async () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
+
+test('baselines: configured tips give per-branch ahead/behind', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-base-'));
+  const commit = (file, msg) => {
+    fs.writeFileSync(path.join(root, file), file);
+    git(['add', file], root);
+    git(['commit', '-m', msg], root);
+  };
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'T'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    commit('a.txt', 'base');
+    git(['checkout', '-b', 'demo'], root);
+    commit('d1.txt', 'demo 1');
+    commit('d2.txt', 'demo 2');
+    git(['checkout', '-b', 'feat/x', 'main'], root);
+    commit('x.txt', 'feat');
+    git(['checkout', 'main'], root);
+
+    assert.deepEqual((await loadBoard(root)).baselines, []);
+    await assert.rejects(() => setBaselines(root, ['nope']), /not found/);
+
+    // Team branch and duplicates drop out; demo stays.
+    let board = await setBaselines(root, ['demo', 'demo', 'main']);
+    assert.deepEqual(board.baselines, [{ name: 'demo', ref: 'demo' }]);
+    const feat = board.branches.find((b) => b.name === 'feat/x');
+    assert.deepEqual(feat.vs.demo, { ahead: 1, behind: 2 });
+    assert.deepEqual(board.branches.find((b) => b.name === 'demo').vs.demo, { ahead: 0, behind: 0 });
+
+    board = await setBaselines(root, []);
+    assert.deepEqual(board.baselines, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

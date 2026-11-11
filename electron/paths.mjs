@@ -7,6 +7,8 @@ export const MANIFEST_DIR = '.plenum';
 export const LEGACY_MANIFEST_DIR = '.overlook';
 export const TEAM_BRANCH_KEY = 'plenum.teamBranch';
 export const LEGACY_TEAM_BRANCH_KEY = 'overlook.teamBranch';
+/** Multi-valued: extra comparison tips for branch ahead/behind (#46). */
+export const BASELINE_KEY = 'plenum.baseline';
 export const RUN_HOME = path.join(os.homedir(), '.plenum');
 export const LEGACY_RUN_HOME = path.join(os.homedir(), '.overlook');
 
