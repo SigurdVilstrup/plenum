@@ -1166,13 +1166,7 @@ function paintPanel() {
     }</div>
   </div>`;
 
-  const foot = `<div class="panel-foot">
-    <button class="iconbtn" type="button" data-settings title="Settings ⌘," aria-label="Settings">${iconHTML('gear-six')}</button>
-    <button class="iconbtn" type="button" disabled title="Account — coming soon" aria-label="Account (coming soon)">${iconHTML('user')}</button>
-    <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
-  </div>`;
-
-  el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${foot}`;
+  el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${panelFootHTML()}`;
   el.panel.classList.toggle('is-refreshing', refreshing);
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
   el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
@@ -1724,6 +1718,15 @@ function startFeedbackPick() {
       target: { label: feedbackPickLabel(node), rect: { x: r.x, y: r.y, w: r.width, h: r.height } },
     });
   });
+}
+
+/** Footer shared by the board sidebar and the Settings sidebar so both look identical. */
+function panelFootHTML(settingsActive = false) {
+  return `<div class="panel-foot">
+    <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
+    <button class="iconbtn" type="button" disabled title="Account — coming soon" aria-label="Account (coming soon)">${iconHTML('user')}</button>
+    <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
+  </div>`;
 }
 
 function openFeedbackSheet(seed = {}) {
@@ -3368,11 +3371,8 @@ function renderSettings() {
   const lit = page === 'setup' ? 'repositories' : page; // Lane setup lives under Repository
   const nav = SETTINGS_NAV.map(([id, ic, label]) =>
     `<button class="navitem${id === lit ? ' active' : ''}" type="button" data-page="${id}"${id === lit ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
-  el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
-    <div class="heading">Settings</div>${nav}
-    <div class="settings-nav-foot">
-      <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
-    </div>`;
+  el.settingsNav.innerHTML = `<div class="settings-nav-list"><button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
+    <div class="heading">Settings</div>${nav}</div>${panelFootHTML(true)}`;
   el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
@@ -3381,6 +3381,7 @@ function renderSettings() {
   bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
+  el.settingsNav.querySelector('[data-settings]')?.addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
     b.addEventListener('click', () => openSettings(b.dataset.page)));
 }
