@@ -73,7 +73,7 @@ test('linkOnPath links when writable, and returns the sudo command when not', ()
   const bad = path.join(tmp(), 'missing-dir', 'plenum');
   const r = linkOnPath(home, bad);
   assert.equal(r.ok, false);
-  assert.equal(r.command, `sudo ln -sf '${launcherPath(home)}' ${bad}`);
+  assert.equal(r.command, `sudo mkdir -p '${path.dirname(bad)}' && sudo ln -sf '${launcherPath(home)}' '${bad}'`);
 });
 
 test('linkOnPath command quotes the launcher path', () => {

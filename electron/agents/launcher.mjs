@@ -36,6 +36,6 @@ export function linkOnPath(home = agentsHome(), link = LINK) {
     fs.symlinkSync(target, link);
     return { ok: true };
   } catch {
-    return { ok: false, command: `sudo ln -sf ${q(target)} ${link}` };
+    return { ok: false, command: `sudo mkdir -p ${q(path.dirname(link))} && sudo ln -sf ${q(target)} ${q(link)}` };
   }
 }

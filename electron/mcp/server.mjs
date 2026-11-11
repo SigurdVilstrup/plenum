@@ -50,7 +50,7 @@ const TOOLS = [
       properties: {
         lane: { type: ['integer', 'string'], description: 'Lane index' },
         path: { type: 'string', description: 'Repo root (default: cwd)' },
-        force: { type: 'boolean', description: 'Skip drift gate (start anyway)' },
+        force: { type: 'boolean', description: 'Not available to agents: a forced start is always refused. Ask the user to start the lane from the Plenum board.' },
       },
       required: ['lane'],
     },
@@ -89,7 +89,7 @@ const TOOLS = [
   },
   {
     name: 'lane.remove',
-    description: 'Remove a lane worktree. Refuses when not safe unless force is true.',
+    description: 'Remove a lane worktree. Refuses when the lane is not safe to remove.',
     inputSchema: {
       type: 'object',
       properties: {

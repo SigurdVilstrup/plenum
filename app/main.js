@@ -3773,7 +3773,7 @@ const SETTINGS_PAGES = {
       <div class="list">${a.clients.map(clientRow).join('')}</div>
       <div class="group-head">Repositories<small>Agents can only start lanes where the repo has lane setup.</small></div>
       ${repos}
-      <div class="group-head">What agents may do<small>Applies to agents using Plenum's tools. Commit, push and merge stay with whoever is in the lane.</small></div>
+      <div class="group-head">What agents may do<small>Applies to Plenum's agent tools, not the <span class="mono">plenum</span> command in a shell. Commit, push and merge stay with whoever is in the lane.</small></div>
       <div class="list">
         ${settingsRow('play', 'Start, stop and test lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('run', 'Start, stop and test lanes'), "Lets agents run the repo's start, stop and test commands on lane ports. Starting past the migration check stays with you.")}
         ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('create', 'Create lanes'), 'Lets agents create worktrees from the team branch.')}
@@ -3941,7 +3941,6 @@ function rerenderAgents() {
 async function loadAgents() {
   seedActiveRepoBoard();
   for (const t of state.store.tabs) {
-    if (state.repoBoards.has(t.path)) continue;
     api.invoke('board.get', t.path).then((b) => { state.repoBoards.set(t.path, b); rerenderAgents(); }, () => {});
   }
   try {
