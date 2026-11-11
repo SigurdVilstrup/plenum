@@ -16,6 +16,18 @@ test('classify assisted trailer', () => {
   assert.equal(a.tool, 'Claude');
 });
 
+test('classify Muse trailer', () => {
+  const a = classifyAuthorship('Sigurd', 's@x.com', 'Co-authored-by: Muse Code <noreply@meta.com>');
+  assert.equal(a.kind, 'assisted');
+  assert.equal(a.tool, 'Muse');
+});
+
+test('classify Codex before openai.com email domain', () => {
+  const a = classifyAuthorship('Sigurd', 's@x.com', 'Co-authored-by: Codex <noreply@openai.com>');
+  assert.equal(a.kind, 'assisted');
+  assert.equal(a.tool, 'Codex');
+});
+
 test('emailAvatarHash normalizes and hashes', () => {
   assert.equal(emailAvatarHash(''), '');
   assert.equal(emailAvatarHash('  Ada@Example.COM '), emailAvatarHash('ada@example.com'));

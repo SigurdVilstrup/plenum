@@ -677,6 +677,14 @@ button.env-link {
   justify-content: center;
   align-self: center;
 }
+.window.app .row .who-mark {
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  flex: none;
+}
 .window.app .row .avatar {
   position: relative;
   display: inline-flex;
@@ -700,22 +708,35 @@ button.env-link {
   height: 100%;
   object-fit: cover;
 }
-.window.app .row .avatar.assisted {
-  color: var(--assisted);
-  border-color: color-mix(in srgb, var(--assisted) 40%, var(--hairline));
+/* Tool identity is the corner badge — no assisted/agent kind ring. */
+.window.app .row .ai-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-1);
+  box-shadow: 0 0 0 1.25px var(--canvas);
+  pointer-events: none;
 }
-.window.app .row .avatar.agent {
-  color: var(--agent);
-  border-color: color-mix(in srgb, var(--agent) 40%, var(--hairline));
+.window.app .row .ai-badge.dark {
+  background: #24292f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-/* Photo covers the letter — keep kind readable with a stronger ring. */
-.window.app .row .avatar.assisted:has(img) {
-  border-width: 2px;
-  border-color: color-mix(in srgb, var(--assisted) 70%, var(--hairline));
+.window.app .row .ai-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
-.window.app .row .avatar.agent:has(img) {
-  border-width: 2px;
-  border-color: color-mix(in srgb, var(--agent) 70%, var(--hairline));
+.window.app .row .ai-badge.dark img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
 }
 .window.app .row .msg {
   min-width: 0; /* allow ellipsis only when the flex column is actually tight */

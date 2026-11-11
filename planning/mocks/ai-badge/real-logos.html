@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AI badge — real logos</title>
+<title>AI badges — day-one set</title>
 <style>
   :root {
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -21,7 +21,6 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; font-family: var(--font-sans); background: transparent; }
   .page { display: flex; flex-direction: column; gap: 14px; width: 100%; }
-
   .card {
     background: var(--card, var(--surface-1));
     color: var(--card-foreground, var(--ink));
@@ -29,251 +28,174 @@
     border-radius: var(--radius);
     padding: 16px;
   }
-  .kicker {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--muted-foreground, var(--ink-tertiary));
-    margin-bottom: 4px;
-  }
-  h1 {
-    margin: 0 0 6px;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-  .note {
-    margin: 0 0 14px;
-    font-size: 12px;
-    line-height: 1.45;
-    color: var(--muted-foreground, var(--ink-subtle));
-  }
+  .kicker { font-family: var(--font-mono); font-size: 11px; color: var(--ink-tertiary); margin-bottom: 4px; }
+  h1 { margin: 0 0 6px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .note { margin: 0 0 14px; font-size: 12px; line-height: 1.45; color: var(--ink-subtle); }
 
   .refs {
-    display: flex;
-    gap: 18px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-    padding: 12px;
-    background: var(--canvas);
-    border: 1px solid var(--hairline);
-    border-radius: 6px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 14px; padding: 10px 12px;
+    background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px;
   }
-  .ref {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .ref { display: flex; align-items: center; gap: 7px; }
+  .ref .chip {
+    width: 18px; height: 18px; border-radius: 50%; overflow: hidden;
+    background: #fff; box-shadow: 0 0 0 1px var(--hairline); flex: none;
   }
-  .ref img, .ref .mark {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    display: block;
-  }
-  .ref .name {
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .ref .src {
-    font-size: 10px;
-    color: var(--ink-tertiary);
-    font-family: var(--font-mono);
-  }
+  .ref .chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ref .name { font-size: 12px; font-weight: 600; }
+  .ref .src { font-size: 10px; color: var(--ink-tertiary); font-family: var(--font-mono); }
 
-  .stage {
-    display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
-    gap: 12px;
-  }
+  .stage { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 12px; }
   .board {
-    background: var(--canvas);
-    border: 1px solid var(--hairline);
-    border-radius: 6px;
-    padding: 10px 12px;
+    position: relative; background: var(--canvas);
+    border: 1px solid var(--hairline); border-radius: 6px; padding: 10px 12px;
   }
   .board-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-tertiary);
-    margin-bottom: 8px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-tertiary); margin-bottom: 8px;
   }
   .row {
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr) 52px;
-    gap: 8px;
-    align-items: center;
-    height: 30px;
+    display: grid; grid-template-columns: 20px minmax(0, 1fr) 52px;
+    gap: 8px; align-items: center; height: 28px;
   }
-  .msg {
-    font-size: 12px;
-    color: var(--ink-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .sha {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--ink-tertiary);
-    text-align: right;
-  }
+  .msg { font-size: 12px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sha { font-family: var(--font-mono); font-size: 11px; color: var(--ink-tertiary); text-align: right; }
 
-  .who-mark {
-    position: relative;
-    width: 18px;
-    height: 18px;
-    display: inline-block;
-  }
+  .who-mark { position: relative; width: 18px; height: 18px; display: inline-block; }
   .avatar {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    overflow: hidden;
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1;
-    color: #4a5568;
-    background: #c5ced9;
-    border: 1px solid var(--hairline-strong);
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%; overflow: hidden;
+    font-size: 10px; font-weight: 600; line-height: 1; color: #4a5568;
+    background: #c5ced9; border: 1px solid var(--hairline-strong);
   }
   .avatar img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    filter: grayscale(1);
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; filter: grayscale(1);
   }
-
-  /* Corner badge = actual brand mark, not a B/W glyph in a disc */
   .ai-badge {
-    position: absolute;
-    right: -4px;
-    bottom: -4px;
-    width: 11px;
-    height: 11px;
-    border-radius: 3px;
-    overflow: hidden;
-    box-shadow: 0 0 0 1.5px var(--canvas);
-    background: #fff;
-    display: block;
+    position: absolute; right: -2px; bottom: -2px;
+    width: 8px; height: 8px; border-radius: 50%; overflow: hidden;
+    box-shadow: 0 0 0 1.25px var(--canvas); background: #fff; display: block;
   }
-  .ai-badge.round { border-radius: 50%; }
-  .ai-badge img, .ai-badge svg {
-    width: 100%;
-    height: 100%;
-    display: block;
+  .ai-badge img, .ai-badge svg { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .ai-badge.dark {
+    background: #24292f; display: flex; align-items: center; justify-content: center;
   }
+  .ai-badge.dark svg { width: 70%; height: 70%; object-fit: contain; }
 
-  .zoom {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
+  .zoom { position: relative; display: flex; align-items: center; justify-content: center; min-height: 150px; }
+  .zoom-inner { transform: scale(3.2); transform-origin: center; }
+  .tools { display: flex; gap: 9px; align-items: center; justify-content: center; flex-wrap: wrap; max-width: 120px; }
+
+  .lock {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline);
+    font-size: 12px; line-height: 1.45; color: var(--ink-subtle);
   }
-  .zoom-inner {
-    transform: scale(4.2);
-    transform-origin: center;
-  }
-  .tools {
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    justify-content: center;
-  }
+  .lock strong { color: var(--ink-muted); }
 </style>
 </head>
 <body>
 <div class="page">
   <section class="card">
-    <div class="kicker">01 corner + 03 no kind ring</div>
-    <h1>Actual brand badges</h1>
-    <p class="note">
-      Neutral avatar (no gold/coral ring). Tool identity is the corner badge itself —
-      Cursor app icon, Claude sunburst tile, Codex color mark. Full brand color, not monochrome.
-    </p>
+    <div class="kicker">locked · 01 corner + 03 no ring · 8px circle</div>
+    <h1>Day-one AI badges</h1>
+    <p class="note">Neutral avatar. Tool identity is the circular brand badge. Muse, not Meta.</p>
 
     <div class="refs">
       <div class="ref">
-        <img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/cursor-badge.png" alt="Cursor" />
-        <div>
-          <div class="name">Cursor</div>
-          <div class="src">cursor.com app icon</div>
-        </div>
+        <span class="chip"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/cursor-badge.png" alt="" /></span>
+        <div><div class="name">Cursor</div><div class="src">app icon</div></div>
       </div>
       <div class="ref">
-        <img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/claude-badge.png" alt="Claude" />
-        <div>
-          <div class="name">Claude</div>
-          <div class="src">claude.ai favicon</div>
-        </div>
+        <span class="chip"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/claude-badge.png" alt="" /></span>
+        <div><div class="name">Claude</div><div class="src">favicon</div></div>
       </div>
       <div class="ref">
-        <span class="mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+        <span class="chip">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M19.503 0H4.496A4.496 4.496 0 000 4.496v15.007A4.496 4.496 0 004.496 24h15.007A4.496 4.496 0 0024 19.503V4.496A4.496 4.496 0 0019.503 0z" fill="#fff"/>
-            <path d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z" fill="url(#codex-g)"/>
-            <defs>
-              <linearGradient id="codex-g" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/>
-              </linearGradient>
-            </defs>
+            <path d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z" fill="url(#cx)"/>
+            <defs><linearGradient id="cx" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse"><stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/></linearGradient></defs>
           </svg>
         </span>
-        <div>
-          <div class="name">Codex</div>
-          <div class="src">OpenAI Codex color mark</div>
-        </div>
+        <div><div class="name">Codex</div><div class="src">color mark</div></div>
+      </div>
+      <div class="ref">
+        <span class="chip" style="background:#24292f;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z"/></svg>
+        </span>
+        <div><div class="name">Copilot</div><div class="src">mark</div></div>
+      </div>
+      <div class="ref">
+        <span class="chip"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/gemini-app.jpg" alt="" /></span>
+        <div><div class="name">Gemini</div><div class="src">app icon</div></div>
+      </div>
+      <div class="ref">
+        <span class="chip"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/muse-app.jpg" alt="" /></span>
+        <div><div class="name">Muse</div><div class="src">product mark</div></div>
       </div>
     </div>
 
     <div class="stage">
       <div class="board">
         <div class="board-label">Graph rows · real size</div>
-
         <div class="row">
           <span class="who-mark">
             <span class="avatar"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/face.png" alt="" /></span>
             <span class="ai-badge"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/cursor-badge.png" alt="" /></span>
           </span>
-          <span class="msg">Wire facet chips to query state · Cursor</span>
+          <span class="msg">Wire facet chips to query state</span>
           <span class="sha">a91c2e</span>
         </div>
-
         <div class="row">
           <span class="who-mark">
             <span class="avatar"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/face.png" alt="" /></span>
             <span class="ai-badge"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/claude-badge.png" alt="" /></span>
           </span>
-          <span class="msg">Tighten empty-state copy · Claude</span>
+          <span class="msg">Tighten empty-state copy</span>
           <span class="sha">4c81f0</span>
         </div>
-
         <div class="row">
           <span class="who-mark">
             <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
             <span class="ai-badge">
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M19.503 0H4.496A4.496 4.496 0 000 4.496v15.007A4.496 4.496 0 004.496 24h15.007A4.496 4.496 0 0024 19.503V4.496A4.496 4.496 0 0019.503 0z" fill="#fff"/>
-                <path d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z" fill="url(#codex-g2)"/>
-                <defs>
-                  <linearGradient id="codex-g2" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/>
-                  </linearGradient>
-                </defs>
+                <path d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z" fill="url(#cx2)"/>
+                <defs><linearGradient id="cx2" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse"><stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/></linearGradient></defs>
               </svg>
             </span>
           </span>
-          <span class="msg">Codex-assisted refactor · Codex</span>
+          <span class="msg">Codex-assisted refactor</span>
           <span class="sha">b12d90</span>
         </div>
-
+        <div class="row">
+          <span class="who-mark">
+            <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
+            <span class="ai-badge dark">
+              <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z"/></svg>
+            </span>
+          </span>
+          <span class="msg">Copilot suggestion landed</span>
+          <span class="sha">c3aa10</span>
+        </div>
+        <div class="row">
+          <span class="who-mark">
+            <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
+            <span class="ai-badge"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/gemini-app.jpg" alt="" /></span>
+          </span>
+          <span class="msg">Gemini draft for filters</span>
+          <span class="sha">91f0bb</span>
+        </div>
+        <div class="row">
+          <span class="who-mark">
+            <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
+            <span class="ai-badge"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/muse-app.jpg" alt="" /></span>
+          </span>
+          <span class="msg">Muse Code pass on tests</span>
+          <span class="sha">d4e801</span>
+        </div>
         <div class="row">
           <span class="who-mark">
             <span class="avatar" style="background:#d4dae3;color:#5a6575">H</span>
@@ -284,7 +206,7 @@
       </div>
 
       <div class="board zoom">
-        <div class="board-label" style="position:absolute;top:10px;left:12px">Zoom ×4.2</div>
+        <div class="board-label" style="position:absolute;top:10px;left:12px">Zoom ×3.2</div>
         <div class="zoom-inner tools">
           <span class="who-mark">
             <span class="avatar"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/face.png" alt="" /></span>
@@ -299,18 +221,33 @@
             <span class="ai-badge">
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M19.503 0H4.496A4.496 4.496 0 000 4.496v15.007A4.496 4.496 0 004.496 24h15.007A4.496 4.496 0 0024 19.503V4.496A4.496 4.496 0 0019.503 0z" fill="#fff"/>
-                <path d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z" fill="url(#codex-g3)"/>
-                <defs>
-                  <linearGradient id="codex-g3" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/>
-                  </linearGradient>
-                </defs>
+                <path d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z" fill="url(#cx3)"/>
+                <defs><linearGradient id="cx3" x1="12" x2="12" y1="3" y2="21" gradientUnits="userSpaceOnUse"><stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/></linearGradient></defs>
               </svg>
             </span>
+          </span>
+          <span class="who-mark">
+            <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
+            <span class="ai-badge dark">
+              <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z"/></svg>
+            </span>
+          </span>
+          <span class="who-mark">
+            <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
+            <span class="ai-badge"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/gemini-app.jpg" alt="" /></span>
+          </span>
+          <span class="who-mark">
+            <span class="avatar" style="background:#c9d0db;color:#5a6575">S</span>
+            <span class="ai-badge"><img src="/Users/sigurdvilstrup/repositories/plenum/planning/mocks/ai-badge/logos/muse-app.jpg" alt="" /></span>
           </span>
         </div>
       </div>
     </div>
+
+    <p class="lock">
+      <strong>Locked:</strong> 8px circular corner badge · no assisted/agent ring · full-color product marks ·
+      Cursor, Claude, Codex, Copilot, Gemini, Muse. Unknown tools: no badge (human avatar only).
+    </p>
   </section>
 </div>
 </body>

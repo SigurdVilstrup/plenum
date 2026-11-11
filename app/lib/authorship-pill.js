@@ -1,3 +1,5 @@
+import { aiToolPillIconHTML } from './ai-tool-badge.js';
+
 const authorIcon = { human: 'user', assisted: 'sparkle', agent: 'robot', mixed: 'git-merge' };
 const authorLabel = { human: 'Human', assisted: 'Assisted', agent: 'Agent', mixed: 'Mixed' };
 
@@ -21,7 +23,8 @@ export function authorshipPillHTML(kind, tool, iconFn) {
   const title = pillTitle(kind, tool);
   const escTitle = String(title).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const escLabel = String(label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<span class="pill ${kind}" title="${escTitle}">${iconFn(authorIcon[kind])}${escLabel}</span>`;
+  const mark = aiToolPillIconHTML(tool) || iconFn(authorIcon[kind]);
+  return `<span class="pill ${kind}" title="${escTitle}">${mark}${escLabel}</span>`;
 }
 
 export { authorIcon, authorLabel };

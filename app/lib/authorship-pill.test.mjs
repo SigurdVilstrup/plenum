@@ -4,12 +4,13 @@ import { authorshipPillHTML } from './authorship-pill.js';
 
 const icon = (name) => `[${name}]`;
 
-test('assisted with tool shows tool name and Assisted-by title', () => {
+test('assisted with known tool uses brand mark, not sparkle', () => {
   const html = authorshipPillHTML('assisted', 'Cursor', icon);
   assert.match(html, /Cursor/);
   assert.doesNotMatch(html, />Assisted</);
   assert.match(html, /title="Assisted by Cursor"/);
-  assert.match(html, /\[sparkle\]/);
+  assert.match(html, /ai-pill-icon/);
+  assert.doesNotMatch(html, /\[sparkle\]/);
 });
 
 test('agent with tool', () => {
@@ -23,10 +24,17 @@ test('mixed with tool', () => {
   assert.match(html, /title="Mixed authorship \(Cursor\)"/);
 });
 
+test('unknown tool falls back to kind icon', () => {
+  const html = authorshipPillHTML('assisted', 'Devin', icon);
+  assert.match(html, /Devin/);
+  assert.match(html, /\[sparkle\]/);
+});
+
 test('no tool shows kind label', () => {
   const html = authorshipPillHTML('assisted', null, icon);
   assert.match(html, /Assisted/);
   assert.match(html, /title="Assisted"/);
+  assert.match(html, /\[sparkle\]/);
 });
 
 test('human returns empty', () => {

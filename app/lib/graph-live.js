@@ -2,6 +2,7 @@
 
 import { authorLabel } from './authorship-pill.js';
 import { authorHue, authorInitial, gravatarUrl } from './author-avatar.js';
+import { aiToolBadgeHTML } from './ai-tool-badge.js';
 import { visibleRefs } from './graph-refs.js';
 
 const ROW = 30;
@@ -156,7 +157,8 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const img = face
       ? `<img src="${esc(face)}" alt="" width="18" height="18" decoding="async" referrerpolicy="no-referrer" />`
       : '';
-    const who = `<span class="avatar ${kind}" style="--avatar-hue:${hue}" aria-hidden="true">${img}${esc(authorInitial(c.author))}</span>`;
+    const badge = kind !== 'human' ? aiToolBadgeHTML(c.tool) : '';
+    const who = `<span class="who-mark" aria-hidden="true"><span class="avatar" style="--avatar-hue:${hue}">${img}${esc(authorInitial(c.author))}</span>${badge}</span>`;
     const sha = esc(String(c.id || '').slice(0, 7));
     const on = selectedCommit === c.id ? ' active-commit' : '';
     const unpushed = c.unpushed ? ' unpushed' : '';

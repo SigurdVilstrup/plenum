@@ -1,6 +1,7 @@
 import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
-import { authorshipPillHTML, authorIcon, authorLabel } from './lib/authorship-pill.js';
+import { authorshipPillHTML } from './lib/authorship-pill.js';
+import { authorshipBadgeLegendHTML } from './lib/ai-tool-badge.js';
 import {
   shouldFreeze,
   evictOldest,
@@ -1160,8 +1161,9 @@ function paintPanel() {
   </div>`;
 
   const foot = `<div class="panel-foot">
-    <button class="lane-row" type="button" data-settings>${iconHTML('gear-six')}<span class="name">Settings</span><kbd>⌘,</kbd></button>
-    <button class="lane-row" type="button" data-feedback>${iconHTML('pencil-simple')}<span class="name">Feedback</span></button>
+    <button class="iconbtn" type="button" data-settings title="Settings ⌘," aria-label="Settings">${iconHTML('gear-six')}</button>
+    <button class="iconbtn" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}</button>
+    <button class="iconbtn" type="button" disabled title="Account — coming soon" aria-label="Account (coming soon)">${iconHTML('user')}</button>
   </div>`;
 
   el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${foot}`;
@@ -1616,7 +1618,7 @@ function openQuickStartSheet() {
     ['cloud-arrow-down', 'Behind', 'Commits on the team branch that this lane doesn’t have yet.'],
     ['sparkle', 'Authorship', 'Who wrote the newest tip — from author + agent trailers. Humans don’t get a pill.'],
     ['play', 'Runnable lanes', 'Phase two: start a lane on its own ports via .plenum/lane.yaml. Without that file it still shows up on the board.'],
-    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the row under Settings. Optional UI target. Saved on this Mac only.'],
+    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the pencil in the panel foot. Optional UI target. Saved on this Mac only.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
@@ -2948,7 +2950,10 @@ const SETTINGS_PAGES = {
         ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole window. 100% is the design size.')}
         ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and it should change right away.')}
         ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Face from a hash of the commit email — no account. Off keeps letter marks only.')}
-      </div>`;
+      </div>
+      <div class="group-head">Authorship<small>Read from the commit — Co-authored-by, Made-with, Generated-with, Assisted-by.</small></div>
+      <p class="lede ab-lede">When a trailer names a known tool, the graph avatar gets a corner mark. Humans stay plain. The lane tip pill uses the same mark.</p>
+      ${authorshipBadgeLegendHTML(iconHTML)}`;
   },
   accounts: () => {
     const a = state.accounts;

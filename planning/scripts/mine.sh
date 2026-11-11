@@ -6,13 +6,13 @@
 #
 # Output is Markdown on stdout. Agent markers: Co-authored-by / Made-with /
 # Generated-with trailers naming Claude, Cursor, Copilot, Codex, GPT, Gemini,
-# Devin or Aider; or an author name matching the same. Both are conventions,
+# Muse, Devin or Aider; or an author name matching the same. Both are conventions,
 # which is also why the memo treats authorship as the weakest of the three facts.
 set -u
 ROOT=${1:-$HOME/Dev/Repositories}
 DAYS=${2:-90}
 SINCE="$DAYS days ago"
-AGENT_RE='(claude|cursor|copilot|codex|gpt|openai|anthropic|gemini|devin|aider)'
+AGENT_RE='(claude|cursor|copilot|codex|gpt|openai|anthropic|gemini|muse|devin|aider)'
 
 is_agent() { # $1 = sha ; prints 1 if author or trailers look agent-made
   git log -1 --format='%an%n%ae%n%(trailers)' "$1" \
