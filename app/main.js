@@ -2980,6 +2980,25 @@ const settingsRow = (ic, name, small, detail, control = '', tip = '') =>
 
 const settingsPlaceholder = (title, lede) => `<h1>${title}</h1><p class="lede">${lede}</p>`;
 
+// Sample data for the Appearance preview (rendered by the real graph/diff code).
+const PREVIEW_COMMITS = [
+  { id: 'a1b2c3d', parents: ['b2c3d4e'], lane: 1, subject: 'Tint row hover from lane color', author: 'Ada', email: 'ada@example.com', kind: 'assisted', tool: 'Claude', when: '2m', refs: [{ name: 'feat/hover', worktree: true }], isTip: true, unpushed: true },
+  { id: 'b2c3d4e', parents: ['c3d4e5f'], lane: 1, subject: 'Split graph row renderer', author: 'Ada', email: 'ada@example.com', kind: 'human', when: '1h', refs: [] },
+  { id: 'e5f6a7b', parents: ['c3d4e5f'], lane: 0, subject: 'Fix lane color on merge', author: 'Lin', email: 'lin@example.com', kind: 'human', when: '3h', refs: [{ name: 'main', primary: true }], isTip: true },
+  { id: 'c3d4e5f', parents: ['d4e5f6a'], lane: 0, subject: 'Add file history pane', author: 'Lin', email: 'lin@example.com', kind: 'human', when: '1d', refs: [] },
+  { id: 'd4e5f6a', parents: [], lane: 0, subject: 'Initial commit', author: 'Lin', email: 'lin@example.com', kind: 'human', when: '2d', refs: [{ name: 'v0.1', tag: true }] },
+];
+const PREVIEW_HUNKS = [{
+  header: '@@ -12,5 +12,6 @@ function paintRow(row)',
+  lines: [
+    { type: 'ctx', text: '  const lane = row.lane;' },
+    { type: 'del', text: '  row.style.background = surface;' },
+    { type: 'add', text: '  row.style.background = tint(lane, 12);' },
+    { type: 'add', text: '  row.classList.toggle("dim", lane !== active);' },
+    { type: 'ctx', text: '  return row;' },
+  ],
+}];
+
 const SETTINGS_PAGES = {
   general: () => {
     const p = state.prefs;
@@ -3050,10 +3069,10 @@ const SETTINGS_PAGES = {
         ${settingsRow('sun', 'Mode', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System tracks light/dark from macOS. Light and Dark stay put.')}
         ${settingsRow('sparkle', 'Surfaces', '', 'Muted or vibrant chrome', optionGroup('chroma', [['muted', 'Muted'], ['vibrant', 'Vibrant']], chroma, { label: 'Surfaces' }), 'Four looks total with Mode: dark/light × muted/vibrant. Lavender stays the brand; this only shifts how saturated the chrome is.')}
       </div>
-      <div class="theme-preview" aria-hidden="true">
-        <div class="tp-surface"><span class="tp-chip">Canvas</span></div>
-        <div class="tp-panel"><span class="tp-chip">Panel</span><button class="btn primary" type="button" tabindex="-1">Action</button></div>
-        <div class="tp-hair"></div>
+      <div class="group-head">Preview<small>Sample data. Follows the settings above.</small></div>
+      <div class="theme-preview" inert aria-hidden="true">
+        <div class="graph"><div class="rows"></div></div>
+        <div class="file-pane-diff">${renderDiffBody(PREVIEW_HUNKS)}</div>
       </div>
       <div class="group-head">Display</div>
       <div class="list">
@@ -3375,6 +3394,7 @@ function renderSettings() {
     <div class="heading">Settings</div>${nav}</div>${panelFootHTML(true)}`;
   el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
+  if (page === 'appearance') renderGraph(el.settingsBody.querySelector('.theme-preview'), { commits: PREVIEW_COMMITS, selectedLane: 1, selectedCommit: 'a1b2c3d', currentBranch: 'feat/hover', gravatar: false });
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);

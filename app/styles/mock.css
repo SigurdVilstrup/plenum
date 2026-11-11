@@ -1480,40 +1480,30 @@ a.navitem.back {
 .option .swatch.teal { background: #2f8a7b; }
 
 .theme-preview {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 10px;
   margin: 4px 0 18px;
-  padding: 12px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
   background: var(--canvas);
+  position: relative;
+  overflow: hidden;
 }
-.theme-preview .tp-surface,
-.theme-preview .tp-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--hairline);
-}
-.theme-preview .tp-surface { background: var(--surface-2); }
-.theme-preview .tp-panel { background: var(--surface-1); }
-.theme-preview .tp-chip {
-  font-size: 11px;
-  color: var(--ink-subtle);
-}
-.theme-preview .tp-hair {
-  grid-column: 1 / -1;
-  height: 1px;
-  background: var(--hairline-strong);
-}
-.theme-preview .btn {
+/* Overlay so the inset shadow sits above row/diff backgrounds. */
+.theme-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 4px color-mix(in srgb, var(--ink) 7%, transparent);
   pointer-events: none;
 }
+.theme-preview .graph { flex: none; }
+.theme-preview .rows { flex: none; height: 150px; overflow: hidden; }
+.theme-preview .file-pane-diff {
+  overflow: hidden;
+  padding: 0 0 4px;
+  border-top: 1px solid var(--hairline);
+}
+.theme-preview .diff-hunk { margin-top: 0; }
 
 .settings-body .ab-lede {
   margin: 0 0 10px;
