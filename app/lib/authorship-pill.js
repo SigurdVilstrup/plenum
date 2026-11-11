@@ -23,8 +23,10 @@ export function authorshipPillHTML(kind, tool, iconFn) {
   const title = pillTitle(kind, tool);
   const escTitle = String(title).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const escLabel = String(label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const mark = aiToolPillIconHTML(tool) || iconFn(authorIcon[kind]);
-  return `<span class="pill ${kind}" title="${escTitle}">${mark}${escLabel}</span>`;
+  // Known tool: the brand mark says it; the name lives in the tooltip.
+  const brand = aiToolPillIconHTML(tool);
+  if (brand) return `<span class="pill ${kind} bare" title="${escTitle}" aria-label="${escTitle}">${brand}</span>`;
+  return `<span class="pill ${kind}" title="${escTitle}">${iconFn(authorIcon[kind])}${escLabel}</span>`;
 }
 
 export { authorIcon, authorLabel };

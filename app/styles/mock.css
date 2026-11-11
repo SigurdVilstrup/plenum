@@ -1730,6 +1730,10 @@ a.navitem.back {
   height: 12px;
 }
 
+.pill.bare {
+  padding: 3px;
+}
+
 .pill .ai-pill-icon {
   display: inline-flex;
   width: 12px;

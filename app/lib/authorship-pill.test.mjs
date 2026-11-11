@@ -6,7 +6,7 @@ const icon = (name) => `[${name}]`;
 
 test('assisted with known tool uses brand mark, not sparkle', () => {
   const html = authorshipPillHTML('assisted', 'Cursor', icon);
-  assert.match(html, /Cursor/);
+  assert.doesNotMatch(html, />Cursor</);
   assert.doesNotMatch(html, />Assisted</);
   assert.match(html, /title="Assisted by Cursor"/);
   assert.match(html, /ai-pill-icon/);
