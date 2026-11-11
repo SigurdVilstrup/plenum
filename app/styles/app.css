@@ -333,7 +333,8 @@ input, textarea, [contenteditable="true"] {
   vertical-align: -2px;
 }
 
-.btn.busy {
+.btn.busy,
+.iconbtn.busy {
   pointer-events: none;
   opacity: 0.75;
 }
@@ -797,6 +798,10 @@ button.env-link {
 
 .body.settings-open {
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+}
+.body.settings-open #lane-head {
+  display: none !important;
 }
 
 #settings {
@@ -1075,16 +1080,35 @@ html.feedback-redact .blame-line {
 }
 .window.app .body {
   grid-template-columns: var(--rail-w) 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   position: relative;
 }
-.window.app .main {
+.window.app #lane-head {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  background: var(--canvas);
+  z-index: 1;
+}
+.window.app #lane-head[hidden] {
+  display: none !important;
+}
+.window.app #panel {
+  grid-row: 2;
+  grid-column: 1;
+}
+.window.app #main {
+  grid-row: 2;
+  grid-column: 2;
   position: relative;
+  min-height: 0;
 }
 .window.app .body.with-changes,
 .window.app .body.with-changes.with-file-pane {
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--changes-w);
 }
 .window.app .body.with-changes #changes {
+  grid-row: 2;
+  grid-column: 3;
   position: static;
   width: auto;
   z-index: auto;

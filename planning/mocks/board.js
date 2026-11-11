@@ -84,16 +84,58 @@ const scenarios = {
   },
 };
 
+function laneUrls(l) {
+  if (l.urls?.length) return l.urls;
+  const off = l.offset || 0;
+  return [{ n: 'web', port: off + 5001 }, { n: 'api', port: off + 5055 }];
+}
+
+function renderLaneRun(sc, l) {
+  if (l.readiness === 'safe') {
+    return `<div class="lane-run"><span class="hint">${icon('stop', 'sm')}Merged — not started</span></div>`;
+  }
+  const ports = laneUrls(l);
+  const items = ports.map((u) =>
+    `<a class="services-menu-item" href="http://localhost:${u.port}" title="http://localhost:${u.port}">
+      <span class="service-name">${u.n}</span>
+      <span class="mono">:${u.port}</span>
+      ${icon('arrow-square-out', 'sm')}
+    </a>`).join('');
+  const services = `<details class="services-dd">
+    <summary class="iconbtn" title="Open a service">${icon('globe-simple')}${icon('caret-down', 'sm')}</summary>
+    <div class="services-menu" role="menu">${items}</div>
+  </details>`;
+  const sharedTitle = `Shared data: RavenDB, SQL Edge, Postgres — same instances for every lane. Switch a service to snapshot in .plenum/lane.yaml for an isolated copy.`;
+  const drift = l.drift
+    ? `<span class="lane-fact warn" title="${l.drift} migration${l.drift > 1 ? 's' : ''} not in shared DB">${icon('warning-circle')}</span>`
+    : '';
+  // One play/stop toggle · Test · services dropdown · shared-data icon (not a button).
+  const runToggle = l.running
+    ? `<button class="iconbtn danger" type="button" data-stop title="Stop" aria-label="Stop">${icon('stop')}</button>`
+    : `<button class="iconbtn primary" type="button" data-up title="Run" aria-label="Run">${icon('play')}</button>`;
+  return `<div class="lane-run">
+    ${runToggle}
+    <button class="iconbtn" type="button" title="Test" aria-label="Test">${icon('flask')}</button>
+    ${services}
+    <span class="lane-fact data" title="${sharedTitle}" aria-label="Shared data">${icon('database')}</span>
+    ${drift}
+  </div>`;
+}
+
 function renderPanel(sc, selected) {
   const main = sc.main;
+  const mainSelected = selected === 0;
   const mainRow = `
     <div class="section">
       <div class="section-head" title="The checkout on the team branch. Plenum watches it and never works in it.">Protected</div>
-      <button class="lane-row ${selected === 0 ? 'selected' : ''}" type="button" data-lane="0">
-        <span class="mark protected ${main.state === 'dirty' ? 'alert' : ''}">${icon(main.state === 'dirty' ? 'warning-circle' : 'shield-check')}</span>
-        <span class="name">main</span>
-        <span class="meta ${main.state === 'dirty' ? 'bad' : 'ok'}">${main.state === 'dirty' ? '2 dirty' : 'clean'}</span>
-      </button>
+      <div class="lane-block ${mainSelected ? 'selected' : ''}">
+        <button class="lane-row ${mainSelected ? 'selected' : ''}" type="button" data-lane="0">
+          <span class="mark protected ${main.state === 'dirty' ? 'alert' : ''}">${icon(main.state === 'dirty' ? 'warning-circle' : 'shield-check')}</span>
+          <span class="name">main</span>
+          <span class="meta ${main.state === 'dirty' ? 'bad' : 'ok'}">${main.state === 'dirty' ? '2 dirty' : 'clean'}</span>
+        </button>
+        ${mainSelected ? `<div class="lane-run"><span class="hint">${icon('shield-check', 'sm')}Protected — never started</span></div>` : ''}
+      </div>
     </div>`;
 
   const rows = sc.lanes
@@ -113,9 +155,13 @@ function renderPanel(sc, selected) {
             ? `<span class="meta ${l.behind >= 5 ? 'bad' : 'warn'}" title="${l.behind} commits behind origin/main">${icon('cloud-arrow-down', 'sm')}${l.behind}</span>`
             : `<span class="meta"></span>`;
       const folder = l.folderDiffers ? `<span class="folder">${l.folder}</span>` : '';
-      return `<button class="lane-row ${l.lane === selected ? 'selected' : ''}" type="button" data-lane="${l.lane}" aria-pressed="${l.lane === selected}">
-        ${mark}<span class="name">${l.name}</span>${meta}${folder}
-      </button>`;
+      const isSelected = l.lane === selected;
+      return `<div class="lane-block ${isSelected ? 'selected' : ''}">
+        <button class="lane-row ${isSelected ? 'selected' : ''}" type="button" data-lane="${l.lane}" aria-pressed="${isSelected}">
+          ${mark}<span class="name">${l.name}</span>${meta}${folder}
+        </button>
+        ${isSelected ? renderLaneRun(sc, l) : ''}
+      </div>`;
     })
     .join('');
 
@@ -158,18 +204,11 @@ function renderHeader(sc, selected) {
              <span class="fact">${icon('circle-dashed', 'sm')}<strong>clean</strong> tree</span>`}
       </div>
       <div class="actions">
-        ${dirty
-          ? `<span class="hint-text">Move this to a lane before anyone pulls.</span>`
-          : `<button class="iconbtn framed" type="button" title="Reveal in Finder" aria-label="Reveal in Finder">${icon('folder-simple')}</button>`}
+        ${gitActions({ dirty: dirty ? 2 : 0, ahead: dirty ? 1 : 0, behind: 0, readiness: 'working', isPrimary: true })}
+        <span class="env-sep"></span>
+        <button class="iconbtn framed" type="button" title="Reveal in Finder" aria-label="Reveal in Finder">${icon('folder-simple')}</button>
         <button class="btn primary" type="button">${icon('arrow-square-out', 'sm')}Open in Cursor</button>
       </div>
-      </div>
-      <div class="env-row">
-        <span class="env-note">${icon('shield-check', 'sm')}Never started by Plenum. Run the stack from a lane.</span>
-        <span class="env-sep"></span>
-        <span class="badge data" title="The databases every lane shares: RavenDB :1338, SQL Edge :1433, Postgres :5432. Defined in .plenum/lane.yaml.">${icon('database', 'sm')}shared data</span>
-        <span class="env-note">RavenDB <span class="mono">:1338</span> · SQL Edge <span class="mono">:1433</span> · Postgres <span class="mono">:5432</span></span>
-        <a class="env-link" href="settings.html?page=repositories">${icon('gear-six', 'sm')}Lane setup in Settings</a>
       </div>`;
   }
 
@@ -197,67 +236,43 @@ function renderHeader(sc, selected) {
       </div>
       <div class="actions">
         ${remove}${gitActions(l)}
+        <span class="env-sep"></span>
         <button class="iconbtn framed" type="button" title="Reveal in Finder" aria-label="Reveal in Finder">${icon('folder-simple')}</button>
         <button class="btn primary" type="button">${icon('arrow-square-out', 'sm')}Open in Cursor</button>
       </div>
-    </div>
-    ${renderEnvRow(sc, l)}`;
-}
-
-// Git first. The actions every client has, in the lane header, only the ones that apply right now.
-function gitActions(l) {
-  if (l.readiness === 'safe') return '';
-  const a = [];
-  if (l.dirty) a.push(`<button class="btn" type="button" title="Commit in this lane (⌘⏎)">${icon('git-commit', 'sm')}Commit</button>`);
-  if (l.behind) a.push(`<button class="btn" type="button" title="Rebase this lane onto origin/main. Conflicts open in the lane, file by file.">${icon('arrow-counter-clockwise', 'sm')}Rebase on main</button>`);
-  else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" title="Merge this lane into main (fast-forward or merge commit, your choice)">${icon('git-merge', 'sm')}Merge into main</button>`);
-  if (l.ahead) a.push(`<button class="btn" type="button" title="Push ${l.ahead} commit${l.ahead > 1 ? 's' : ''} to origin (⇧⌘P)">${icon('arrow-up', 'sm')}Push <span class="mono">${l.ahead}</span></button>`);
-  return a.join('');
-}
-
-// The environment strip: run, test, and (when up) a fold-out of named service links.
-// Shared data is a fact, not a dialog; the only gate is migration drift, and that is a sheet on Run.
-function renderEnvRow(sc, l) {
-  if (l.readiness === 'safe') {
-    return `<div class="env-row">
-      <span class="env-note">${icon('stop', 'sm')}Not running. Merged lanes are not started.</span>
     </div>`;
+}
+
+// Fixed slots: Commit · Stash · Pop · Pull · Push. Muted when they do not apply.
+// Rebase / merge still appear when relevant (not fixed slots).
+function gitActions(l) {
+  if (l.readiness === 'safe' && !l.isPrimary) {
+    return [
+      `<button class="btn" type="button" disabled title="Nothing to commit">${icon('git-commit', 'sm')}Commit</button>`,
+      `<button class="btn" type="button" disabled>Stash</button>`,
+      `<button class="btn" type="button" disabled>Pop</button>`,
+      `<button class="btn" type="button" disabled>Pull</button>`,
+      `<button class="btn" type="button" disabled>Push</button>`,
+    ].join('');
   }
-  const sharedWith = sc.lanes.filter((x) => x.running && x.lane !== l.lane).map((x) => x.name);
-  const dataTitle = `RavenDB, SQL Edge and Postgres are the same instances for every lane${sharedWith.length ? `, right now also used by ${sharedWith.join(', ')}` : ''}. Switch a service to snapshot in .plenum/lane.yaml to give this lane its own copy.`;
-  const runBtn = l.running
-    ? `<button class="btn" type="button" data-stop>${icon('stop', 'sm')}Stop</button>`
-    : `<button class="btn" type="button" data-up>${icon('play', 'sm')}Run</button>`;
-  const drift = l.drift
-    ? `<span class="fact drift" title="Migrations in this lane that the shared database has not run. Run will ask before applying them.">${icon('warning-circle', 'sm')}<strong>${l.drift} migration${l.drift > 1 ? 's' : ''}</strong> not in shared DB</span>`
-    : '';
-  const tests = l.tests ? `<span class="env-note">${icon('check-circle', 'sm')}tests ${l.tests}</span>` : '';
-  let servicesToggle = '';
-  if (l.running) {
-    const n = l.urls.length;
-    const items = l.urls.map((u) =>
-      `<a class="services-menu-item" href="http://localhost:${u.port}" title="http://localhost:${u.port}">
-        <span class="service-name">${u.n}</span>
-        <span class="mono">:${u.port}</span>
-        ${icon('arrow-square-out', 'sm')}
-      </a>`).join('');
-    servicesToggle = `<details class="services-dd">
-      <summary class="btn">${icon('caret-down', 'sm')}${n} service${n === 1 ? '' : 's'}</summary>
-      <div class="services-menu" role="menu">${items}</div>
-    </details>`;
-  } else {
-    servicesToggle = `<span class="env-note">opens ${l.urls.map((u) => `<span class="mono">${u.n}:${u.port}</span>`).join('<span class="env-dot">·</span>')}</span>`;
+  const a = [];
+  a.push(l.dirty
+    ? `<button class="btn" type="button" title="Commit in this lane (⌘⏎)">${icon('git-commit', 'sm')}Commit</button>`
+    : `<button class="btn" type="button" disabled title="Working tree clean">${icon('git-commit', 'sm')}Commit</button>`);
+  a.push(l.dirty
+    ? `<button class="btn" type="button" title="Stash uncommitted changes">${icon('files', 'sm')}Stash</button>`
+    : `<button class="btn" type="button" disabled>Stash</button>`);
+  a.push(`<button class="btn" type="button" disabled title="No stash">${icon('files', 'sm')}Pop</button>`);
+  a.push(`<button class="btn" type="button" title="Pull (ff-only)">${icon('cloud-arrow-down', 'sm')}Pull</button>`);
+  a.push(l.ahead
+    ? `<button class="btn" type="button" title="Push ${l.ahead} commit${l.ahead > 1 ? 's' : ''} to origin (⇧⌘P)">${icon('arrow-up', 'sm')}Push <span class="mono">${l.ahead}</span></button>`
+    : `<button class="btn" type="button" disabled>Push</button>`);
+  if (!l.isPrimary && l.behind) {
+    a.push(`<button class="btn" type="button" title="Rebase this lane onto origin/main">${icon('arrow-counter-clockwise', 'sm')}Rebase on main</button>`);
+  } else if (!l.isPrimary && l.ahead && !l.dirty) {
+    a.push(`<button class="btn" type="button" title="Merge this lane into main">${icon('git-merge', 'sm')}Merge into main</button>`);
   }
-  return `<div class="env-row">
-    ${runBtn}
-    <button class="btn" type="button">${icon('flask', 'sm')}Test</button>
-    <span class="env-sep"></span>
-    ${servicesToggle}
-    <span class="env-sep"></span>
-    <span class="badge data" title="${dataTitle}">${icon('database', 'sm')}shared data</span>
-    ${drift}
-    ${tests}
-  </div>`;
+  return a.join('');
 }
 
 // Mac sheet on Run when the lane has migrations the shared database has not seen.
@@ -348,7 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
       sheet.querySelector('[data-close]').addEventListener('click', () => sheet.classList.remove('open'));
     };
     header.querySelector('[data-remove]')?.addEventListener('click', () => openSheet(renderRemoveSheet(sc.lanes.find((x) => x.lane === selected))));
-    header.querySelector('[data-up]')?.addEventListener('click', () => {
+    panel.querySelector('[data-up]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       const l = sc.lanes.find((x) => x.lane === selected);
       if (l.drift) openSheet(renderUpSheet(sc, l));
       else {
@@ -357,7 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
         paint();
       }
     });
-    header.querySelector('[data-stop]')?.addEventListener('click', () => {
+    panel.querySelector('[data-stop]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       sc.lanes.find((x) => x.lane === selected).running = false;
       paint();
     });

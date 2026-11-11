@@ -98,9 +98,10 @@ components:
     height: 30px
     laneColumnWidth: 136px
     laneSpacing: 24px
-  lane-header:
-    headRow: 56px
-    envRow: 36px
+  board-toolbar:
+    height: 52px
+  lane-run:
+    # Expanded under the selected runnable lane in the panel; look iterates.
   sheet:
     width: 460px
     setupWidth: 760px
@@ -169,8 +170,8 @@ Meaning is fixed per icon so it can be learned once:
 Window 1280x800, 11px radius, hairline-strong border, one soft drop shadow on the desk only.
 
 - Title bar, 52px: traffic lights at 14px inset with 8px gaps, the 16px app mark, then the tab strip. Right: live sync dot with "synced n ago" and the palette button with its `⌘K` key cap. Nothing else; theme and settings are not title bar material.
-- Lanes panel, 260px: sections Protected, Lanes, Branches without a lane. Rows are 16px mark, name, trailing meta. Folder under the name only when it differs. Running is a success ring on the mark, not a second list; named service links open from a Services dropdown on the selected lane header. A Settings row (`⌘,`) sits at the bottom, the way Mac sidebars do.
-- Selected lane header, two rows. Head row, 56px: lane icon, name, path; then facts (behind, uncommitted, base, authorship pill); then a framed folder icon button (Reveal in Finder) and Open in Cursor. Environment strip, 36px, on surface-1: Run or Stop, Test, a hairline separator, URL chips (`web :5101`), a separator, the `shared data` badge, and the drift fact in warning when the lane has migrations the shared database has not run. On the protected row the strip has no buttons: it names the shared services and links to Lane setup.
+- Lanes panel, 260px: sections Protected, Lanes, Branches without a lane. Rows are 16px mark, name, trailing meta. Folder under the name only when it differs. Running is a success ring on the mark. The selected runnable lane expands with a play/stop icon toggle (primary play, danger red stop), Test, a services dropdown (every `ports.expose` entry), and a database icon (not a button — hover names the shared services; drift as a warning icon when present). Protected never expands run controls. A Settings row (`⌘,`) sits at the bottom, the way Mac sidebars do.
+- Board toolbar, full width above panel + graph, ~52px: lane icon, name, path and facts on the left; fixed action slots on the right — Commit, Stash, Pop, Pull, Push (muted when they do not apply), then Finder and Open in editor. No environment strip under the graph. Exact control chrome iterates; the slot order does not.
 - Title bar readout: "synced 1s ago · 2 running". The count appears only when it is above zero.
 - Graph: column header (Graph, Commit, Author, SHA, When), then 30px rows. The graph column is 136px wide with 24px between lanes. An SVG overlay draws edges and nodes at row centers. A legend footer explains tip colors and the WIP row.
 
@@ -201,7 +202,7 @@ One 16px slot per lane row, four states:
 - Safe to remove: `check-circle` in success, settles in once.
 - Protected primary: `shield-check` in subtle.
 
-Running is not a fifth state. A running lane keeps its readiness mark and gains a 1.5px success ring around it. In the graph, the lane's ref pill gains a 6px success dot. Named ports open from a Services dropdown on the lane header.
+Running is not a fifth state. A running lane keeps its readiness mark and gains a 1.5px success ring around it. In the graph, the lane's ref pill gains a 6px success dot. Named ports open from a Services dropdown on the selected lane in the panel.
 
 ## Motion
 
@@ -226,7 +227,7 @@ App icon (M3): dark-lavender → near-black corner-pool tile, solid white glyph.
 - Use lavender only for primary actions, focus, the selected lane, and palette matches. Hover stays in the dark-lavender family (`#7a84e0`), not neon.
 - Title bar and empty state use the M3 Dock tile. Loading uses the bare glyph only (no tile).
 - Keep both themes identical in structure; only tokens change. Vibrant dark is the brand-night surface set.
-- Show shared data as a fact on the lane. Gate Run only on drift, and say what each choice costs.
+- Show shared data as a hoverable icon on the lane, not a badge. Gate Run only on drift, and say what each choice costs.
 - Put ports next to the lane they belong to. `:5101` means lane 1 everywhere it appears.
 
 ## Don't
@@ -237,7 +238,7 @@ App icon (M3): dark-lavender → near-black corner-pool tile, solid white glyph.
 - Hand-drawn glyphs or a second icon set mixed with Phosphor.
 - Interactive rebase, merge-from-graph, or commit from the graph.
 - A refresh button. Everything is a stream.
-- A warning dialog about shared data every time a lane starts. Once it is a badge, it stays a badge.
+- A warning dialog about shared data every time a lane starts. Once it is a hoverable icon on the lane, it stays that.
 - A data-mode setting in Settings. Modes live in `.plenum/lane.yaml`, where the team can see them.
 - A terminal into the agent, or a log viewer. Running shows URLs and the last test result, nothing more.
 

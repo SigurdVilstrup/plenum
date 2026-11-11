@@ -638,6 +638,9 @@ function endOp(tabId, act) {
   paintOpBusy();
 }
 
+/** Lane run controls show busy on the icon button itself — no floating bar. */
+const INLINE_BUSY_ACTS = new Set(['up', 'down', 'test']);
+
 function paintOpBusy() {
   const host = el.graph || el.main || document.body;
   let bar = document.getElementById('op-busy');
@@ -652,7 +655,7 @@ function paintOpBusy() {
     host.appendChild(bar);
   }
   const op = state.opsByTab.get(state.store.activeId);
-  if (!op?.act) {
+  if (!op?.act || INLINE_BUSY_ACTS.has(op.act)) {
     bar.hidden = true;
     bar.innerHTML = '';
     el.body?.classList.remove('is-busy');
@@ -732,7 +735,7 @@ function paint() {
   el.body.classList.toggle('settings-open', state.settings.open);
   if (state.settings.open) {
     // Settings owns the body; the board repaints on close.
-    for (const n of [el.empty, el.loading, el.panel, el.main, el.changes]) n.hidden = true;
+    for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
     return;
   }
   const tab = activeTab();
@@ -741,6 +744,7 @@ function paint() {
   if (!tab) {
     el.empty.hidden = false;
     el.loading.hidden = true;
+    el.laneHead.hidden = true;
     el.panel.hidden = true;
     el.main.hidden = true;
     closeChanges();
@@ -748,6 +752,7 @@ function paint() {
   }
   if (!state.board) {
     el.empty.hidden = true;
+    el.laneHead.hidden = true;
     el.panel.hidden = true;
     el.main.hidden = true;
     closeChanges();
@@ -760,6 +765,7 @@ function paint() {
   }
   el.empty.hidden = true;
   el.loading.hidden = true;
+  el.laneHead.hidden = false;
   el.panel.hidden = false;
   el.main.hidden = false;
   paintPanel();
@@ -1304,13 +1310,17 @@ function paintPanel() {
   const markPrimary = primary.alert
     ? `${iconHTML('warning-circle')}`
     : `${iconHTML('shield-check')}`;
+  const primarySelected = selected === 0;
   let html = `<div class="section">
     <div class="section-head" title="Checkout on the team branch. Plenum watches it and won’t work in it.">Protected</div>
-    <button class="lane-row ${selected === 0 ? 'selected' : ''}" type="button" data-lane="0">
-      <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
-      <span class="name">${esc(primary.name)}</span>
-      <span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>
-    </button>
+    <div class="lane-block${primarySelected ? ' selected' : ''}">
+      <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0">
+        <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
+        <span class="name">${esc(primary.name)}</span>
+        <span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>
+      </button>
+      ${primarySelected ? laneRunHTML(primary) : ''}
+    </div>
   </div>`;
 
   const rows = lanes.map((l) => {
@@ -1328,9 +1338,13 @@ function paintPanel() {
         ? `<span class="meta ${l.behind >= 3 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind} behind</span>`
         : `<span class="meta"></span>`;
     const folder = l.folder ? `<span class="folder">${esc(l.folder)}</span>` : '';
-    return `<button class="lane-row${enter}${l.index === selected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${l.index === selected}">
-      ${mark}<span class="name">${esc(l.name)}</span>${meta}${folder}
-    </button>`;
+    const isSelected = l.index === selected;
+    return `<div class="lane-block${isSelected ? ' selected' : ''}">
+      <button class="lane-row${enter}${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}">
+        ${mark}<span class="name">${esc(l.name)}</span>${meta}${folder}
+      </button>
+      ${isSelected ? laneRunHTML(l) : ''}
+    </div>`;
   }).join('');
 
   html += `<div class="section">
@@ -1404,11 +1418,24 @@ function paintPanel() {
       paint();
     });
     btn.addEventListener('contextmenu', (e) => {
-      if (e.target.closest('[data-act="down"]')) return;
+      if (e.target.closest('[data-act]')) return;
       e.preventDefault();
       e.stopPropagation();
       const lane = laneByIndex(Number(btn.dataset.lane));
       if (lane) openLaneCtxMenu(e.clientX, e.clientY, lane);
+    });
+  });
+  el.panel.querySelectorAll('.lane-run [data-act]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const lane = laneByIndex(state.selectedLane);
+      if (!lane) return;
+      if (btn.dataset.act === 'servicesMenu') {
+        openServicesMenu(btn, lane);
+        return;
+      }
+      handleAction(btn.dataset.act, lane, btn.dataset.url);
     });
   });
   el.panel.querySelector('[data-new-lane]')?.addEventListener('click', openCreateLane);
@@ -1569,26 +1596,32 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false)
 }
 
 function gitActionsHTML(l) {
-  const a = [];
+  // Fixed slots: Commit · Stash · Pop · Pull · Push. Muted when they do not apply.
   const stashes = state.board?.stashCount || 0;
-  if (state.conflictRoot) a.push(`<button class="btn" type="button" data-act="conflicts" title="Pick up the conflict walk">${iconHTML('warning-circle', 'sm')}Resolve conflicts</button>`);
-  if (l.isPrimary) {
-    if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit on ${esc(l.name)}">${iconHTML('git-commit', 'sm')}Commit</button>`);
-    if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
-    if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop latest stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
-    if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
-    a.push(`<button class="btn" type="button" data-act="pull" title="Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
-    return a.join('');
+  const a = [];
+  if (state.conflictRoot) {
+    a.push(`<button class="btn" type="button" data-act="conflicts" title="Pick up the conflict walk">${iconHTML('warning-circle', 'sm')}Resolve conflicts</button>`);
   }
-  if (l.readiness === 'safe' && !state.conflictRoot && !stashes) return a.join('');
-  if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit in this lane">${iconHTML('git-commit', 'sm')}Commit</button>`);
-  if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
-  if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop latest stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
-  if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
-  if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase onto a tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
-  else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
-  if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push: force-with-lease after rebase">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
-  a.push(`<button class="btn" type="button" data-act="pull" title="Pull (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
+  a.push(l.dirty
+    ? `<button class="btn" type="button" data-act="commit" title="Commit on ${esc(l.name)}">${iconHTML('git-commit', 'sm')}Commit</button>`
+    : `<button class="btn" type="button" disabled title="Working tree clean">${iconHTML('git-commit', 'sm')}Commit</button>`);
+  a.push(l.dirty
+    ? `<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`
+    : `<button class="btn" type="button" disabled title="Nothing to stash">${iconHTML('stack', 'sm')}Stash</button>`);
+  a.push(stashes
+    ? `<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop${stashes > 1 ? ` · ${stashes}` : ''}</button>`
+    : `<button class="btn" type="button" disabled title="No stash">${iconHTML('stack', 'sm')}Pop</button>`);
+  a.push(`<button class="btn" type="button" data-act="pull" title="Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
+  a.push(l.unpushed
+    ? `<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`
+    : `<button class="btn" type="button" disabled title="Nothing to push">${iconHTML('arrow-up', 'sm')}Push</button>`);
+  if (!l.isPrimary && l.readiness !== 'safe') {
+    if (l.behind) {
+      a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase onto a tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
+    } else if (l.ahead && !l.dirty) {
+      a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
+    }
+  }
   return a.join('');
 }
 
@@ -1605,43 +1638,36 @@ function laneSetupLink() {
   return `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup</button>`;
 }
 
-function runActionsHTML(l) {
-  // Primary never runs the stack - keep lane setup in Settings, not a permanent banner (#27).
-  if (l.isPrimary) return '';
+/** Run controls on the selected lane in the panel: play/stop · Test · services · shared-data icon. */
+function laneRunHTML(l) {
+  if (l.isPrimary) {
+    return `<div class="lane-run"><span class="hint">${iconHTML('shield-check', 'sm')}Protected — never started</span></div>`;
+  }
   if (l.readiness === 'safe' && !l.running) {
-    return `<div class="env-row"><span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span></div>`;
+    return `<div class="lane-run"><span class="hint">${iconHTML('stop', 'sm')}Merged — not started</span></div>`;
   }
   if (!l.runnable) {
-    return `<div class="env-row"><span class="env-note">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>${laneSetupLink()}</div>`;
+    return `<div class="lane-run"><span class="hint">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>${laneSetupLink()}</div>`;
   }
-  const runBtn = l.running
-    ? `<button class="btn" type="button" data-act="down" title="Stop lane">${iconHTML('stop', 'sm')}Stop</button>`
-    : `<button class="btn" type="button" data-act="up" title="Run lane">${iconHTML('play', 'sm')}Run</button>`;
-  const entries = Object.entries(l.urls || {});
-  const badge = l.dataMode === 'shared'
-    ? `<span class="badge data" title="Databases shared across lanes. Set a service to snapshot in .plenum/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
-    : l.dataMode === 'snapshot'
-      ? `<span class="badge data" title="Seeds its own copy via services.*.snapshot (or data.snapshot) before Run.">${iconHTML('database', 'sm')}snapshot data</span>`
-      : '';
-  const tests = l.lastTest
-    ? `<span class="env-note">${iconHTML(l.lastTest.ok ? 'check-circle' : 'warning-circle', 'sm')}tests ${l.lastTest.ok ? 'passed' : 'failed'}</span>`
+  const runToggle = l.running
+    ? `<button class="iconbtn danger" type="button" data-act="down" title="Stop" aria-label="Stop">${iconHTML('stop')}</button>`
+    : `<button class="iconbtn primary" type="button" data-act="up" title="Run" aria-label="Run">${iconHTML('play')}</button>`;
+  const testTitle = l.lastTest
+    ? `Test · last ${l.lastTest.ok ? 'passed' : 'failed'}`
+    : 'Run tests';
+  const services = `<button class="iconbtn" type="button" data-act="servicesMenu" aria-haspopup="menu" title="Open a service">${iconHTML('globe-simple')}${iconHTML('caret-down', 'sm')}</button>`;
+  const dataTitle = l.dataMode === 'snapshot'
+    ? 'Snapshot data: seeds its own copy via services.*.snapshot before Run.'
+    : 'Shared data: databases shared across lanes. Set a service to snapshot in .plenum/lane.yaml for an isolated copy.';
+  const dataIcon = l.dataMode === 'snapshot' || l.dataMode === 'shared' || !l.dataMode
+    ? `<span class="lane-fact data" title="${esc(dataTitle)}" aria-label="${l.dataMode === 'snapshot' ? 'Snapshot data' : 'Shared data'}">${iconHTML('database')}</span>`
     : '';
-  let servicesToggle = '';
-  if (l.running) {
-    const n = entries.length;
-    const label = n === 0
-      ? 'No ports declared'
-      : `${n} service${n === 1 ? '' : 's'}`;
-    servicesToggle = `<button class="btn" type="button" data-act="servicesMenu" aria-haspopup="menu" title="Open a named port from ports.expose">${iconHTML('caret-down', 'sm')}${esc(label)}</button>`;
-  } else if (entries.length) {
-    const preview = entries.map(([name, url]) => {
-      let port = '';
-      try { port = new URL(url).port; } catch { /* ignore */ }
-      return `<span class="mono">${esc(name)}:${esc(port)}</span>`;
-    }).join('<span class="env-dot">·</span>');
-    servicesToggle = `<span class="env-note" title="Resolved from ports.expose + offset × lane index">opens ${preview}</span>`;
-  }
-  return `<div class="env-row">${runBtn}<button class="btn" type="button" data-act="test" title="Run tests">${iconHTML('flask', 'sm')}Test</button><span class="env-sep"></span>${servicesToggle}${badge || tests ? '<span class="env-sep"></span>' : ''}${badge}${tests}</div>`;
+  return `<div class="lane-run">
+    ${runToggle}
+    <button class="iconbtn" type="button" data-act="test" title="${esc(testTitle)}" aria-label="Test">${iconHTML('flask')}</button>
+    ${services}
+    ${dataIcon}
+  </div>`;
 }
 
 function paintHeader() {
@@ -1669,12 +1695,11 @@ function paintHeader() {
       </div>
       <div class="actions">
         ${gitActionsHTML(l)}
+        <span class="env-sep"></span>
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
         ${editorBtnHTML()}
       </div>
     </div>`;
-    const primaryEnv = runActionsHTML(l);
-    if (primaryEnv) html += primaryEnv;
   } else {
     const behind = l.readiness === 'safe'
       ? `<span class="fact ok">${iconHTML('check-circle', 'sm')}<strong>merged</strong> into ${esc(b.teamBranch)}</span>`
@@ -1696,24 +1721,20 @@ function paintHeader() {
       <div class="facts">${behind}${dirty}${pill}</div>
       <div class="actions">
         ${remove}${gitActionsHTML(l)}
+        <span class="env-sep"></span>
         <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
         ${editorBtnHTML()}
       </div>
-    </div>
-    ${runActionsHTML(l)}`;
+    </div>`;
   }
   el.laneHead.innerHTML = html;
-  el.laneHead.querySelector('.title').addEventListener('contextmenu', (e) => {
+  el.laneHead.querySelector('.title')?.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     openLaneCtxMenu(e.clientX, e.clientY, l);
   });
   el.laneHead.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      if (btn.dataset.act === 'servicesMenu') {
-        openServicesMenu(btn, l);
-        return;
-      }
       handleAction(btn.dataset.act, l, btn.dataset.url);
     });
   });
@@ -1818,6 +1839,18 @@ function setActionBusy(act, on) {
   document.querySelectorAll(`[data-act="${act}"]`).forEach((btn) => {
     btn.classList.toggle('busy', on);
     btn.disabled = on;
+    const iconOnly = btn.classList.contains('iconbtn');
+    if (iconOnly) {
+      // Same box, same size: swap the glyph for a spinner (no extra node beside it).
+      if (on) {
+        if (btn.dataset.busyHtml == null) btn.dataset.busyHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="spinner btn-spin" aria-hidden="true"></i>';
+      } else if (btn.dataset.busyHtml != null) {
+        btn.innerHTML = btn.dataset.busyHtml;
+        delete btn.dataset.busyHtml;
+      }
+      return;
+    }
     const spin = btn.querySelector(':scope > .btn-spin');
     if (on && !spin) {
       const i = document.createElement('i');

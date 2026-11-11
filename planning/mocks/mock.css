@@ -439,6 +439,15 @@ a.iconbtn,
   text-align: left;
 }
 
+/* Full-width git toolbar above panel + graph */
+.board-toolbar.lane-head {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+  background: var(--canvas);
+}
+
 /* Body: lanes panel + graph */
 .body {
   display: grid;
@@ -544,6 +553,92 @@ a.iconbtn,
 }
 .lane-row .meta.ok {
   color: var(--success);
+}
+
+/* Selected lane run controls (look iterates; slot content is fixed) */
+.lane-block {
+  margin: 0 2px 2px;
+  border-radius: var(--radius-sm);
+}
+.lane-block.selected {
+  background: var(--surface-3);
+}
+.lane-block .lane-row.selected {
+  background: transparent;
+}
+.lane-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 8px 32px;
+}
+.lane-run .iconbtn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  color: var(--ink-muted);
+}
+.lane-run .iconbtn:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+  background: var(--surface-2);
+}
+.lane-run .iconbtn.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.lane-run .iconbtn.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+.lane-run .iconbtn.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.lane-run .iconbtn.danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+  color: #fff;
+}
+.lane-run .iconbtn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.lane-run .lane-fact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 26px;
+  color: var(--ink-subtle);
+}
+.lane-run .lane-fact.data {
+  color: var(--primary);
+}
+.lane-run .lane-fact.warn {
+  color: var(--warning);
+}
+.lane-run .services-dd > summary.iconbtn {
+  width: auto;
+  min-width: 26px;
+  padding: 0 4px;
+  gap: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.lane-run .services-dd > summary.iconbtn .icon.sm {
+  width: 10px;
+  height: 10px;
+  opacity: 0.7;
+}
+.lane-run .hint {
+  font-size: 11px;
+  color: var(--ink-tertiary);
 }
 
 /* Readiness mark: one dot, four states */
@@ -811,6 +906,13 @@ a.navitem.back {
 .btn:hover {
   color: var(--ink);
   border-color: var(--hairline-strong);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
+  color: var(--ink-tertiary);
+  pointer-events: none;
 }
 
 .btn.primary {
