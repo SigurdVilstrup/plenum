@@ -2912,10 +2912,10 @@ const SETTINGS_PAGES = {
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
         ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Plenum launches when Terminal is Other app.') : ''}
       </div>
-      <div class="group-head">Diff and merge<small>Nothing opens yet — your choice is saved for when Diff and Merge ship.</small></div>
+      <div class="group-head">Diff and merge<span class="soon-tag">Coming soon</span><small>Compare changes and resolve conflicts in the tool you pick.</small></div>
       <div class="list">
-        ${settingsRow('files', 'Diff tool', '', 'Saved only — not opened yet', selectHTML('diffTool', diffOpts, p.diffTool, 'Diff tool'), 'Installed tools on this Mac. Stored only for now — Plenum won’t open this tool until Diff/Merge launch.')}
-        ${settingsRow('git-merge', 'Merge tool', '', 'Saved only — not opened yet', selectHTML('mergeTool', mergeOpts, p.mergeTool, 'Merge tool'), 'Installed tools on this Mac. Stored only for now — Plenum won’t open this tool until Diff/Merge launch.')}
+        ${settingsRow('files', 'Diff tool', '', 'Compares file changes in a lane', selectHTML('diffTool', diffOpts, p.diffTool, 'Diff tool'), 'Installed tools on this Mac.')}
+        ${settingsRow('git-merge', 'Merge tool', '', 'Resolves conflicts when merging lanes', selectHTML('mergeTool', mergeOpts, p.mergeTool, 'Merge tool'), 'Installed tools on this Mac.')}
       </div>
       <div class="group-head">Folders</div>
       <div class="list">

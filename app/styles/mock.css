@@ -2228,6 +2228,16 @@ a.navitem {
   color: var(--ink);
 }
 
+.soon-tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2, var(--hairline));
+  color: var(--ink-subtle);
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .group-head small {
   display: block;
   margin-top: 2px;
