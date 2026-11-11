@@ -10,29 +10,33 @@ export const CLIENTS = [
 ];
 
 const INSTALLED = {
-  cursor: (h) => [h('.cursor'), '/Applications/Cursor.app'],
+  cursor: (h, apps) => [h('.cursor'), path.join(apps, 'Cursor.app')],
   'claude-code': (h) => [h('.claude'), h('.claude.json')],
   codex: (h) => [h('.codex')],
 };
 
-const ctx = (id, { userHome = os.homedir(), launcher = launcherPath() } = {}) => {
+const ctx = (id, { userHome = os.homedir(), launcher = launcherPath(), appsDir = '/Applications' } = {}) => {
   const c = CLIENTS.find((x) => x.id === id);
   if (!c) throw new Error(`Unknown client: ${id}`);
   const h = (rel) => path.join(userHome, rel);
-  return { ...c, path: h(c.file), launcher, installed: INSTALLED[id](h).some((p) => fs.existsSync(p)) };
+  return { ...c, path: h(c.file), launcher, installed: INSTALLED[id](h, appsDir).some((p) => fs.existsSync(p)) };
 };
 
 const tomlStr = (s) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 const tomlBlock = (launcher) => `[mcp_servers.plenum]\ncommand = ${tomlStr(launcher)}\nargs = ["mcp"]\n`;
-const HEADER = /^\[mcp_servers\.plenum(\.[^\]]+)?\]\s*$/;
+const KEY = String.raw`(?:"[^"]*"|[A-Za-z0-9_-]+)`;
+const HEADER = new RegExp(String.raw`^\[\s*mcp_servers\s*\.\s*(?:plenum|"plenum")\s*(?:\.\s*${KEY}\s*)*\]\s*(?:#.*)?$`);
+const UNEDITABLE = /^\s*(?:mcp_servers\s*\.\s*(?:plenum|"plenum")\b|(?:plenum|"plenum")\s*=)/;
+const TABLE = /^\s*\[/;
 
 // Line range [start, end) of the plenum block in TOML text, or null.
 function tomlRange(lines) {
   const start = lines.findIndex((l) => HEADER.test(l));
   if (start < 0) return null;
   let end = start + 1;
-  while (end < lines.length && (!lines[end].startsWith('[') || HEADER.test(lines[end]))) end++;
-  while (end > start + 1 && lines[end - 1].trim() === '') end--; // blank lines belong to what follows
+  while (end < lines.length && (!TABLE.test(lines[end]) || HEADER.test(lines[end]))) end++;
+  // trailing blank/comment lines before the next table belong to what follows
+  while (end > start + 1 && /^\s*(#.*)?$/.test(lines[end - 1])) end--;
   return [start, end];
 }
 
@@ -55,13 +59,19 @@ function inspect(c) {
   if (c.format === 'toml') {
     const lines = text.replace(/\n$/, '').split('\n');
     const r = tomlRange(lines);
-    if (!r) return { state: 'missing', text, lines };
+    if (!r) {
+      return lines.some((l) => UNEDITABLE.test(l))
+        ? { state: 'unreadable', reason: "has a plenum entry in a form Plenum can't edit" }
+        : { state: 'missing', text, lines };
+    }
     return { state: tomlEntryOk(lines, r, c.launcher) ? 'ok' : 'stale', text, lines, range: r };
   }
   let json;
   try { json = JSON.parse(text); } catch (e) { return { state: 'unreadable', reason: e.message }; }
   if (json === null || typeof json !== 'object' || Array.isArray(json)) return { state: 'unreadable', reason: 'top level is not a JSON object' };
-  const e = json.mcpServers?.plenum;
+  const m = json.mcpServers;
+  if (m !== undefined && (m === null || typeof m !== 'object' || Array.isArray(m))) return { state: 'unreadable', reason: 'mcpServers is not an object' };
+  const e = m?.plenum;
   if (e === undefined) return { state: 'missing', text, json };
   const ok = e && e.command === c.launcher && Array.isArray(e.args) && e.args.length === 1 && e.args[0] === 'mcp';
   return { state: ok ? 'ok' : 'stale', text, json };
@@ -75,11 +85,19 @@ const status = (c) => {
 function writeAtomic(file, text) {
   let real = file;
   let mode = 0o600;
-  try { real = fs.realpathSync(file); mode = fs.statSync(real).mode & 0o777; } catch { fs.mkdirSync(path.dirname(file), { recursive: true }); }
+  try {
+    if (fs.lstatSync(file).isSymbolicLink()) real = path.resolve(path.dirname(file), fs.readlinkSync(file));
+  } catch { /* not there yet */ }
+  try { real = fs.realpathSync(real); mode = fs.statSync(real).mode & 0o777; } catch { fs.mkdirSync(path.dirname(real), { recursive: true }); }
   const tmp = `${real}.plenum-tmp`;
-  fs.writeFileSync(tmp, text, { mode });
-  fs.chmodSync(tmp, mode);
-  fs.renameSync(tmp, real);
+  try {
+    fs.writeFileSync(tmp, text, { mode });
+    fs.chmodSync(tmp, mode);
+    fs.renameSync(tmp, real);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
 }
 
 const jsonEntry = (launcher) => ({ command: launcher, args: ['mcp'] });

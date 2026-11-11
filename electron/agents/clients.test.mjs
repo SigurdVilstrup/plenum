@@ -7,10 +7,10 @@ import { CLIENTS, listClients, previewAdd, addClient, removeClient } from './cli
 
 const LAUNCHER = '/tmp/pl home/bin/plenum';
 
-// Every test goes through here: temp home, fake launcher, no client binaries searched.
+// Every test goes through here: temp home, temp apps dir, fake launcher.
 function setup(extra = {}) {
   const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-clients-'));
-  const opts = { userHome, launcher: LAUNCHER, binDirs: [], ...extra };
+  const opts = { userHome, appsDir: path.join(userHome, 'Applications'), launcher: LAUNCHER, ...extra };
   const p = (rel) => path.join(userHome, rel);
   return { userHome, opts, p };
 }
@@ -20,11 +20,8 @@ const write = (file, text) => { fs.mkdirSync(path.dirname(file), { recursive: tr
 test('nothing installed → all three not-installed', () => {
   const { opts } = setup();
   const l = listClients(opts);
-  // Cursor.app may exist on the machine; only assert the other two strictly and cursor unless app present
   assert.equal(l.length, 3);
-  assert.equal(state(opts, 'claude-code').state, 'not-installed');
-  assert.equal(state(opts, 'codex').state, 'not-installed');
-  if (!fs.existsSync('/Applications/Cursor.app')) assert.equal(state(opts, 'cursor').state, 'not-installed');
+  assert.deepEqual(l.map((c) => c.state), ['not-installed', 'not-installed', 'not-installed']);
   assert.deepEqual(CLIENTS.map((c) => c.id), ['cursor', 'claude-code', 'codex']);
 });
 
@@ -157,4 +154,82 @@ test('not-installed client: add throws and writes nothing', () => {
   const { opts, p } = setup();
   assert.throws(() => addClient('codex', opts));
   assert.ok(!fs.existsSync(p('.codex')));
+});
+
+test('Cursor.app in appsDir (no .cursor dir) makes Cursor missing', () => {
+  const { opts, p } = setup();
+  fs.mkdirSync(p('Applications/Cursor.app'), { recursive: true });
+  assert.equal(state(opts, 'cursor').state, 'missing');
+});
+
+const codexFile = (text) => { const s = setup(); const f = s.p('.codex/config.toml'); write(f, text); return { ...s, f }; };
+const countHeaders = (t) => (t.match(/^\[mcp_servers\.plenum\]/gm) || []).length;
+
+test('toml: header with trailing comment / spaces / quoted key is a recognised block', () => {
+  for (const h of ['[mcp_servers.plenum] # mine', '[ mcp_servers . plenum ]  ', '[mcp_servers."plenum"]']) {
+    const { opts, f } = codexFile(`[a]\nx = 1\n\n${h}\ncommand = "old"\n\n[b]\ny = 2\n`);
+    assert.equal(state(opts, 'codex').state, 'stale', h);
+    assert.equal(addClient('codex', opts).state, 'ok', h);
+    const t = fs.readFileSync(f, 'utf8');
+    assert.equal(countHeaders(t), 1, h);
+    assert.ok(!t.includes('old') && !t.includes('# mine') && t.endsWith('[b]\ny = 2\n'), h);
+    assert.equal(removeClient('codex', opts).state, 'missing', h);
+    assert.ok(!fs.readFileSync(f, 'utf8').includes('plenum'), h);
+  }
+});
+
+test('toml: plenum entry in an uneditable form (inline table / dotted key) → unreadable, nothing written', () => {
+  for (const bad of [
+    '[mcp_servers]\nplenum = { command = "plenum" }\n',
+    'mcp_servers.plenum.command = "plenum"\n[tools]\nweb = true\n',
+  ]) {
+    const { opts, f } = codexFile(bad);
+    const s = state(opts, 'codex');
+    assert.equal(s.state, 'unreadable');
+    assert.equal(s.reason, "has a plenum entry in a form Plenum can't edit");
+    assert.throws(() => addClient('codex', opts));
+    assert.throws(() => removeClient('codex', opts));
+    assert.equal(fs.readFileSync(f, 'utf8'), bad);
+  }
+});
+
+test("toml: comments belonging to the next table survive Fix and Remove", () => {
+  const orig = '[mcp_servers.plenum]\ncommand = "plenum"\n\n# tools section\n[tools]\nweb = true\n';
+  const { opts, f } = codexFile(orig);
+  addClient('codex', opts);
+  const t = fs.readFileSync(f, 'utf8');
+  assert.ok(t.endsWith('\n\n# tools section\n[tools]\nweb = true\n'));
+  assert.equal(countHeaders(t), 1);
+  fs.writeFileSync(f, orig);
+  removeClient('codex', opts);
+  assert.equal(fs.readFileSync(f, 'utf8').trimStart(), '# tools section\n[tools]\nweb = true\n');
+});
+
+test('toml: a comment between plenum keys stays part of the block', () => {
+  const { opts, f } = codexFile('[mcp_servers.plenum]\ncommand = "old"\n# note\nargs = ["x"]\n\n[b]\ny = 2\n');
+  addClient('codex', opts);
+  const t = fs.readFileSync(f, 'utf8');
+  assert.ok(!t.includes('# note') && !t.includes('"x"') && t.endsWith('\n\n[b]\ny = 2\n'));
+});
+
+test('dangling symlink config: write creates the target and the link stays a link', () => {
+  const { opts, p } = setup();
+  fs.mkdirSync(p('.cursor'));
+  fs.mkdirSync(p('dotfiles'));
+  fs.symlinkSync('../dotfiles/mcp.json', p('.cursor/mcp.json'));
+  addClient('cursor', opts);
+  assert.ok(fs.lstatSync(p('.cursor/mcp.json')).isSymbolicLink());
+  assert.ok(JSON.parse(fs.readFileSync(p('dotfiles/mcp.json'), 'utf8')).mcpServers.plenum);
+});
+
+test('non-object mcpServers → unreadable; add throws; bytes unchanged', () => {
+  for (const bad of ['{"mcpServers":"x"}', '{"mcpServers":[]}']) {
+    const { opts, p } = setup();
+    write(p('.cursor/mcp.json'), bad);
+    const s = state(opts, 'cursor');
+    assert.equal(s.state, 'unreadable');
+    assert.equal(s.reason, 'mcpServers is not an object');
+    assert.throws(() => addClient('cursor', opts));
+    assert.equal(fs.readFileSync(p('.cursor/mcp.json'), 'utf8'), bad);
+  }
 });
