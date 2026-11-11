@@ -9,13 +9,6 @@ const ROW = 30;
 const COL_X0 = 14;
 const COL_W = 24;
 const laneColor = (c) => `var(--lane-${c})`;
-const authorColor = {
-  human: 'var(--human)',
-  assisted: 'var(--assisted)',
-  agent: 'var(--agent)',
-  mixed: 'var(--assisted)',
-};
-
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
@@ -70,7 +63,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
   commits.forEach((c, i) => {
     c.parents.forEach((pid) => {
       const p = index.get(pid);
-      const dash = c.isWIP ? ' stroke-dasharray="3 3"' : '';
+      const dash = c.isWIP || c.unpushed ? ' stroke-dasharray="3 3"' : '';
       if (p == null) {
         const dim = c.lane !== selectedLane ? ' dim' : '';
         // Continue past the last painted tip so load-older doesn't look cut off.
@@ -103,9 +96,11 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       nodes += `<circle class="node wip${dim}" cx="${cx}" cy="${cy}" r="5" fill="var(--canvas)" stroke="${col}" stroke-width="1.5" stroke-dasharray="2.5 2"/>`;
     } else if (c.isMerge) {
       nodes += `<circle class="node${dim}" cx="${cx}" cy="${cy}" r="4" fill="var(--canvas)" stroke="${laneColor(c.lane)}" stroke-width="1.5"/>`;
+    } else if (c.unpushed && !tips.has(c.id)) {
+      // Not on origin yet: hollow ring, dashed edge below (see edges).
+      nodes += `<circle class="node unpushed${dim}" cx="${cx}" cy="${cy}" r="3.5" fill="var(--canvas)" stroke="${laneColor(c.lane)}" stroke-width="1.5"/>`;
     } else if (tips.has(c.id)) {
-      const fill = authorColor[c.kind] || authorColor.human;
-      nodes += `<circle class="node tip${dim}" cx="${cx}" cy="${cy}" r="5.5" fill="${fill}" stroke="${laneColor(c.lane)}" stroke-width="1.5"/>`;
+      nodes += `<circle class="node tip${dim}" cx="${cx}" cy="${cy}" r="5.5" fill="${laneColor(c.lane)}" stroke="var(--canvas)" stroke-width="1.5"/>`;
     } else {
       nodes += `<circle class="node${dim}" cx="${cx}" cy="${cy}" r="3.5" fill="${laneColor(c.lane)}"/>`;
     }

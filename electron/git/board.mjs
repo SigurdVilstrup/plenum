@@ -460,7 +460,7 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
     }
   }
   let primaryOnly = new Set();
-  if (lanes[0]?.branch && lanes[0].branch !== team) {
+  if (lanes[0]?.branch) {
     primaryOnly = await shaSet(['rev-list', lanes[0].branch, '--not', teamRef], cwd);
   }
 

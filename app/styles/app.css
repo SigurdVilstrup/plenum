@@ -833,7 +833,7 @@ button.env-link {
 
 /* Unpushed tip commits (not on origin/<branch>) */
 .row.unpushed .sha {
-  color: var(--warn, #c47a00);
+  color: var(--primary);
 }
 .row.unpushed .sha::after {
   content: "↑";
