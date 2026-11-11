@@ -1395,6 +1395,70 @@ a.iconbtn,
   color: var(--ink);
 }
 
+/* In-app update CTA — far right, after Feedback. */
+.panel-foot .foot-update {
+  position: relative;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+.panel-foot .foot-update .icon {
+  color: var(--on-primary);
+  flex-shrink: 0;
+}
+
+.panel-foot .foot-update:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.panel-foot .foot-update:disabled,
+.panel-foot .foot-update.busy {
+  opacity: 0.85;
+  cursor: wait;
+}
+
+.panel-foot .foot-update.ready {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--on-primary) 35%, transparent);
+}
+
+.panel-foot .foot-update-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f04438;
+  border: 2px solid var(--surface-1);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #f04438 40%, transparent);
+  animation: update-dot-pulse 1.6s ease-in-out infinite;
+}
+
+.panel-foot .foot-update.busy .foot-update-dot {
+  animation: none;
+  background: var(--warning, #e8a317);
+}
+
+@keyframes update-dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
 /* Mac sheets: drop from under the title bar, rounded at the bottom only. */
 .sheet-layer,
 .modal-layer {

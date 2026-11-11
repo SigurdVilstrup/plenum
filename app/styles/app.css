@@ -1076,6 +1076,15 @@ html.feedback-redact .blame-line {
 .window.app .panel .panel-foot {
   flex-shrink: 0;
 }
+.window.app .panel-foot .foot-update {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.window.app .panel-foot .foot-update [data-update-label] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .window.app .panel .lane-row {
   padding: 8px 8px 8px 10px;
   column-gap: 10px;

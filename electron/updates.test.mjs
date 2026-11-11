@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   actionKind,
   actionLabel,
   createUpdater,
+  DEFAULT_UPDATE_FEED_URL,
   initialState,
   reduceOnCheckFailure,
   reduceOnCheckStart,
@@ -14,7 +18,19 @@ import {
   reduceOnInstallFailure,
   reduceOnNoUpdate,
   reduceOnUpdateAvailable,
+  resolveUpdateFeed,
 } from './updates.mjs';
+
+test('resolveUpdateFeed defaults to public plenum.sh generic URL', () => {
+  assert.deepEqual(resolveUpdateFeed(() => undefined), {
+    provider: 'generic',
+    url: DEFAULT_UPDATE_FEED_URL,
+  });
+  assert.deepEqual(
+    resolveUpdateFeed((name) => (name === 'UPDATE_FEED_URL' ? 'https://cdn.example/upd' : undefined)),
+    { provider: 'generic', url: 'https://cdn.example/upd/' },
+  );
+});
 
 test('actionLabel and actionKind follow T3 available → download → install', () => {
   assert.equal(actionKind(initialState({ status: 'idle', enabled: true })), 'check');
@@ -124,6 +140,7 @@ test('createUpdater configures no-auto download/install and runs check', async (
     verifyUpdateCodeSignature: true,
     removeAllListeners(ev) { listeners.delete(ev); },
     on(ev, fn) { listeners.set(ev, fn); },
+    setFeedURL() {},
     async checkForUpdates() {
       checked += 1;
       listeners.get('update-available')?.({ version: '0.3.0' });
@@ -134,6 +151,7 @@ test('createUpdater configures no-auto download/install and runs check', async (
     },
     quitAndInstall() { fake._installed = true; },
   };
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-home-'));
   const u = createUpdater({
     getVersion: () => '0.2.5',
     isPackaged: true,
@@ -141,6 +159,7 @@ test('createUpdater configures no-auto download/install and runs check', async (
     send: (s) => sent.push(s),
     updater: fake,
     envGet: () => undefined,
+    runHome: emptyHome,
   });
   u.configure();
   assert.equal(fake.autoDownload, false);
@@ -161,6 +180,36 @@ test('createUpdater configures no-auto download/install and runs check', async (
   assert.equal(fake._installed, true);
 });
 
+test('mock-update file forces available without calling GitHub', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-'));
+  fs.writeFileSync(path.join(dir, 'mock-update'), '0.3.0\n');
+  // Point RUN_HOME-equivalent by writing where readMockUpdateVersion looks — use env.
+  const prev = process.env.PLENUM_MOCK_UPDATE;
+  process.env.PLENUM_MOCK_UPDATE = '0.3.0';
+  try {
+    const u = createUpdater({
+      getVersion: () => '0.2.6',
+      isPackaged: true,
+      platform: 'darwin',
+      send: () => {},
+      updater: {
+        removeAllListeners() {},
+        on() {},
+        setFeedURL() {},
+        async checkForUpdates() { throw new Error('should not hit network'); },
+      },
+      envGet: () => undefined,
+    });
+    u.configure();
+    await u.check();
+    assert.equal(u.getState().status, 'available');
+    assert.equal(u.getState().availableVersion, '0.3.0');
+  } finally {
+    if (prev == null) delete process.env.PLENUM_MOCK_UPDATE;
+    else process.env.PLENUM_MOCK_UPDATE = prev;
+  }
+});
+
 test('PLENUM_DISABLE_AUTO_UPDATE disables the updater', () => {
   const u = createUpdater({
     getVersion: () => '0.2.5',
@@ -170,6 +219,7 @@ test('PLENUM_DISABLE_AUTO_UPDATE disables the updater', () => {
     updater: {
       removeAllListeners() {},
       on() {},
+      setFeedURL() {},
     },
     envGet: (name) => (name === 'DISABLE_AUTO_UPDATE' ? '1' : undefined),
   });

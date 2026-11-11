@@ -54,11 +54,13 @@ Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Pack
 
 ### In-app updates (T3 pattern)
 
-Packaged builds use `electron-updater` against GitHub Releases. The app checks in the background; you click to download, then again to install & restart. First installs still use the `.dmg`; updates use the `.zip` + `latest-mac.yml` (+ `*.blockmap` for differential downloads) published on each `v*` tag.
+Packaged builds use `electron-updater` against the **public** feed at [`https://plenum.sh/updates/`](https://plenum.sh/updates/). Anyone can update — no GitHub token. The app checks in the background; you click to download, then again to install & restart.
+
+CI FTPs those files on each `v*` tag (see `docs/updates-feed.md`). Secrets: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_UPDATES_DIR`.
 
 - Disable: `PLENUM_DISABLE_AUTO_UPDATE=1`
-- Override feed repo: `PLENUM_UPDATE_REPOSITORY=owner/repo`
-- Private release auth: `PLENUM_UPDATE_GITHUB_TOKEN` (or `GH_TOKEN`)
+- Override feed: `PLENUM_UPDATE_FEED_URL=https://…/updates/`
+- UI dogfood without files yet: put a newer semver in `~/.plenum/mock-update` (e.g. `0.2.7`)
 
 ## Layout
 

@@ -27,15 +27,14 @@ jobs:
         env:
           # Unsigned local/dogfood builds (package.json sets identity: null).
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          # Still emit latest-mac.yml / *.blockmap for electron-updater (publish never uploads).
+          # electron-builder may still talk to GitHub for changelog; token is fine.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # electron-builder auto-publishes on a git tag; we upload via softprops below.
+        # Emits dmg/zip/blockmap + latest-mac.yml (generic feed → https://plenum.sh/updates/).
         run: npm run build && npx electron-builder --mac --publish never
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # DMG for first install; zip + yml + blockmap for in-app electron-updater (T3 pattern).
           files: |
             release/*.dmg
             release/*.zip
@@ -43,3 +42,28 @@ jobs:
             release/latest-mac.yml
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+      - name: Stage public update feed
+        run: |
+          set -euo pipefail
+          mkdir -p release-ftp
+          cp release/latest-mac.yml release-ftp/
+          cp release/*.zip release-ftp/
+          cp release/*.blockmap release-ftp/ 2>/dev/null || true
+          # Stable first-install name for the landing “Download” link.
+          dmg=$(ls release/*.dmg | head -1)
+          cp "$dmg" release-ftp/Plenum.dmg
+          cp "$dmg" "release-ftp/$(basename "$dmg")"
+          ls -la release-ftp
+
+      - name: FTP upload to plenum.sh/updates
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./release-ftp/
+          # e.g. public_html/updates/ — must be the dir served at https://plenum.sh/updates/
+          server-dir: ${{ secrets.FTP_UPDATES_DIR }}
+          dangerous-clean-slate: false

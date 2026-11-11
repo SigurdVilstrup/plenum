@@ -55,10 +55,8 @@
     ],
     "publish": [
       {
-        "provider": "github",
-        "owner": "SigurdVilstrup",
-        "repo": "plenum",
-        "releaseType": "release"
+        "provider": "generic",
+        "url": "https://plenum.sh/updates/"
       }
     ],
     "mac": {

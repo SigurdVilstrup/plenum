@@ -255,22 +255,76 @@ function versionDetailHTML() {
   return `<span class="mono">${ver} · ${rest}</span>`;
 }
 
+function updateTargetVersion(u = state.update) {
+  return u?.availableVersion || u?.downloadedVersion || null;
+}
+
 /** Mirror of electron/updates.mjs actionLabel for the Settings / foot button. */
 function updateActionLabel(u = state.update) {
   if (!u || !u.enabled) return null;
-  const v = u.availableVersion || u.downloadedVersion;
+  const v = updateTargetVersion(u);
   switch (u.status) {
-    case 'available': return v ? `Download ${v}` : 'Download update';
+    case 'available': return v ? `Install ${v}` : 'Install update';
     case 'downloading': {
       const pct = u.downloadPercent;
       return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
     }
-    case 'downloaded': return 'Install & Restart';
+    case 'downloaded': return 'Install update';
     case 'checking': return 'Checking…';
-    case 'error': return u.canRetry ? 'Retry' : 'Update unavailable';
+    case 'error': return u.canRetry ? 'Try again' : 'Update unavailable';
     case 'up-to-date':
     case 'idle': return 'Check for updates';
     default: return null;
+  }
+}
+
+/** Short disruptive label for the sidebar foot (never the error/retry state). */
+function updateFootLabel(u = state.update) {
+  if (!u?.enabled) return null;
+  const v = updateTargetVersion(u);
+  switch (u.status) {
+    case 'available': return v ? `Install ${v}` : 'Install update';
+    case 'downloading': {
+      const pct = u.downloadPercent;
+      return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
+    }
+    case 'downloaded': return 'Install update';
+    default: return null;
+  }
+}
+
+/** Hover copy: always show current → next when we know the target. */
+function updateHoverTip(u = state.update) {
+  if (!u) return '';
+  if (u.message && (u.status === 'error' || u.status === 'disabled')) return u.message;
+  const cur = u.currentVersion || state.appInfo.version || '?';
+  const next = updateTargetVersion(u);
+  const arrow = next ? `${cur} → ${next}` : null;
+  switch (u.status) {
+    case 'available':
+      return arrow
+        ? `Install update\n${arrow}\nDownloads ${next}, then you install & restart.`
+        : 'Install update. Downloads first, then you restart.';
+    case 'downloading': {
+      const pct = u.downloadPercent != null ? ` (${Math.round(u.downloadPercent)}%)` : '';
+      return arrow
+        ? `Downloading update${pct}\n${arrow}`
+        : `Downloading update${pct}`;
+    }
+    case 'downloaded':
+      return arrow
+        ? `Install update\n${arrow}\nQuits Plenum and restarts on ${next}.`
+        : 'Install update. Quits Plenum and restarts.';
+    case 'up-to-date':
+      return `You’re on ${cur} — latest GitHub release.`;
+    case 'idle':
+      return `Installed ${cur}. Check GitHub Releases for a newer Plenum.`;
+    case 'checking':
+      return `Checking for updates… (installed ${cur})`;
+    case 'error':
+      return u.message || 'Update check failed.';
+    default:
+      return arrow || `Installed ${cur}`;
   }
 }
 
@@ -287,12 +341,9 @@ function updateControlHTML() {
   const label = updateActionLabel(u);
   if (!label) return '';
   const busy = updateActionBusy(u);
-  const tip = u.message
-    || (u.status === 'up-to-date' ? 'You’re on the latest GitHub release.'
-      : u.status === 'available' ? 'Downloads in the background. Install when ready.'
-        : u.status === 'downloaded' ? 'Quits Plenum and swaps in the new build.'
-          : 'Checks GitHub Releases for a newer Plenum.');
-  return `<button class="btn" type="button" data-update-act${busy ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
+  const hot = u.status === 'available' || u.status === 'downloaded' || u.status === 'downloading';
+  const tip = updateHoverTip(u);
+  return `<button class="btn${hot ? ' primary' : ''}" type="button" data-update-act${busy ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
 }
 
 function applyUpdateState(next) {
@@ -315,12 +366,16 @@ function applyUpdateState(next) {
     paint();
     return;
   }
-  // Progress-only: keep the foot button label current without rebuilding the board.
+  // Progress-only: keep the foot / settings button copy current without rebuilding the board.
+  const tip = updateHoverTip(next);
+  const foot = updateFootLabel(next);
   const label = updateActionLabel(next);
-  el.panel?.querySelectorAll('[data-update-act]').forEach((btn) => {
-    if (!label) return;
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
+  document.querySelectorAll('[data-update-act]').forEach((btn) => {
+    btn.title = tip;
+    btn.setAttribute('aria-label', tip.replace(/\n/g, ' — '));
+    const text = btn.querySelector('[data-update-label]');
+    if (text && foot) text.textContent = foot;
+    else if (!text && label) btn.textContent = label;
   });
 }
 
@@ -1998,24 +2053,45 @@ function startFeedbackPick() {
 /** Footer shared by the board sidebar and the Settings sidebar so both look identical. */
 function panelFootHTML(settingsActive = false) {
   const u = state.update;
-  const showUpdate = u?.enabled && (u.status === 'available' || u.status === 'downloading' || u.status === 'downloaded' || (u.status === 'error' && u.canRetry));
-  const updateLabel = updateActionLabel(u) || 'Update';
+  // Foot CTA only for a real update path — failed checks stay in Settings (“Try again”).
+  const showUpdate = u?.enabled && (u.status === 'available' || u.status === 'downloading' || u.status === 'downloaded');
   const updateBusy = updateActionBusy(u);
+  const footLabel = updateFootLabel(u) || 'Install update';
+  const tip = updateHoverTip(u);
+  const tipAttr = esc(tip);
+  const aria = esc(tip.replace(/\n/g, ' — '));
+  const ready = u?.status === 'downloaded';
   const updateBtn = showUpdate
-    ? `<button class="iconbtn${u.status === 'downloaded' ? ' active' : ''}" type="button" data-update-act${updateBusy ? ' disabled' : ''} title="${esc(updateLabel)}" aria-label="${esc(updateLabel)}">${iconHTML('cloud-arrow-down')}</button>`
+    ? `<button class="foot-update${ready ? ' ready' : ''}${updateBusy ? ' busy' : ''}" type="button" data-update-act${updateBusy ? ' disabled' : ''} title="${tipAttr}" aria-label="${aria}">
+        <span class="foot-update-dot" aria-hidden="true"></span>
+        ${iconHTML('cloud-arrow-down')}
+        <span data-update-label>${esc(footLabel)}</span>
+      </button>`
     : '';
   return `<div class="panel-foot">
     <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
     <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
-    ${updateBtn}
     <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
+    ${updateBtn}
   </div>`;
 }
 
 async function runUpdateAct() {
   try {
+    const prev = state.update;
     const next = await invoke('app.update.act');
     if (next) applyUpdateState(next);
+    // Surface mock / install failures — the foot label often stays “Install update”.
+    if (next?.message && next.message !== prev?.message) {
+      const kind = next.status === 'downloaded' || next.status === 'available' || next.status === 'error'
+        ? 'bad'
+        : '';
+      toast(next.message, kind);
+    } else if (next?.status === 'downloaded' && prev?.status === 'downloading') {
+      toast(next.downloadedVersion ? `Downloaded ${next.downloadedVersion}` : 'Download complete', 'ok');
+    } else if (next?.status === 'available' && prev?.status === 'checking') {
+      toast(next.availableVersion ? `Update ${next.availableVersion} available` : 'Update available', 'ok');
+    }
   } catch { /* toasted */ }
 }
 

@@ -1,16 +1,78 @@
 /**
- * T3-style desktop updates: electron-updater against GitHub Releases.
+ * T3-style desktop updates via electron-updater.
  * Check in the background; never auto-download or auto-install — the UI advances
  * available → download → install & restart.
+ *
+ * Default feed is the public generic URL on plenum.sh (no GitHub token).
+ * Override with PLENUM_UPDATE_FEED_URL, or PLENUM_UPDATE_REPOSITORY=owner/repo for GitHub.
+ * Dogfood UI without files: ~/.plenum/mock-update containing a semver (e.g. `0.2.7`).
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { createRequire } from 'node:module';
-import { env } from './paths.mjs';
+import { env, RUN_HOME } from './paths.mjs';
 
 const require = createRequire(import.meta.url);
 
 /** Lazy — importing electron-updater's autoUpdater touches `app` and breaks node:test. */
 function defaultAutoUpdater() {
   return require('electron-updater').autoUpdater;
+}
+
+/** Public update channel — anyone can check/download without a GitHub token. */
+export const DEFAULT_UPDATE_FEED_URL = 'https://plenum.sh/updates/';
+
+const DEFAULT_FEED = { provider: 'generic', url: DEFAULT_UPDATE_FEED_URL };
+
+/** Resolve feed from env overrides, else public plenum.sh. */
+export function resolveUpdateFeed(envGet = env) {
+  const feedUrl = String(envGet('UPDATE_FEED_URL', '') || '').trim();
+  if (feedUrl) return { provider: 'generic', url: feedUrl.endsWith('/') ? feedUrl : `${feedUrl}/` };
+
+  const repo = String(envGet('UPDATE_REPOSITORY', '') || '').trim();
+  if (repo) {
+    const [owner, name, ...rest] = repo.split('/');
+    if (owner && name && rest.length === 0) {
+      return { provider: 'github', owner, repo: name, private: true };
+    }
+  }
+  return { ...DEFAULT_FEED };
+}
+
+function readFirstLine(file) {
+  try {
+    const text = fs.readFileSync(file, 'utf8').trim();
+    const line = text.split(/\r?\n/).map((s) => s.trim()).find(Boolean);
+    return line || '';
+  } catch {
+    return '';
+  }
+}
+
+/** Optional dogfood override: force “update available” without hitting GitHub. */
+export function readMockUpdateVersion(dir = RUN_HOME) {
+  const fromEnv = String(env('MOCK_UPDATE', '') || '').trim();
+  if (fromEnv) return fromEnv.replace(/^v/i, '');
+  const fromFile = readFirstLine(path.join(dir, 'mock-update'));
+  return fromFile ? fromFile.replace(/^v/i, '') : '';
+}
+
+function readUpdateGithubToken(dir = RUN_HOME) {
+  return (
+    String(env('UPDATE_GITHUB_TOKEN', '') || '').trim()
+    || String(process.env.GH_TOKEN || '').trim()
+    || String(process.env.GITHUB_TOKEN || '').trim()
+    || readFirstLine(path.join(dir, 'update-github-token'))
+  );
+}
+
+function isNewerVersion(candidate, current) {
+  try {
+    const semver = require('semver');
+    return Boolean(semver.valid(candidate) && semver.valid(current) && semver.gt(candidate, current));
+  } catch {
+    return candidate !== current && candidate > current;
+  }
 }
 
 export const STARTUP_DELAY_MS = 15_000;
@@ -233,6 +295,7 @@ function errMessage(err) {
 export function createUpdater(opts) {
   const updater = opts.updater || defaultAutoUpdater();
   const envGet = opts.envGet || env;
+  const runHome = opts.runHome || RUN_HOME;
   let state = initialState({ currentVersion: opts.getVersion() });
   let timers = [];
   let busy = null;
@@ -278,21 +341,21 @@ export function createUpdater(opts) {
       updater.verifyUpdateCodeSignature = false;
     }
 
-    const token = envGet('UPDATE_GITHUB_TOKEN') || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-    if (token) {
-      updater.requestHeaders = {
-        ...(updater.requestHeaders || {}),
-        Authorization: `Bearer ${token}`,
-      };
-    }
-
-    const repo = String(envGet('UPDATE_REPOSITORY', '') || '').trim();
-    if (repo) {
-      const [owner, name, ...rest] = repo.split('/');
-      if (owner && name && rest.length === 0) {
-        updater.setFeedURL({ provider: 'github', owner, repo: name });
+    const feed = resolveUpdateFeed(envGet);
+    if (feed.provider === 'github') {
+      const token = readUpdateGithubToken(runHome);
+      if (token) {
+        updater.requestHeaders = {
+          ...(updater.requestHeaders || {}),
+          Authorization: `Bearer ${token}`,
+        };
       }
     }
+
+    // Always set an explicit feed — `npm run pack --dir` does not embed app-update.yml.
+    try {
+      updater.setFeedURL(feed);
+    } catch { /* keep electron-updater defaults if setFeedURL unavailable in tests */ }
 
     updater.removeAllListeners?.('update-available');
     updater.removeAllListeners?.('update-not-available');
@@ -337,6 +400,27 @@ export function createUpdater(opts) {
     busy = 'check';
     publish(reduceOnCheckStart(state, nowIso()));
     try {
+      const mock = envGet('MOCK_UPDATE') != null && String(envGet('MOCK_UPDATE')).trim() !== ''
+        ? String(envGet('MOCK_UPDATE')).trim().replace(/^v/i, '')
+        : readMockUpdateVersion(runHome);
+      if (mock) {
+        const cur = opts.getVersion();
+        if (isNewerVersion(mock, cur)) {
+          publish(reduceOnUpdateAvailable(state, mock, nowIso()));
+        } else {
+          publish(reduceOnNoUpdate(state, nowIso()));
+        }
+        return snapshot();
+      }
+      const feed = resolveUpdateFeed(envGet);
+      if (feed.provider === 'github' && !readUpdateGithubToken(runHome)) {
+        publish(reduceOnCheckFailure(
+          state,
+          'GitHub update feed needs ~/.plenum/update-github-token (private repo). Prefer the public https://plenum.sh/updates/ feed.',
+          nowIso(),
+        ));
+        return snapshot();
+      }
       await updater.checkForUpdates();
     } catch (err) {
       publish(reduceOnCheckFailure(state, errMessage(err), nowIso()));
@@ -355,6 +439,13 @@ export function createUpdater(opts) {
     busy = 'download';
     publish(reduceOnDownloadStart(state));
     try {
+      const mock = readMockUpdateVersion(runHome) || String(envGet('MOCK_UPDATE', '') || '').trim().replace(/^v/i, '');
+      if (mock) {
+        // UI dogfood only — no real package to swap in.
+        publish(reduceOnDownloadProgress(state, 100));
+        publish(reduceOnDownloadComplete(state, mock));
+        return snapshot();
+      }
       await updater.downloadUpdate();
       if (state.status === 'downloading') {
         publish(reduceOnDownloadComplete(state, state.availableVersion || ''));
@@ -372,6 +463,14 @@ export function createUpdater(opts) {
     if (state.status !== 'downloaded' && state.downloadedVersion == null) return snapshot();
     busy = 'install';
     try {
+      if (readMockUpdateVersion(runHome) || String(envGet('MOCK_UPDATE', '') || '').trim()) {
+        publish(reduceOnInstallFailure(
+          state,
+          'Mock update only — publish zip + latest-mac.yml to https://plenum.sh/updates/ to install for real.',
+        ));
+        busy = null;
+        return snapshot();
+      }
       // isSilent=false, isForceRunAfter=true — same as T3 quitAndInstall options.
       updater.quitAndInstall(false, true);
     } catch (err) {
