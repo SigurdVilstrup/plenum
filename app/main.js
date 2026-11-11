@@ -26,7 +26,7 @@ const icon = (n, c = '') => {
   return svg;
 };
 const iconHTML = (n, c = '') => {
-  // Trusted static icon names only — never pass user input as n.
+  // Trusted static icon names only - never pass user input as n.
   const safe = String(n).replace(/[^a-z0-9-]/g, '');
   return `<svg class="icon ${c}" aria-hidden="true"><use href="#i-${safe}"></use></svg>`;
 };
@@ -60,7 +60,7 @@ const state = {
   opsByTab: new Map(),
   conflictRoot: null,
   branchesOpen: true,
-  /** Remotes fold-out — collapsed by default; locals are the active work. */
+  /** Remotes fold-out - collapsed by default; locals are the active work. */
   remotesOpen: false,
   /** Session expand/collapse for branch path folders (#21). */
   collapsedBranchFolders: new Set(),
@@ -91,7 +91,7 @@ const state = {
   /** Bumped on every tab switch so superseded select/load work stops painting. */
   switchSeq: 0,
   pendingGraphScroll: null,
-  /** ⌘Z stack: { label, tabId|null, run, opts } — newest last. */
+  /** ⌘Z stack: { label, tabId|null, run, opts } - newest last. */
   undoStack: [],
 };
 
@@ -184,13 +184,26 @@ function tabGlyph(tab) {
 applyTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
-function toast(msg, kind = '', { undo = false } = {}) {
+function toast(msg, kind = '', { undo = false, link = null } = {}) {
   el.toast.hidden = false;
   el.toast.className = `toast ${kind}`.trim();
   el.toast.setAttribute('role', 'status');
-  el.toast.textContent = String(msg).replace(/^Error:\s*/i, '').split('\n')[0] + (undo ? ' · ⌘Z to undo' : '');
+  el.toast.replaceChildren();
+  const text = String(msg).replace(/^Error:\s*/i, '').split('\n')[0] + (undo ? ' · ⌘Z to undo' : '');
+  el.toast.append(document.createTextNode(text));
+  if (link?.url && link?.label) {
+    el.toast.append(document.createTextNode(' · '));
+    const a = document.createElement('a');
+    a.href = link.url;
+    a.textContent = link.label;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      invoke('os.openExternal', link.url).catch(() => {});
+    });
+    el.toast.append(a);
+  }
   clearTimeout(toast._t);
-  const ms = kind === 'bad' ? 6000 : undo ? 5000 : 2800;
+  const ms = kind === 'bad' ? 6000 : undo ? 5000 : link ? 6000 : 2800;
   toast._t = setTimeout(() => { el.toast.hidden = true; }, ms);
 }
 
@@ -450,7 +463,7 @@ function pushCreateLaneUndo(tabId, created, { newBranch }) {
   pushUndo(`create lane ${created.name}`, tabId, async () => {
     const cur = state.board?.lanes.find((l) => l.path === created.path);
     if (!cur) return null;
-    if (cur.dirty) throw new Error('That lane has uncommitted changes now — remove it from the lane menu.');
+    if (cur.dirty) throw new Error('That lane has uncommitted changes now. Remove it from the lane menu.');
     let board = await invoke('lane.remove', ...pin(cur.index, { force: true }));
     if (newBranch && created.branch) board = (await api.invoke('branch.delete', ...pin(created.branch)).catch(() => null)) || board;
     return board;
@@ -601,7 +614,7 @@ function paint() {
     return;
   }
   const tab = activeTab();
-  // Empty state is only for "no tabs". A selected tab without a board yet is loading —
+  // Empty state is only for "no tabs". A selected tab without a board yet is loading -
   // never the "Open a repository" marketing empty (that was the dogfood bug).
   if (!tab) {
     el.empty.hidden = false;
@@ -979,8 +992,8 @@ function openRename(tab, anchor) {
       const autoBtn = document.createElement('button');
       autoBtn.type = 'button';
       autoBtn.className = 'icon-auto';
-      autoBtn.title = 'Auto — use repo favicon when found';
-      autoBtn.setAttribute('aria-label', 'Auto — use repo favicon when found');
+      autoBtn.title = 'Auto: use repo favicon when found';
+      autoBtn.setAttribute('aria-label', 'Auto: use repo favicon when found');
       if (chosen === 'auto') autoBtn.classList.add('on');
       autoBtn.appendChild(autoGlyph());
       const tag = document.createElement('span');
@@ -1184,8 +1197,8 @@ function paintPanel() {
     const run = l.running ? ' running' : '';
     const runTitle = l.running ? ' Running.' : '';
     let mark;
-    if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working — uncommitted changes.${runTitle}"><i></i></span>`;
-    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove — merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
+    if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working: uncommitted changes.${runTitle}"><i></i></span>`;
+    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove: merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
     else mark = `<span class="mark unmerged${flash}${run}" title="Not merged yet.${runTitle}"><i></i></span>`;
     const meta = l.readiness === 'safe'
       ? `<span class="meta ok">merged</span>`
@@ -1245,8 +1258,8 @@ function paintPanel() {
     const label = origin.status === 'none'
       ? 'No origin remote set'
       : origin.status === 'renamed'
-        ? `Origin moved — ${esc(origin.display)}${origin.effectiveDisplay ? ` → ${esc(origin.effectiveDisplay)}` : ''}`
-        : `Origin URL is stale — ${esc(origin.display || 'unknown')}`;
+        ? `Origin moved: ${esc(origin.display)}${origin.effectiveDisplay ? ` → ${esc(origin.effectiveDisplay)}` : ''}`
+        : `Origin URL is stale: ${esc(origin.display || 'unknown')}`;
     html += `<div class="section">
       <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
     </div>`;
@@ -1263,7 +1276,7 @@ function paintPanel() {
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips — no local branch of the same name. origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists, so this can read 0.">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips: no local branch of the same name. origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists, so this can read 0.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Remotes</span>
       <span class="meta">${remoteMeta}</span>
@@ -1339,7 +1352,7 @@ function paintPanel() {
   });
 }
 
-// #46 — which tip the branch list counts against. '' = each branch's upstream (default).
+// #46 - which tip the branch list counts against. '' = each branch's upstream (default).
 const BRANCH_VS_KEY = 'plenum.branchVs';
 
 function readBranchVs() {
@@ -1475,7 +1488,7 @@ function gitActionsHTML(l) {
   if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
   if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase onto a tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
   else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
-  if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push — force-with-lease after rebase">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
+  if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push: force-with-lease after rebase">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
   a.push(`<button class="btn" type="button" data-act="pull" title="Pull (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
   return a.join('');
 }
@@ -1494,7 +1507,7 @@ function laneSetupLink() {
 }
 
 function runActionsHTML(l) {
-  // Primary never runs the stack — keep lane setup in Settings, not a permanent banner (#27).
+  // Primary never runs the stack - keep lane setup in Settings, not a permanent banner (#27).
   if (l.isPrimary) return '';
   if (l.readiness === 'safe' && !l.running) {
     return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
@@ -1564,7 +1577,7 @@ function paintHeader() {
     const pill = authorshipPillHTML(l.authorship, l.tool, iconHTML);
     const remove = l.readiness === 'safe'
       ? `<button class="btn ghost-danger" type="button" data-act="remove">${iconHTML('x', 'sm')}Remove lane</button>`
-      : `<button class="btn ghost-danger" type="button" data-act="remove" title="Not safe — opens a guided remove">${iconHTML('warning-circle', 'sm')}Remove lane !</button>`;
+      : `<button class="btn ghost-danger" type="button" data-act="remove" title="Not safe: opens a guided remove">${iconHTML('warning-circle', 'sm')}Remove lane !</button>`;
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML('tree-structure')}
@@ -1717,7 +1730,7 @@ function openDriftSheet(lane, pending) {
         </label>
         <label class="list-row compact choice">
           <input type="radio" name="up" value="snapshot" />
-          <div class="name">Switch service to snapshot<small>Open Lane setup — set <span class="mono">mode: snapshot</span> and a <span class="mono">snapshot:</span> command in <span class="mono">.plenum/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
+          <div class="name">Switch service to snapshot<small>Open Lane setup: set <span class="mono">mode: snapshot</span> and a <span class="mono">snapshot:</span> command in <span class="mono">.plenum/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
         </label>
       </div>
       <div class="row-end">
@@ -1765,7 +1778,10 @@ async function runConflictable(channel, lane, extra, act, okMsg) {
 function openSheet(html) {
   el.sheetLayer.innerHTML = html;
   el.sheetLayer.classList.add('open');
-  el.sheetLayer.querySelector('[data-close]')?.addEventListener('click', closeSheet);
+  el.sheetLayer.querySelector('[data-close]')?.addEventListener('click', () => {
+    if (el.sheetLayer.querySelector('form[data-sending="1"]')) return;
+    closeSheet();
+  });
   const form = el.sheetLayer.querySelector('form');
   form?.addEventListener('submit', (e) => e.preventDefault());
 }
@@ -1776,7 +1792,9 @@ function closeSheet() {
 }
 
 el.sheetLayer.addEventListener('click', (e) => {
-  if (e.target === el.sheetLayer) closeSheet();
+  if (e.target !== el.sheetLayer) return;
+  if (el.sheetLayer.querySelector('form[data-sending="1"]')) return;
+  closeSheet();
 });
 
 function openQuickStartSheet() {
@@ -1785,13 +1803,13 @@ function openQuickStartSheet() {
     ['tree-structure', 'Lane', 'A worktree on its own branch. Several features going at once, side by side.'],
     ['shield-check', 'Protected main', 'The checkout on the team branch. Plenum watches it and won’t work in it.'],
     ['cloud-arrow-down', 'Behind', 'Commits on the team branch that this lane doesn’t have yet.'],
-    ['sparkle', 'Authorship', 'Who wrote the newest tip — from author + agent trailers. Humans don’t get a pill.'],
+    ['sparkle', 'Authorship', 'Who wrote the newest tip, from author + agent trailers. Humans don’t get a pill.'],
     ['play', 'Runnable lanes', 'Phase two: start a lane on its own ports via .plenum/lane.yaml. Without that file it still shows up on the board.'],
-    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or Feedback in the panel foot / Settings sidebar. Optional UI target. Saved on this Mac only.'],
+    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the Feedback link in the panel. Point at something if it helps. We get a blurred screenshot. Your repo path stays here.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
-      <h1 id="qs-title">Quick start — what are lanes?</h1>
+      <h1 id="qs-title">Quick start: what are lanes?</h1>
       <div class="list">${rows}</div>
       <div class="row-end"><button class="btn primary" type="button" data-close>Done</button></div>
     </form>`);
@@ -1821,7 +1839,22 @@ function openWarmSheet() {
   });
 }
 
-let feedbackDraft = { comment: '', target: null };
+let feedbackDraft = { comment: '', target: null, credit: false };
+
+/** Effective git email for optional feedback credit (local override, else global). */
+function feedbackCreditEmail() {
+  const id = state.identity;
+  if (!id) return '';
+  return String(id.local?.email || id.global?.email || '').trim();
+}
+
+async function ensureFeedbackIdentity() {
+  if (feedbackCreditEmail()) return feedbackCreditEmail();
+  try {
+    state.identity = await invoke('git.identity.get');
+  } catch { /* leave prior */ }
+  return feedbackCreditEmail();
+}
 
 function stopFeedbackPick() {
   document.getElementById('feedback-pick-layer')?.remove();
@@ -1876,14 +1909,16 @@ function startFeedbackPick() {
     e.stopPropagation();
     const node = hitAt(e.clientX, e.clientY);
     stopFeedbackPick();
+    const creditSeed = { credit: !!feedbackDraft.credit };
     if (!node) {
-      openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target });
+      openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target, ...creditSeed });
       return;
     }
     const r = node.getBoundingClientRect();
     openFeedbackSheet({
       comment: feedbackDraft.comment,
       target: { label: feedbackPickLabel(node), rect: { x: r.x, y: r.y, w: r.width, h: r.height } },
+      ...creditSeed,
     });
   });
 }
@@ -1892,22 +1927,64 @@ function startFeedbackPick() {
 function panelFootHTML(settingsActive = false) {
   return `<div class="panel-foot">
     <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
-    <button class="iconbtn" type="button" disabled title="Account — coming soon" aria-label="Account (coming soon)">${iconHTML('user')}</button>
+    <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
     <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
   </div>`;
 }
 
-function openFeedbackSheet(seed = {}) {
+let feedbackPreviewPng = null;
+
+function setFeedbackRedact(on) {
+  document.documentElement.classList.toggle('feedback-redact', !!on);
+}
+
+async function captureFeedbackPreview(target) {
+  const sheet = el.sheetLayer;
+  const sheetOpen = sheet.classList.contains('open');
+  const prevVis = sheet.style.visibility;
+  const host = document.querySelector('.window.app') || document.body;
+  // Paint redact under the open sheet scrim when possible (user still sees the modal).
+  setFeedbackRedact(true);
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  if (sheetOpen) sheet.style.visibility = 'hidden';
+  // One paint of the redacted board is required for capturePage.
+  await new Promise((r) => requestAnimationFrame(r));
+  try {
+    const { pngBase64 } = await invoke('feedback.capture', { target: target || null });
+    feedbackPreviewPng = pngBase64;
+    return pngBase64;
+  } finally {
+    // Opaque cover while tearing down redact so the board doesn't "un-skeleton" in view.
+    const cover = document.createElement('div');
+    cover.className = 'feedback-capture-cover';
+    cover.setAttribute('data-feedback-ignore', '');
+    host.appendChild(cover);
+    setFeedbackRedact(false);
+    if (sheetOpen) sheet.style.visibility = prevVis;
+    requestAnimationFrame(() => cover.remove());
+  }
+}
+
+async function openFeedbackSheet(seed = {}) {
+  const email = await ensureFeedbackIdentity();
   const target = seed.target || null;
   const comment = seed.comment ?? '';
+  const creditOn = !!seed.credit && !!email;
   const chip = target?.label
     ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
     : `<span class="feedback-target-chip muted">No element selected</span>`;
+  const previewSrc = seed.pngBase64 || feedbackPreviewPng;
+  const creditLabel = email
+    ? `<strong>Credit me</strong> (${esc(email)}). We may ask follow-up questions.`
+    : `<strong>Credit me</strong>. We may ask follow-up questions.`;
+  const creditHint = email
+    ? ''
+    : `<p class="feedback-credit-hint">Add an email in Settings → Accounts first.</p>`;
   openSheet(`
-    <form class="modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
+    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
       <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
       <h1 id="feedback-title">What’s broken?</h1>
-      <label class="field">Comment<textarea name="comment" rows="4" required autofocus placeholder="What went wrong or felt off?">${esc(comment)}</textarea></label>
+      <label class="field">Comment<textarea name="comment" rows="3" required autofocus placeholder="What happened?">${esc(comment)}</textarea></label>
       <div class="field">
         <span>Target</span>
         <div class="feedback-target-row">
@@ -1916,43 +1993,144 @@ function openFeedbackSheet(seed = {}) {
           ${target ? '<button class="btn" type="button" data-clear-target>Clear</button>' : ''}
         </div>
       </div>
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Saves a full-window screenshot on this Mac. Nothing leaves the machine.</span></p>
+      <div class="feedback-preview">
+        <span>Screenshot</span>
+        <figure>
+          ${previewSrc
+            ? `<img alt="Blurred window preview" src="data:image/png;base64,${previewSrc}" />`
+            : '<div class="feedback-preview-pending">Grabbing a blurred preview…</div>'}
+          <figcaption>Branch names and faces are blanked. Say what was on screen if it matters.</figcaption>
+        </figure>
+      </div>
+      <div class="feedback-credit">
+        <label class="feedback-credit-row">
+          <input type="checkbox" name="credit" ${creditOn ? 'checked' : ''} ${email ? '' : 'disabled'} />
+          <span>${creditLabel}</span>
+        </label>
+        ${creditHint}
+      </div>
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Goes to the Plenum team. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
-        <span class="hint-text">⌘↩</span>
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Save feedback</button>
+        <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
+        <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>⌘↩</kbd></button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
   const ta = form.querySelector('[name=comment]');
+  const credit = form.querySelector('[name=credit]');
+  const sendBtn = form.querySelector('[data-feedback-send]');
+
+  const paintSendLabel = (busy) => {
+    sendBtn.replaceChildren();
+    if (busy) {
+      const i = document.createElement('i');
+      i.className = 'spinner btn-spin';
+      i.setAttribute('aria-hidden', 'true');
+      sendBtn.append(i, document.createTextNode('Sending…'));
+      return;
+    }
+    const kbd = document.createElement('kbd');
+    kbd.textContent = '⌘↩';
+    sendBtn.append(document.createTextNode('Send feedback '), kbd);
+  };
+
+  const setSendBusy = (on) => {
+    form.dataset.sending = on ? '1' : '';
+    sendBtn.classList.toggle('busy', on);
+    sendBtn.disabled = on;
+    form.querySelectorAll('button, textarea, input').forEach((node) => {
+      if (node === sendBtn) return;
+      if (node === credit && !email) return;
+      node.disabled = on;
+    });
+    paintSendLabel(on);
+  };
+
+  const refreshPreview = async () => {
+    try {
+      const b64 = await captureFeedbackPreview(target);
+      const fig = form.querySelector('.feedback-preview figure');
+      if (!fig || !form.isConnected) return;
+      fig.querySelector('img, .feedback-preview-pending')?.remove();
+      const img = document.createElement('img');
+      img.alt = 'Redacted window preview';
+      img.src = `data:image/png;base64,${b64}`;
+      fig.insertBefore(img, fig.querySelector('figcaption'));
+    } catch (e) {
+      const pending = form.querySelector('.feedback-preview-pending');
+      if (pending) pending.textContent = e.message || 'Couldn’t capture preview';
+    }
+  };
+  if (!previewSrc) refreshPreview();
+  else feedbackPreviewPng = previewSrc;
+
   const send = async () => {
+    if (sendBtn.disabled) return;
     const text = ta.value.trim();
     if (!text) {
       ta.focus();
       return;
     }
-    const draft = { comment: text, target };
-    closeSheet();
-    stopFeedbackPick();
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const wantCredit = !!credit?.checked && !!email;
+    if (credit?.checked && !email) {
+      toast('Add an email in Settings → Accounts, or leave credit off.', 'bad');
+      return;
+    }
+    const draft = {
+      comment: text,
+      target,
+      credit: wantCredit,
+      pngBase64: feedbackPreviewPng,
+    };
+    setSendBusy(true);
     try {
-      const { dir } = await invoke('feedback.save', { comment: text, target });
-      const pretty = await prettyPath(dir).catch(() => dir);
-      toast(`Saved on this Mac · ${pretty}`, 'ok');
+      let pngBase64 = feedbackPreviewPng;
+      if (!pngBase64) pngBase64 = await captureFeedbackPreview(target);
+      const { dir } = await invoke('feedback.save', {
+        comment: text,
+        target,
+        reporterEmail: wantCredit ? email : null,
+        pngBase64,
+      });
+      try {
+        await invoke('feedback.send', dir);
+        feedbackPreviewPng = null;
+        closeSheet();
+        stopFeedbackPick();
+        toast('Sent. Thanks.', 'ok');
+      } catch (sendErr) {
+        setSendBusy(false);
+        const pretty = await prettyPath(dir).catch(() => dir);
+        toast(
+          `${sendErr.message || 'Couldn’t send'} · kept a copy here · ${pretty}`,
+          'bad',
+        );
+      }
     } catch (e) {
-      toast(e.message || 'Couldn’t save feedback', 'bad');
-      openFeedbackSheet(draft);
+      setSendBusy(false);
+      toast(e.message || 'Couldn’t save', 'bad');
+      if (!form.isConnected) openFeedbackSheet(draft);
     }
   };
   form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
   bindCommitChord(ta, send);
   form.querySelector('[data-pick]')?.addEventListener('click', () => {
-    feedbackDraft = { comment: ta.value, target };
+    feedbackDraft = {
+      comment: ta.value,
+      target,
+      credit: !!credit?.checked,
+    };
+    feedbackPreviewPng = null;
     closeSheet();
     startFeedbackPick();
   });
   form.querySelector('[data-clear-target]')?.addEventListener('click', () => {
-    openFeedbackSheet({ comment: ta.value, target: null });
+    feedbackPreviewPng = null;
+    openFeedbackSheet({
+      comment: ta.value,
+      target: null,
+      credit: !!credit?.checked,
+    });
   });
   ta.focus();
   if (comment) ta.setSelectionRange(comment.length, comment.length);
@@ -2075,7 +2253,7 @@ async function checkoutBranchRow(name) {
   }
   let lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
   if (!lane) return;
-  // Primary stays on the protected tip — feature tips check out in a lane (#23).
+  // Primary stays on the protected tip - feature tips check out in a lane (#23).
   const team = state.board?.teamBranch;
   const isTeam = br.isTeam || br.short === team || br.name === team;
   if (lane.isPrimary && !isTeam) {
@@ -2084,7 +2262,7 @@ async function checkoutBranchRow(name) {
       lane = alt;
       state.selectedLane = alt.index;
     } else {
-      toast('Opening as a lane — primary stays put', 'ok');
+      toast('Opening as a lane. Primary stays put.', 'ok');
       return openLaneFromBranch(br.name);
     }
   }
@@ -2353,7 +2531,7 @@ function laneRemoveRisks(lane) {
     risks.push(`${lane.dirty} uncommitted file${lane.dirty === 1 ? '' : 's'} will be discarded from disk`);
   }
   if (lane.readiness === 'unmerged') {
-    risks.push(`Not merged into ${team} — the worktree goes away; branch ${lane.name} is kept`);
+    risks.push(`Not merged into ${team}. The worktree goes away; branch ${lane.name} is kept`);
   } else if (lane.readiness === 'working' && lane.ahead > 0) {
     risks.push(`${lane.ahead} commit${lane.ahead === 1 ? '' : 's'} ahead of ${team} stay on the branch`);
   }
@@ -2374,11 +2552,11 @@ function openRemoveSheet(lane) {
     </div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="remove-title">
-      <div class="eyebrow${safe ? '' : ' warn'}">${iconHTML(safe ? 'check-circle' : 'warning-circle', 'sm')}${safe ? 'Safe to remove' : 'Not safe — remove anyway'}</div>
+      <div class="eyebrow${safe ? '' : ' warn'}">${iconHTML(safe ? 'check-circle' : 'warning-circle', 'sm')}${safe ? 'Safe to remove' : 'Not safe: remove anyway'}</div>
       <h1 id="remove-title">Remove lane ${esc(lane.name)}</h1>
       <p>${safe
         ? `Merged into ${esc(state.board.teamBranch)} and clean. This only deletes the folder.`
-        : `Not safe yet. You can still delete the worktree folder — the branch ref stays.`}</p>
+        : `Not safe yet. You can still delete the worktree folder. The branch ref stays.`}</p>
       <div class="list">
         <div class="list-row compact">
           ${iconHTML('folder-simple')}
@@ -2394,7 +2572,7 @@ function openRemoveSheet(lane) {
       </div>
       ${safe
         ? `<div class="check">${iconHTML('shield-check')}<div>One lane at a time. Merge + clean first when you can.</div></div>`
-        : `<label class="check"><input type="checkbox" name="confirm" /> I get it — remove the folder anyway</label>`}
+        : `<label class="check"><input type="checkbox" name="confirm" /> I get it. Remove the folder anyway</label>`}
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn danger" type="submit"${safe ? '' : ' disabled'}>${iconHTML('x', 'sm')}${safe ? 'Remove folder' : 'Remove anyway'}</button>
@@ -2667,7 +2845,7 @@ async function paintFilePane(pane) {
       const data = await invoke('file.workingDiff', ...pin(pane.path, pane.cwd));
       if (!filePaneStill(pane) || !body) return;
       if (data.binary || data.tooLarge) {
-        body.innerHTML = `<div class="fx-empty">${data.binary ? 'Binary file' : 'File too large'} — use Editor.</div>`;
+        body.innerHTML = `<div class="fx-empty">${data.binary ? 'Binary file' : 'File too large'}. Use Editor.</div>`;
       } else if (data.empty && !data.hunks?.length) {
         body.innerHTML = '<div class="fx-empty">No textual changes vs HEAD</div>';
       } else {
@@ -2677,7 +2855,7 @@ async function paintFilePane(pane) {
       const shown = await invoke('file.workingShow', ...pin(pane.path, pane.cwd));
       if (!filePaneStill(pane) || !body) return;
       if (shown.binary || shown.tooLarge || shown.missing) {
-        body.innerHTML = `<div class="fx-empty">${shown.missing ? 'Missing on disk' : shown.binary ? 'Binary file' : 'File too large'} — use Editor.</div>`;
+        body.innerHTML = `<div class="fx-empty">${shown.missing ? 'Missing on disk' : shown.binary ? 'Binary file' : 'File too large'}. Use Editor.</div>`;
       } else {
         body.innerHTML = `<pre class="file-read mono">${esc(shown.text)}</pre>`;
       }
@@ -3153,7 +3331,7 @@ async function openConflictSheet(lane, snapshot) {
       }
       state.conflictRoot = null;
       closeSheet();
-      if (settleBoard(tabId, root, res)) toast('Conflicts resolved — continued', 'ok');
+      if (settleBoard(tabId, root, res)) toast('Conflicts resolved. Continued.', 'ok');
     } catch { /* toasted */ }
   });
   modal.querySelector('[data-abort]')?.addEventListener('click', async () => {
@@ -3161,7 +3339,7 @@ async function openConflictSheet(lane, snapshot) {
       const board = await invoke('lane.conflictAbort', ...pin(lane.index, croot));
       state.conflictRoot = null;
       closeSheet();
-      if (settleBoard(tabId, root, board)) toast('Aborted — branch restored', 'ok');
+      if (settleBoard(tabId, root, board)) toast('Aborted. Branch restored.', 'ok');
     } catch { /* toasted */ }
   });
 }
@@ -3289,9 +3467,9 @@ const SETTINGS_PAGES = {
       <div class="list">
         ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole window. 100% is the design size.')}
         ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and it should change right away.')}
-        ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Face from a hash of the commit email — no account. Off keeps letter marks only.')}
+        ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Face from a hash of the commit email. No account. Off keeps letter marks only.')}
       </div>
-      <div class="group-head">Authorship<small>Read from the commit — Co-authored-by, Made-with, Generated-with, Assisted-by.</small></div>
+      <div class="group-head">Authorship<small>Read from the commit: Co-authored-by, Made-with, Generated-with, Assisted-by.</small></div>
       <p class="lede ab-lede">When a trailer names a known tool, the graph avatar gets a corner mark. Humans stay plain. The lane tip pill uses the same mark.</p>
       ${authorshipBadgeLegendHTML(iconHTML)}`;
   },
@@ -3312,7 +3490,7 @@ const SETTINGS_PAGES = {
       ? (tab ? esc(tab.title) : '')
       : 'Open a repo to set a local identity';
     return `<h1>Accounts</h1><p class="lede">Commit author, and how https remotes log in. Tokens go to git’s helper${where ? ` (${where})` : ''}. Plenum only remembers host + username.</p>
-      <div class="group-head">Git identity<small>Writes user.name / user.email in git config — not app prefs.</small></div>
+      <div class="group-head">Git identity<small>Writes user.name / user.email in git config, not app prefs.</small></div>
       <div class="list">
         ${settingsRow('user', 'Applies to', '', scopeDetail, optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'Current repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'All repositories → ~/.gitconfig. Current repository → only the open tab’s local config.')}
         ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on new commits.')}
@@ -3320,10 +3498,10 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">HTTPS</div>
       <div class="list">${saved}</div>
-      <div class="group-head">Add<small>Personal access token with repo scope — not your password.</small></div>
+      <div class="group-head">Add<small>Personal access token with repo scope, not your password.</small></div>
       <div class="list">
         <form class="list-row acct" data-acct="github" title="Saves github.com via git credential approve.">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
-        <form class="list-row acct" data-acct="https" title="Any https git host. Hostname only — no https://.">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+        <form class="list-row acct" data-acct="https" title="Any https git host. Hostname only, no https://.">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
       </div>
       <div class="group-head">SSH<small>Plenum doesn’t manage keys. Git uses ssh-agent and ~/.ssh/config.</small></div>
       <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`, 'Status only. Add or unlock keys outside Plenum.')}</div>`;
@@ -3344,7 +3522,7 @@ const SETTINGS_PAGES = {
       : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
     const runDetail = m?.run
       ? `run <span class="mono">${esc(m.run)}</span>${m.test ? ` · test <span class="mono">${esc(m.test)}</span>` : ''} · ports <span class="mono">+${esc(m.offset)}</span>`
-      : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet — lanes still show, they just can’t start.');
+      : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet. Lanes still show, they just can’t start.');
     const svc = (m?.services || []).map((s) => `${esc(s.name)} (${esc(s.mode)})`).join(', ');
     const edit = b?.hasManifest
       ? `<button class="btn" type="button" data-edit-manifest="${esc(root)}" title="Open .plenum/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button>`
@@ -3382,8 +3560,8 @@ const SETTINGS_PAGES = {
       </div>`;
   },
   agents: () => {
-    const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled title="Not wired yet — preview only."></button>`;
-    const ask = (label) => `<select class="select" aria-label="${label}" disabled title="Not wired yet — preview only."><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
+    const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled title="Not wired yet. Preview only."></button>`;
+    const ask = (label) => `<select class="select" aria-label="${label}" disabled title="Not wired yet. Preview only."><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
     return `<h1>Agents</h1>
       <p class="lede">Preview only. Agents already hit lanes via <span class="mono">plenum mcp</span> (stdio) and the <span class="mono">plenum</span> CLI. These switches don’t do anything yet.</p>
       <div class="agents-stub">
@@ -3401,7 +3579,7 @@ const SETTINGS_PAGES = {
           ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Let agents run the repo’s start/stop/test commands on lane ports.')}
           ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Let agents create worktrees from the team branch.')}
           ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Safe removes stay one-click. Unsafe ones ask before force-removing the folder.')}
-          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team call — leave this on Ask until you trust it.')}
+          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team call. Leave this on Ask until you trust it.')}
         </div>
       </div>`;
   },
@@ -3483,7 +3661,7 @@ function teamBranchControlHTML(board, root, title) {
     .concat([...names].sort((a, b) => a.localeCompare(b)).map((n) => (
       `<option value="${esc(n)}"${n === cur && board.teamBranchSource === 'override' ? ' selected' : ''}>${esc(n)}</option>`
     )));
-  // When detected (not override), show current as selected visual via Auto label — keep Auto selected.
+  // When detected (not override), show current as selected visual via Auto label - keep Auto selected.
   if (board.teamBranchSource !== 'override') {
     opts[0] = `<option value="" selected>Auto · ${esc(cur || 'detect')}</option>`;
   }
@@ -3665,7 +3843,7 @@ function syncSettingsAfterTabSwitch({ afterSelect = true } = {}) {
       state.settings.setupRoot = null;
       state.settings.setupTabId = null;
       openSettings('repositories');
-      toast('Lane setup closed — switched repository');
+      toast('Lane setup closed. Switched repository.');
       return;
     }
   }
@@ -3688,7 +3866,7 @@ function paletteCommands() {
   const lane = laneByIndex(state.selectedLane);
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
-    { id: 'quickstart', label: 'Quick start — what are lanes?', run: openQuickStartSheet },
+    { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStartSheet },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
@@ -3783,11 +3961,18 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (document.getElementById('feedback-pick-layer')) {
       stopFeedbackPick();
-      openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target });
+      openFeedbackSheet({
+        comment: feedbackDraft.comment,
+        target: feedbackDraft.target,
+        credit: !!feedbackDraft.credit,
+      });
       return;
     }
     if (!el.paletteLayer.hidden) closePalette();
-    else if (el.sheetLayer.classList.contains('open')) closeSheet();
+    else if (el.sheetLayer.classList.contains('open')) {
+      if (el.sheetLayer.querySelector('form[data-sending="1"]')) return;
+      closeSheet();
+    }
     else if (state.settings.open) {
       if (state.settings.page === 'setup') openSettings('repositories');
       else closeSettings();

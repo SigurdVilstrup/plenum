@@ -42,7 +42,7 @@ function hydrate(data) {
 }
 
 function applyFavicon(tab, enabled) {
-  // Manual preset or custom image — leave alone.
+  // Manual preset or custom image - leave alone.
   if (tab.iconManual) return;
   tab.faviconRel = null;
   if (!enabled) {

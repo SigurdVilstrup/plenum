@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Common repo-root (and one-level) favicon locations — first hit wins. */
+/** Common repo-root (and one-level) favicon locations - first hit wins. */
 const CANDIDATES = [
   'favicon.ico',
   'favicon.svg',
@@ -82,7 +82,7 @@ function toDataUrl(abs, buf) {
   return `data:${mimeFor(abs)};base64,${buf.toString('base64')}`;
 }
 
-/** Fuzzy score — higher = more likely a tab glyph. */
+/** Fuzzy score - higher = more likely a tab glyph. */
 export function imageNameScore(relPath) {
   const base = path.basename(relPath, path.extname(relPath));
   const full = relPath.replace(/\\/g, '/').toLowerCase();
@@ -116,7 +116,7 @@ export function readRepoFaviconDataUrl(repoRoot) {
       if (!buf) continue;
       return toDataUrl(abs, buf);
     } catch {
-      /* missing or unreadable — try next */
+      /* missing or unreadable - try next */
     }
   }
   return null;

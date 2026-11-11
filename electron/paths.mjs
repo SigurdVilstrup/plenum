@@ -12,7 +12,7 @@ export const BASELINE_KEY = 'plenum.baseline';
 export const RUN_HOME = path.join(os.homedir(), '.plenum');
 export const LEGACY_RUN_HOME = path.join(os.homedir(), '.overlook');
 
-/** Dir that holds lane.yaml — prefer `.plenum`, fall back to `.overlook`. */
+/** Dir that holds lane.yaml - prefer `.plenum`, fall back to `.overlook`. */
 export function manifestDir(repoRoot) {
   const root = path.resolve(repoRoot);
   const neu = path.join(root, MANIFEST_DIR);

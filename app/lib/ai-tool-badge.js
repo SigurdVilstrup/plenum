@@ -67,7 +67,7 @@ export function authorshipBadgeLegendHTML(iconFn) {
       <span class="ab-name">${tool}</span>
     </div>`;
   }).join('');
-  const human = `<div class="ab-sample" title="Human — no badge">
+  const human = `<div class="ab-sample" title="Human, no badge">
     <span class="who-mark"><span class="avatar" style="--avatar-hue:210">H</span></span>
     <span class="ab-name">Human</span>
   </div>`;

@@ -10,7 +10,7 @@ import { manifestPath } from '../paths.mjs';
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
   if (!lane) throw new Error('Lane not found.');
-  if (lane.isPrimary) throw new Error('Protected checkout — open this in a lane first.');
+  if (lane.isPrimary) throw new Error('Protected checkout. Open this in a lane first.');
   return lane;
 }
 
@@ -238,7 +238,7 @@ export async function pullLane(root, laneIndex) {
   if (!ref) throw new Error('Can’t pull a detached HEAD.');
   if (lane.dirty > 0) {
     throw new Error(
-      `Can’t pull — ${lane.dirty} uncommitted change${lane.dirty === 1 ? '' : 's'} would be overwritten. Commit or stash first.`,
+      `Can’t pull: ${lane.dirty} uncommitted change${lane.dirty === 1 ? '' : 's'} would be overwritten. Commit or stash first.`,
     );
   }
   try {
@@ -248,7 +248,7 @@ export async function pullLane(root, laneIndex) {
   } catch (e) {
     const msg = e?.message || String(e);
     if (/would be overwritten|local changes/i.test(msg)) {
-      throw new Error('Can’t pull — uncommitted changes would be overwritten. Commit or stash first.');
+      throw new Error('Can’t pull: uncommitted changes would be overwritten. Commit or stash first.');
     }
     if (lane.isPrimary) {
       throw new Error(`${msg}\nPrimary only fast-forwards. Fix the divergence outside Plenum.`);
@@ -334,7 +334,7 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
   if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], board.root))) {
     throw new Error(`No origin/${name}. Fetch or set upstream first.`);
   }
-  // `src:dst` without + is fast-forward only — refuses diverge.
+  // `src:dst` without + is fast-forward only - refuses diverge.
   try {
     await git(['fetch', 'origin', `${name}:${name}`], board.root);
   } catch (e) {
@@ -351,7 +351,7 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
 export async function pushBranchToRemote(root, { branch } = {}) {
   const board = await loadBoard(root);
   const name = assertBranchName(branch);
-  if (name.startsWith('origin/')) throw new Error('That tip is already on origin — nothing to push.');
+  if (name.startsWith('origin/')) throw new Error('That tip is already on origin. Nothing to push.');
   if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
     throw new Error(`Local branch ${name} not found.`);
   }
@@ -377,7 +377,7 @@ export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   if (holder && holder.index !== lane.index) {
     throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Select that worktree.`);
   }
-  if (lane.dirty) throw new Error('Uncommitted changes — stash or commit before switching branches.');
+  if (lane.dirty) throw new Error('Uncommitted changes. Stash or commit before switching branches.');
   if (lane.branch === local) return board;
   await git(['checkout', local], lane.path);
   return loadBoard(root);

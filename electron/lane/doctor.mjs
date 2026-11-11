@@ -78,7 +78,7 @@ export async function doctor(repoPath) {
   }
 
   const canAccept = typeof proposed.run === 'string' && !!proposed.run.trim();
-  if (!canAccept) findings.push('no run command — Accept disabled until the repo has a start script');
+  if (!canAccept) findings.push('no run command - Accept disabled until the repo has a start script');
 
   return { findings, proposed, proposedYaml: dumpManifest(proposed), canAccept };
 }

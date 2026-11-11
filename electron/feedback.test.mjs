@@ -3,24 +3,36 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildMeta, collectFeedbackEnv, writeFeedbackReport } from './feedback.mjs';
+import {
+  buildMeta,
+  buildUploadPayload,
+  collectFeedbackEnv,
+  patchFeedbackMeta,
+  sanitizeReporterEmail,
+  sendFeedbackReport,
+  writeFeedbackReport,
+} from './feedback.mjs';
 
-test('buildMeta shapes v1 report', () => {
+test('buildMeta shapes v2 report', () => {
   const meta = buildMeta({
     comment: '  Behind is too quiet  ',
     target: { label: 'Behind', rect: { x: 1, y: 2, w: 3, h: 4 } },
     appVersion: '0.0.0',
     platform: 'darwin',
     repoPath: '/tmp/repo',
+    reporterEmail: 'Sigurd@Example.com',
     createdAt: '2026-11-09T00:00:00.000Z',
   });
-  assert.equal(meta.version, 1);
+  assert.equal(meta.version, 2);
   assert.equal(meta.createdAt, '2026-11-09T00:00:00.000Z');
   assert.equal(meta.comment, 'Behind is too quiet');
   assert.deepEqual(meta.target, { label: 'Behind', rect: { x: 1, y: 2, w: 3, h: 4 } });
   assert.equal(meta.appVersion, '0.0.0');
   assert.equal(meta.platform, 'darwin');
   assert.equal(meta.repoPath, '/tmp/repo');
+  assert.equal(meta.reporterEmail, 'sigurd@example.com');
+  assert.equal(meta.status, 'pending');
+  assert.equal(meta.issueUrl, null);
 
   assert.equal(buildMeta({ comment: '', appVersion: '1', platform: 'darwin' }).target, null);
   assert.equal(buildMeta({ comment: '', target: null, appVersion: '1', platform: 'darwin' }).target, null);
@@ -46,6 +58,31 @@ test('buildMeta passes through env fields', () => {
   assert.equal(meta.locale, 'en-US');
   assert.deepEqual(meta.screens, [{ width: 1512, height: 982, scaleFactor: 2, primary: true }]);
   assert.deepEqual(meta.windowSize, { width: 1280, height: 800 });
+});
+
+test('sanitizeReporterEmail accepts emails and rejects junk', () => {
+  assert.equal(sanitizeReporterEmail(null), null);
+  assert.equal(sanitizeReporterEmail(''), null);
+  assert.equal(sanitizeReporterEmail('  Ada@Example.COM '), 'ada@example.com');
+  assert.throws(() => sanitizeReporterEmail('not-an-email'), /Invalid/);
+  assert.throws(() => sanitizeReporterEmail('a\nb@x.com'), /Invalid/);
+});
+
+test('buildUploadPayload strips repoPath', () => {
+  const meta = buildMeta({
+    comment: 'hi',
+    appVersion: '0.1.0',
+    platform: 'darwin',
+    repoPath: '/Users/someone/secret-repo',
+    reporterEmail: 'ada@example.com',
+  });
+  const payload = buildUploadPayload(meta, Buffer.from('png'));
+  assert.equal(payload.comment, 'hi');
+  assert.equal(payload.reporterEmail, 'ada@example.com');
+  assert.equal(payload.env.appVersion, '0.1.0');
+  assert.equal('repoPath' in payload, false);
+  assert.equal('repoPath' in payload.env, false);
+  assert.ok(payload.pngBase64);
 });
 
 test('collectFeedbackEnv shapes display + window facts', () => {
@@ -95,6 +132,8 @@ test('writeFeedbackReport writes meta.json and window.png', async () => {
   const meta = JSON.parse(fs.readFileSync(path.join(out, 'meta.json'), 'utf8'));
   assert.equal(meta.comment, 'hi');
   assert.equal(meta.target, null);
+  assert.equal(meta.status, 'pending');
+  assert.equal(meta.version, 2);
   assert.deepEqual(fs.readFileSync(path.join(out, 'window.png')), tinyPng);
 });
 
@@ -118,4 +157,79 @@ test('writeFeedbackReport dirs are unique under baseDir/feedback', async () => {
   const metaA = JSON.parse(fs.readFileSync(path.join(a, 'meta.json'), 'utf8'));
   assert.equal(metaA.createdAt, '2026-11-09T00:00:00.000Z');
   assert.notEqual(path.basename(a), '2026-11-09T00-00-00.000Z');
+});
+
+test('sendFeedbackReport patches sent meta and never posts repoPath', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const out = await writeFeedbackReport(dir, {
+    comment: 'lane truncates',
+    target: null,
+    appVersion: '0.2.0',
+    platform: 'darwin',
+    repoPath: '/Users/secret/repo',
+    png: tinyPng,
+  });
+  let posted = null;
+  const meta = await sendFeedbackReport(out, {
+    endpoint: 'https://example.test/submit-feedback',
+    anonKey: 'anon',
+    fetchImpl: async (url, init) => {
+      posted = { url, body: JSON.parse(init.body), headers: init.headers };
+      return {
+        ok: true,
+        async json() {
+          return {
+            issueUrl: 'https://github.com/SigurdVilstrup/plenum/issues/12',
+            issueNumber: 12,
+          };
+        },
+      };
+    },
+  });
+  assert.equal(posted.url, 'https://example.test/submit-feedback');
+  assert.equal(posted.headers.Authorization, 'Bearer anon');
+  assert.equal('repoPath' in posted.body, false);
+  assert.equal(posted.body.comment, 'lane truncates');
+  assert.equal(meta.status, 'sent');
+  assert.equal(meta.issueNumber, 12);
+  assert.match(meta.issueUrl, /plenum\/issues\/12/);
+  assert.ok(meta.sentAt);
+});
+
+test('sendFeedbackReport marks failed on HTTP error', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const out = await writeFeedbackReport(dir, {
+    comment: 'x',
+    appVersion: '0.0.0',
+    platform: 'darwin',
+    png: tinyPng,
+  });
+  await assert.rejects(
+    () => sendFeedbackReport(out, {
+      endpoint: 'https://example.test/submit-feedback',
+      fetchImpl: async () => ({
+        ok: false,
+        status: 429,
+        async json() { return { error: 'Too many reports' }; },
+      }),
+    }),
+    /Too many reports/,
+  );
+  const meta = JSON.parse(fs.readFileSync(path.join(out, 'meta.json'), 'utf8'));
+  assert.equal(meta.status, 'failed');
+  assert.match(meta.error, /Too many/);
+});
+
+test('patchFeedbackMeta merges fields', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const out = await writeFeedbackReport(dir, {
+    comment: 'x',
+    appVersion: '0.0.0',
+    platform: 'darwin',
+    png: tinyPng,
+  });
+  const next = patchFeedbackMeta(out, { status: 'sent', issueNumber: 3 });
+  assert.equal(next.status, 'sent');
+  assert.equal(next.issueNumber, 3);
+  assert.equal(next.comment, 'x');
 });

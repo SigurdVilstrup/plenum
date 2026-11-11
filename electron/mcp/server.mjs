@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Minimal MCP stdio JSON-RPC server (newline-delimited).
- * Tools: PRODUCT table only — no git commit/push.
+ * Tools: PRODUCT table only - no git commit/push.
  */
 import readline from 'node:readline';
 import path from 'node:path';

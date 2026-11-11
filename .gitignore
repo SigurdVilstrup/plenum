@@ -8,6 +8,11 @@ tmp/
 .worktrees/
 *.log
 
+# Local secrets / machine config (see .env.example).
+.env
+.env.local
+
 # Stamped on build/dev — not source of truth in git.
 electron/build-info.json
 
+supabase/.temp/

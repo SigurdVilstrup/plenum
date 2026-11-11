@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
+import { loadRepoEnv } from './load-env.mjs';
 import { isPathUnderRepos } from './repo-favicon.mjs';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch, setBaselines } from './git/board.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
@@ -15,15 +16,23 @@ import { doctor, acceptManifest } from './lane/doctor.mjs';
 import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
-import { paintHighlight, writeFeedbackReport, collectFeedbackEnv } from './feedback.mjs';
+import {
+  paintHighlight,
+  writeFeedbackReport,
+  collectFeedbackEnv,
+  sanitizeReporterEmail,
+  sendFeedbackReport,
+} from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
 import { env as brandEnv } from './paths.mjs';
+
+loadRepoEnv();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const buildInfoPath = path.join(__dirname, 'build-info.json');
 
-// Must run before app ready — lets the sandboxed UI load local repo images.
+// Must run before app ready - lets the sandboxed UI load local repo images.
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'plenum-img',
@@ -177,7 +186,7 @@ ipcMain.handle('tabs.open', async (_e, repoPath) => {
   const favicons = getPrefs(prefsDir()).tabFavicons !== false;
   return { store: tabs.openTab(board.root, board.repoName, { favicons }), board };
 });
-// Select is sync — board loads in the renderer via board.get so rapid switches
+// Select is sync - board loads in the renderer via board.get so rapid switches
 // do not pile up loadBoard work against the wrong active tab.
 ipcMain.handle('tabs.select', (_e, id) => ({ store: tabs.selectTab(id) }));
 ipcMain.handle('tabs.close', async (_e, id) => {
@@ -220,27 +229,8 @@ ipcMain.handle('app.version', () => {
 ipcMain.handle('os.editors', () => listEditors());
 ipcMain.handle('os.diffMergeTools', () => listDiffMergeTools());
 
-// Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
-ipcMain.handle('feedback.save', async (_e, payload) => {
-  const comment = String(payload?.comment || '').trim();
-  if (!comment) throw new Error('Add a comment.');
-  const target = payload?.target ?? null;
-  let rect = null;
-  if (target?.rect) {
-    const r = target.rect;
-    const nums = ['x', 'y', 'w', 'h'].map((k) => Number(r[k]));
-    if (nums.some((n) => !Number.isFinite(n))) throw new Error('Invalid target rect.');
-    rect = { x: nums[0], y: nums[1], w: nums[2], h: nums[3] };
-  }
-
-  let png = (await win.webContents.capturePage()).toPNG();
-  if (rect) {
-    const { width: imgW, height: imgH } = nativeImage.createFromBuffer(png).getSize();
-    const [cssW, cssH] = win.getContentSize();
-    png = paintHighlight(png, rect, { scaleX: imgW / cssW, scaleY: imgH / cssH });
-  }
-
-  const env = collectFeedbackEnv({
+function feedbackEnvSnapshot() {
+  return collectFeedbackEnv({
     getVersion: () => app.getVersion(),
     platform: process.platform,
     arch: process.arch,
@@ -251,16 +241,77 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
     primaryDisplayId: screen.getPrimaryDisplay().id,
     getContentSize: () => win.getContentSize(),
   });
+}
+
+function parseFeedbackTarget(target) {
+  if (!target?.rect) return null;
+  const r = target.rect;
+  const nums = ['x', 'y', 'w', 'h'].map((k) => Number(r[k]));
+  if (nums.some((n) => !Number.isFinite(n))) throw new Error('Invalid target rect.');
+  return {
+    label: String(target.label || '').slice(0, 200),
+    rect: { x: nums[0], y: nums[1], w: nums[2], h: nums[3] },
+  };
+}
+
+async function captureFeedbackPng(rect) {
+  let png = (await win.webContents.capturePage()).toPNG();
+  if (rect) {
+    const { width: imgW, height: imgH } = nativeImage.createFromBuffer(png).getSize();
+    const [cssW, cssH] = win.getContentSize();
+    png = paintHighlight(png, rect, { scaleX: imgW / cssW, scaleY: imgH / cssH });
+  }
+  return png;
+}
+
+// Renderer must hide the sheet and apply redaction before capture.
+ipcMain.handle('feedback.capture', async (_e, payload) => {
+  const parsed = parseFeedbackTarget(payload?.target ?? null);
+  const png = await captureFeedbackPng(parsed?.rect || null);
+  return { pngBase64: png.toString('base64') };
+});
+
+ipcMain.handle('feedback.save', async (_e, payload) => {
+  const comment = String(payload?.comment || '').trim();
+  if (!comment) throw new Error('Add a comment.');
+  const reporterEmail = sanitizeReporterEmail(payload?.reporterEmail);
+  const parsed = parseFeedbackTarget(payload?.target ?? null);
+  let png;
+  if (payload?.pngBase64) {
+    png = Buffer.from(String(payload.pngBase64), 'base64');
+  } else {
+    png = await captureFeedbackPng(parsed?.rect || null);
+  }
+  const env = feedbackEnvSnapshot();
   const dir = await writeFeedbackReport(prefsDir(), {
     comment,
-    target: target?.label
-      ? { label: String(target.label).slice(0, 200), rect }
-      : null,
+    target: parsed?.label ? { label: parsed.label, rect: parsed.rect } : null,
+    reporterEmail,
     ...env,
     repoPath: activePath(),
     png,
   });
   return { dir };
+});
+
+ipcMain.handle('feedback.send', async (_e, dir) => {
+  const root = path.resolve(prefsDir(), 'feedback');
+  const reportDir = path.resolve(String(dir || ''));
+  if (reportDir !== root && !reportDir.startsWith(root + path.sep)) {
+    throw new Error('bad report path');
+  }
+  if (!fs.existsSync(path.join(reportDir, 'meta.json')) || !fs.existsSync(path.join(reportDir, 'window.png'))) {
+    throw new Error('bad report path');
+  }
+  const meta = await sendFeedbackReport(reportDir, {
+    endpoint: brandEnv('FEEDBACK_URL'),
+    anonKey: brandEnv('SUPABASE_ANON_KEY'),
+  });
+  return {
+    dir: reportDir,
+    issueUrl: meta.issueUrl,
+    issueNumber: meta.issueNumber,
+  };
 });
 
 ipcMain.handle('board.get', async (_e, root, opts) => loadBoard(root || activePath(), opts || {}));
@@ -391,7 +442,7 @@ function fileMergeAvailable() {
   return apps.some((p) => fs.existsSync(p)) || bins.some((p) => fs.existsSync(p));
 }
 
-/** Tools allowed by prefs.diffTool / prefs.mergeTool — probe installs like editors. */
+/** Tools allowed by prefs.diffTool / prefs.mergeTool - probe installs like editors. */
 function listDiffMergeTools() {
   return [
     { id: 'internal', label: 'Built-in', available: true },

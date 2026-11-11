@@ -13,6 +13,9 @@ const FILL_A = 0.25;
 const BORDER_A = 0.7;
 const BORDER_PX = 2;
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL = 254;
+
 /** Blend lavender highlight into PNG. scaleX/Y map CSS rect → capture pixels. */
 export function paintHighlight(pngBuffer, rect, { scaleX = 1, scaleY = 1 } = {}) {
   // ponytail: BGRA blend; drop if Electron gains a canvas/compositor API we prefer
@@ -41,6 +44,17 @@ export function paintHighlight(pngBuffer, rect, { scaleX = 1, scaleY = 1 } = {})
   return nativeImage.createFromBitmap(bitmap, { width, height }).toPNG();
 }
 
+/** Reporter email or null. Throws on invalid non-empty input. */
+export function sanitizeReporterEmail(raw) {
+  if (raw == null || raw === false) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (!s) return null;
+  if (s.length > MAX_EMAIL || /[\r\n\0]/.test(s) || !EMAIL_RE.test(s)) {
+    throw new Error('Invalid email.');
+  }
+  return s;
+}
+
 export function buildMeta(input) {
   const target = input.target
     ? {
@@ -53,8 +67,11 @@ export function buildMeta(input) {
         },
       }
     : null;
+  const reporterEmail = input.reporterEmail == null
+    ? null
+    : sanitizeReporterEmail(input.reporterEmail);
   return {
-    version: 1,
+    version: 2,
     createdAt: input.createdAt || new Date().toISOString(),
     comment: String(input.comment || '').trim(),
     target,
@@ -67,6 +84,38 @@ export function buildMeta(input) {
     screens: input.screens,
     windowSize: input.windowSize,
     repoPath: input.repoPath ?? null,
+    reporterEmail,
+    status: input.status || 'pending',
+    issueUrl: input.issueUrl ?? null,
+    issueNumber: input.issueNumber ?? null,
+    sentAt: input.sentAt ?? null,
+    error: input.error ?? null,
+  };
+}
+
+/** Safe env fields for the relay (never includes repoPath). */
+export function buildUploadEnv(meta) {
+  return {
+    appVersion: meta.appVersion,
+    platform: meta.platform,
+    arch: meta.arch,
+    osVersion: meta.osVersion,
+    electronVersion: meta.electronVersion,
+    locale: meta.locale,
+    screens: meta.screens,
+    windowSize: meta.windowSize,
+  };
+}
+
+export function buildUploadPayload(meta, pngBuffer) {
+  return {
+    comment: meta.comment,
+    target: meta.target
+      ? { label: meta.target.label, rect: meta.target.rect }
+      : null,
+    reporterEmail: meta.reporterEmail || null,
+    env: buildUploadEnv(meta),
+    pngBase64: Buffer.from(pngBuffer).toString('base64'),
   };
 }
 
@@ -99,8 +148,63 @@ export async function writeFeedbackReport(baseDir, opts) {
   const dir = path.resolve(feedbackRoot, id);
   if (!dir.startsWith(feedbackRoot + path.sep)) throw new Error('bad report path');
   fs.mkdirSync(dir, { recursive: true });
-  const meta = buildMeta({ ...opts, createdAt: opts.createdAt || now });
+  const meta = buildMeta({ ...opts, createdAt: opts.createdAt || now, status: 'pending' });
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta));
   fs.writeFileSync(path.join(dir, 'window.png'), opts.png);
   return dir;
+}
+
+export function readFeedbackReport(dir) {
+  const metaPath = path.join(dir, 'meta.json');
+  const pngPath = path.join(dir, 'window.png');
+  const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  const png = fs.readFileSync(pngPath);
+  return { meta, png, metaPath };
+}
+
+export function patchFeedbackMeta(dir, patch) {
+  const { meta, metaPath } = readFeedbackReport(dir);
+  const next = { ...meta, ...patch };
+  fs.writeFileSync(metaPath, JSON.stringify(next));
+  return next;
+}
+
+export async function sendFeedbackReport(dir, { endpoint, anonKey, fetchImpl = fetch } = {}) {
+  if (!endpoint) throw new Error('Feedback relay is not configured (PLENUM_FEEDBACK_URL).');
+  const { meta, png } = readFeedbackReport(dir);
+  const payload = buildUploadPayload(meta, png);
+  const headers = { 'Content-Type': 'application/json' };
+  if (anonKey) {
+    headers.Authorization = `Bearer ${anonKey}`;
+    headers.apikey = anonKey;
+  }
+  const res = await fetchImpl(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const err = (data && data.error) || `Submit failed (${res.status})`;
+    patchFeedbackMeta(dir, { status: 'failed', error: String(err) });
+    throw new Error(String(err));
+  }
+  const issueUrl = data?.issueUrl;
+  const issueNumber = data?.issueNumber;
+  if (!issueUrl || issueNumber == null) {
+    patchFeedbackMeta(dir, { status: 'failed', error: 'Relay returned no issue URL' });
+    throw new Error('Relay returned no issue URL');
+  }
+  return patchFeedbackMeta(dir, {
+    status: 'sent',
+    issueUrl: String(issueUrl),
+    issueNumber: Number(issueNumber),
+    sentAt: new Date().toISOString(),
+    error: null,
+  });
 }

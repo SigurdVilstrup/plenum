@@ -144,7 +144,7 @@ export function getLastTest(root, laneIndex) {
 }
 
 async function prepareLane(root, laneIndex) {
-  if (laneIndex === 0) throw new Error('Protected checkout can’t be run — use a lane.');
+  if (laneIndex === 0) throw new Error('Protected checkout can’t be run - use a lane.');
 
   const { top, paths } = await resolveLanes(root);
   const cwd = paths[laneIndex];
@@ -291,7 +291,7 @@ export async function up(root, laneIndex, { force = false } = {}) {
   children.set(key, local);
   setStored(top, laneIndex, { pid: child.pid, startedAt, urls });
   // CLI must exit after up; unref child + pipes so they don't pin the event loop.
-  // Electron stays alive via app — pipes still deliver log data after unref.
+  // Electron stays alive via app - pipes still deliver log data after unref.
   child.unref();
   child.stdout.unref();
   child.stderr.unref();
@@ -348,7 +348,7 @@ export async function down(root, laneIndex) {
       return;
     }
 
-    // Cross-process: no child handle — poll until dead or timeout fires
+    // Cross-process: no child handle - poll until dead or timeout fires
     const iv = setInterval(() => {
       if (!alive(pid)) {
         clearInterval(iv);

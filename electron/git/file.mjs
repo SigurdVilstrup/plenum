@@ -165,7 +165,7 @@ export async function loadWorkingDiff(repoPath, filePath) {
     patch = await git(['diff', '--unified=3', 'HEAD', '--', safe], cwd);
   } catch { /* empty */ }
   if (!patch.trim()) {
-    // Untracked or identical to HEAD — synthesize from file on disk vs empty/HEAD blob
+    // Untracked or identical to HEAD - synthesize from file on disk vs empty/HEAD blob
     const abs = path.join(cwd, safe);
     if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
       return { sha: 'WORKTREE', path: safe, hunks: [], binary: false, empty: true };

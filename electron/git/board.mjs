@@ -150,7 +150,7 @@ async function baselines(cwd, team) {
   return out;
 }
 
-/** Replace the comparison baselines for this repo. Comparison only — no protected rules. */
+/** Replace the comparison baselines for this repo. Comparison only - no protected rules. */
 export async function setBaselines(repoPath, names) {
   const cwd = path.resolve(repoPath);
   const list = [...new Set((Array.isArray(names) ? names : []).map((n) => String(n || '').trim()).filter(Boolean))];
@@ -269,7 +269,7 @@ export async function loadCommitChanges(repoPath, sha) {
 }
 
 /** ponytail: cherry misses rewritten squash; upgrade is host PR API.
- *  Empty cherry means "no unique commits" — that is both a fresh lane and a
+ *  Empty cherry means "no unique commits" - that is both a fresh lane and a
  *  fully-merged one. Reflog must show real work before we call it merged. */
 async function isPatchMerged(branch, teamRef, cwd) {
   try {
@@ -366,7 +366,7 @@ function pills(decoration, team, primaryBranch, laneBranches) {
       worktree: local && laneBranches.has(name) && name !== primaryBranch,
     });
   }
-  // If local `main` is here, skip `origin/main` — same tip, one label is enough.
+  // If local `main` is here, skip `origin/main` - same tip, one label is enough.
   const locals = new Set(parsed.filter((r) => !r.remote && !r.tag).map((r) => r.name));
   return parsed.filter((r) => {
     if (!r.remote) return true;
@@ -412,7 +412,7 @@ export async function listBranches(cwd, lanes, team, teamRef, extra = []) {
     }
   } catch { /* empty */ }
 
-  // Parallel ahead/behind vs team — sequential rev-list made checkout/update crawl on big repos.
+  // Parallel ahead/behind vs team - sequential rev-list made checkout/update crawl on big repos.
   await Promise.all([...locals.values()].map(async (b) => {
     if (!b.head) return;
     try {
@@ -442,14 +442,14 @@ export async function listBranches(cwd, lanes, team, teamRef, extra = []) {
     ], cwd);
     for (const line of raw.split(/\n/).filter(Boolean)) {
       const [name, head] = line.split('\t');
-      // origin/HEAD shortens to bare "origin" — not a branch.
+      // origin/HEAD shortens to bare "origin" - not a branch.
       if (!name || name === 'origin' || name.endsWith('/HEAD') || !name.startsWith('origin/')) continue;
       const short = name.slice('origin/'.length);
       if (locals.has(short)) {
         locals.get(short).hasRemote = true;
         continue;
       }
-      // Skip vs-team counts on remote-only tips — Remotes are a separate fold-out; chips live on locals.
+      // Skip vs-team counts on remote-only tips - Remotes are a separate fold-out; chips live on locals.
       remotes.push({
         name,
         short,

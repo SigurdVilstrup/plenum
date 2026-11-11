@@ -19,6 +19,8 @@ Run these steps in order. Do not skip ahead to big features while small dogfood 
 
 ### 1. Pull all issues
 
+In-app feedback opens issues on the private app repo (label `feedback`), with optional `Reported by` email in the body for follow-up.
+
 From the repo root:
 
 ```bash
@@ -26,7 +28,7 @@ gh issue list --state open --limit 100 \
   --json number,title,body,labels,createdAt,updatedAt,author,comments,url
 ```
 
-Use live `gh` data only.
+Use live `gh` data only. Bias `feedback`-labeled items for dogfood P0/P1.
 
 ### 2. Put together and remove duplicates
 

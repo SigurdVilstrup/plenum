@@ -5,7 +5,7 @@ import { manifestDir } from '../paths.mjs';
 /**
  * Shared-data drift (v1).
  * # ponytail: name-only compare via .plenum/applied-migrations; upgrade is tool-specific
- * migrator introspection (mobaro: Aspire/EF adapter — not blocking v1).
+ * migrator introspection (mobaro: Aspire/EF adapter - not blocking v1).
  */
 
 /** Resolve `rel` under `base`; reject absolute paths and `..` escapes. */

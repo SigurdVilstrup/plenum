@@ -143,7 +143,7 @@ test('primary commit push pull', async () => {
   assert.ok(board.lanes[0].ahead >= 1);
   board = await ops.pushLane(root, 0);
   assert.equal(board.lanes[0].ahead, 0);
-  // Advance remote via a worktree on the bare — avoids a second clone, which
+  // Advance remote via a worktree on the bare - avoids a second clone, which
   // can end up with unrelated histories on newer git (CI runners ship 2.56).
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-other-'));
   fs.rmSync(other, { recursive: true, force: true });
@@ -427,7 +427,7 @@ test('updateBranchFromRemote fast-forwards a free local tip', async () => {
   const after = (await git(['rev-parse', 'feat/sync'], root)).trim();
   assert.equal(after, remote);
 
-  // Checked-out tip must refuse — use Pull on that worktree.
+  // Checked-out tip must refuse - use Pull on that worktree.
   await assert.rejects(
     () => ops.updateBranchFromRemote(root, { branch: 'main' }),
     /checked out/,

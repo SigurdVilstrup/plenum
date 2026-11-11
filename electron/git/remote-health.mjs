@@ -30,7 +30,7 @@ async function defaultLsRemote(cwd) {
 
 /**
  * Read origin and check whether git can still talk to it (uses credentials).
- * A bare HTTP HEAD of github.com/… 404s private repos and false-alarms — don't.
+ * A bare HTTP HEAD of github.com/… 404s private repos and false-alarms - don't.
  * After git says the URL is gone, HTTP redirects can still show a rename.
  */
 export async function probeOrigin(cwd, {
@@ -113,7 +113,7 @@ export async function probeOrigin(cwd, {
     ...base,
     status: 'missing',
     detail: gh
-      ? `Git can’t find ${gh.owner}/${gh.repo}. The origin URL is stale — update it if the repo moved or was deleted.`
-      : 'Git can’t find origin. The remote URL is stale — update it.',
+      ? `Git can’t find ${gh.owner}/${gh.repo}. The origin URL is stale. Update it if the repo moved or was deleted.`
+      : 'Git can’t find origin. The remote URL is stale. Update it.',
   };
 }

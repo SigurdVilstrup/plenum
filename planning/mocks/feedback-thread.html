@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plenum feedback mocks</title>
+<style>
+  :root {
+    --background: transparent;
+    --foreground: #f7f8f8;
+    --muted: #8a8f98;
+    --card: #0f1011;
+    --border: #23252a;
+    --primary: #5e6ad2;
+    --primary-foreground: #fff;
+    --destructive: #eb5757;
+    --success: #27a644;
+    --radius: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --canvas: #010102;
+    --surface-1: #0f1011;
+    --surface-2: #141516;
+    --surface-3: #18191a;
+    --hairline: #23252a;
+    --hairline-strong: #34343a;
+    --ink: #f7f8f8;
+    --ink-muted: #d0d6e0;
+    --ink-subtle: #8a8f98;
+    --ink-tertiary: #62666d;
+    --primary-hover: #7a84e0;
+    --scrim: rgba(1, 1, 2, 0.72);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--foreground);
+    background: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: 100%;
+  }
+  .shot {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .shot h2 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .shot .lede {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .window {
+    position: relative;
+    height: auto;
+    min-height: 280px;
+    border-radius: 11px;
+    overflow: hidden;
+    border: 1px solid var(--hairline-strong);
+    background: var(--canvas);
+    color: var(--ink);
+  }
+  .window.short { min-height: 240px; }
+  .titlebar {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .traffic { display: flex; gap: 6px; }
+  .traffic span {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #34343a;
+  }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    color: var(--ink-muted);
+    font-size: 12px;
+  }
+  .body {
+    display: none;
+  }
+  .window.short .body {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    min-height: 180px;
+  }
+  .panel { background: var(--surface-1); border-right: 1px solid var(--hairline); }
+  .main { background: var(--canvas); }
+  .bar {
+    margin: 14px 12px;
+    height: 10px;
+    border-radius: 2px;
+    background: #2a2b30;
+  }
+  .modal-layer {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: var(--scrim);
+    padding: 0 12px 16px;
+  }
+  .modal {
+    width: min(460px, 100%);
+    margin-top: 0;
+    border-radius: 0 0 12px 12px;
+    border: 1px solid var(--hairline-strong);
+    border-top: 0;
+    background: var(--surface-1);
+    padding: 18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.35);
+  }
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-tertiary);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .modal h1 {
+    margin: 4px 0 10px;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--ink-subtle);
+  }
+  textarea {
+    border: 1px solid var(--hairline);
+    background: var(--canvas);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--ink);
+    font: inherit;
+    resize: none;
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .chip {
+    display: inline-flex;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+    background: var(--surface-2);
+    color: var(--ink-muted);
+    font-size: 12px;
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid var(--hairline);
+    background: var(--surface-2);
+    color: var(--ink-muted);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 12px;
+  }
+  .btn.primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary);
+    border-color: transparent;
+    color: #fff;
+  }
+  .btn .ico,
+  .btn .gh-mark {
+    width: 14px;
+    height: 14px;
+    margin-top: 0;
+    flex-shrink: 0;
+  }
+  .btn .gh-mark {
+    display: block;
+    fill: currentColor;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+  }
+  .preview { margin: 0 0 14px; }
+  .preview > span {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--ink-subtle);
+  }
+  .preview figure {
+    margin: 0;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--canvas);
+  }
+  .preview svg { display: block; width: 100%; height: auto; }
+  .preview figcaption {
+    padding: 8px 10px;
+    border-top: 1px solid var(--hairline);
+    font-size: 11px;
+    color: var(--ink-tertiary);
+  }
+  .warn, .note {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 0 0 16px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-subtle);
+  }
+  .note {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--destructive) 45%, var(--hairline));
+    background: color-mix(in srgb, var(--destructive) 10%, var(--surface-2));
+    color: var(--ink-muted);
+  }
+  .note strong { color: var(--destructive); font-weight: 600; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .row-end {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+  }
+  .hint {
+    margin-right: auto;
+    color: var(--ink-subtle);
+    font-size: 12px;
+  }
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-3);
+    border: 1px solid var(--hairline-strong);
+    color: var(--ink);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .toast a { color: var(--primary-hover); text-decoration: none; }
+  .toast .ok { color: var(--success); }
+  .ico { width: 14px; height: 14px; flex-shrink: 0; fill: currentColor; margin-top: 1px; }
+  .credit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 14px;
+  }
+  .credit-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ink-muted);
+    line-height: 1.4;
+  }
+  .credit-row input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--primary);
+  }
+  .credit-row span strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .credit input[type="text"] {
+    width: 100%;
+    border: 1px solid var(--hairline);
+    background: var(--canvas);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--ink);
+    font: inherit;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .credit .hint-line {
+    margin: 0;
+    font-size: 11px;
+    color: var(--ink-tertiary);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <section class="shot">
+    <h2>1 · Ready (anonymous)</h2>
+    <p class="lede">Default. Credit off. Supabase stores the redacted PNG; a bot opens the public issue.</p>
+    <div class="window">
+      <div class="titlebar">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <span class="tab">Mobaro Web</span>
+      </div>
+      <div class="body" aria-hidden="true">
+        <aside class="panel"><div class="bar"></div><div class="bar"></div><div class="bar"></div></aside>
+        <main class="main"><div class="bar" style="width:40%"></div><div class="bar" style="width:55%"></div></main>
+      </div>
+      <div class="modal-layer">
+        <form class="modal" onsubmit="return false">
+          <div class="eyebrow">
+            <svg class="ico" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"/></svg>
+            Feedback
+          </div>
+          <h1>What’s broken?</h1>
+          <label class="field">Comment
+            <textarea rows="3" readonly>Lane switcher truncates long branch names before I can read them.</textarea>
+          </label>
+          <div class="field"><span>Target</span>
+            <div class="row">
+              <span class="chip">feat/invoice-pdf-export-v2</span>
+              <button class="btn" type="button">Point at UI</button>
+              <button class="btn" type="button">Clear</button>
+            </div>
+          </div>
+          <div class="preview">
+            <span>Screenshot</span>
+            <figure>
+              <svg viewBox="0 0 480 96" xmlns="http://www.w3.org/2000/svg" aria-label="Blurred preview">
+                <rect width="480" height="96" fill="#010102"/>
+                <rect width="480" height="20" fill="#0f1011"/>
+                <rect x="70" y="5" width="80" height="10" rx="3" fill="#2a2b30"/>
+                <rect y="20" width="112" height="76" fill="#0f1011"/>
+                <rect x="12" y="36" width="88" height="8" rx="2" fill="#2a2b30"/>
+                <rect x="12" y="52" width="76" height="8" rx="2" fill="#2a2b30"/>
+                <rect x="112" y="20" width="368" height="76" fill="#141516"/>
+                <rect x="128" y="40" width="180" height="7" rx="2" fill="#2a2b30"/>
+                <rect x="128" y="56" width="150" height="7" rx="2" fill="#2a2b30"/>
+                <rect x="8" y="46" width="96" height="20" fill="rgba(94,106,210,.22)" stroke="#5e6ad2" stroke-width="2"/>
+              </svg>
+              <figcaption>Branch names and faces are blanked. Say what was on screen if it matters.</figcaption>
+            </figure>
+          </div>
+          <div class="credit">
+            <label class="credit-row">
+              <input type="checkbox" />
+              <span><strong>Credit me</strong> (you@example.com). We may ask follow-up questions.</span>
+            </label>
+          </div>
+          <p class="warn">
+            <svg class="ico" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg>
+            <span>Goes to the Plenum team. Your <code>repoPath</code> stays on this Mac.</span>
+          </p>
+          <div class="row-end">
+            <button class="btn" type="button">Cancel <kbd>esc</kbd></button>
+            <button class="btn primary" type="submit">Send feedback <kbd>⌘↩</kbd></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="shot">
+    <h2>2 · Credit me</h2>
+    <p class="lede">Checkbox on. Uses the git email from Settings. Issue body gets <code>Reported by you@example.com</code>.</p>
+    <div class="window">
+      <div class="titlebar">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <span class="tab">Mobaro Web</span>
+      </div>
+      <div class="body" aria-hidden="true">
+        <aside class="panel"><div class="bar"></div><div class="bar"></div></aside>
+        <main class="main"><div class="bar" style="width:45%"></div></main>
+      </div>
+      <div class="modal-layer">
+        <form class="modal" onsubmit="return false">
+          <div class="eyebrow">
+            <svg class="ico" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"/></svg>
+            Feedback
+          </div>
+          <h1>What’s broken?</h1>
+          <label class="field">Comment
+            <textarea rows="2" readonly>Lane switcher truncates long branch names before I can read them.</textarea>
+          </label>
+          <div class="field"><span>Target</span>
+            <div class="row"><span class="chip">feat/invoice-pdf-export-v2</span></div>
+          </div>
+          <div class="preview">
+            <span>Screenshot</span>
+            <figure>
+              <svg viewBox="0 0 480 72" xmlns="http://www.w3.org/2000/svg" aria-label="Blurred preview">
+                <rect width="480" height="72" fill="#010102"/>
+                <rect width="480" height="18" fill="#0f1011"/>
+                <rect y="18" width="112" height="54" fill="#0f1011"/>
+                <rect x="12" y="34" width="88" height="8" rx="2" fill="#2a2b30"/>
+                <rect x="112" y="18" width="368" height="54" fill="#141516"/>
+                <rect x="128" y="36" width="170" height="7" rx="2" fill="#2a2b30"/>
+                <rect x="8" y="28" width="96" height="20" fill="rgba(94,106,210,.22)" stroke="#5e6ad2" stroke-width="2"/>
+              </svg>
+              <figcaption>Branch names and faces are blanked. Say what was on screen if it matters.</figcaption>
+            </figure>
+          </div>
+          <div class="credit">
+            <label class="credit-row">
+              <input type="checkbox" checked />
+              <span><strong>Credit me</strong> (you@example.com). We may ask follow-up questions.</span>
+            </label>
+          </div>
+          <div class="row-end">
+            <button class="btn" type="button">Cancel <kbd>esc</kbd></button>
+            <button class="btn primary" type="submit">Send feedback <kbd>⌘↩</kbd></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="shot">
+    <h2>3 · Sent</h2>
+    <p class="lede">Sheet closes. Toast says thanks. No issue link. A copy stays in the local outbox.</p>
+    <div class="window short">
+      <div class="titlebar">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <span class="tab">Mobaro Web</span>
+      </div>
+      <div class="body">
+        <aside class="panel"><div class="bar"></div><div class="bar"></div><div class="bar"></div></aside>
+        <main class="main">
+          <div class="bar" style="width:38%"></div>
+          <div class="bar" style="width:52%"></div>
+          <div class="bar" style="width:44%"></div>
+        </main>
+      </div>
+      <div class="toast" role="status">
+        <svg class="ico ok" viewBox="0 0 256 256"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
+        <span>Sent. Thanks.</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

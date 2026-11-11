@@ -717,7 +717,7 @@ button.env-link {
   height: 100%;
   object-fit: cover;
 }
-/* Tool identity is the corner badge — no assisted/agent kind ring. */
+/* Tool identity is the corner badge - no assisted/agent kind ring. */
 .window.app .row .ai-badge {
   position: absolute;
   right: -2px;
@@ -831,6 +831,192 @@ button.env-link {
   margin-top: 1px;
 }
 
+.feedback-warn code {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.feedback-preview {
+  margin: 0 0 14px;
+}
+
+.feedback-preview > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ink-subtle);
+}
+
+.feedback-preview figure {
+  margin: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+.feedback-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 160px;
+  object-fit: cover;
+  object-position: top left;
+}
+
+.feedback-preview-pending {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-tertiary);
+}
+
+.feedback-preview figcaption {
+  padding: 8px 10px;
+  border-top: 1px solid var(--hairline);
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+
+.feedback-credit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.feedback-credit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.feedback-credit-row input {
+  margin-top: 2px;
+  accent-color: var(--primary);
+}
+
+.feedback-credit-row strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.feedback-credit-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+
+.btn.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn kbd {
+  margin-left: 2px;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 4px;
+  opacity: 0.75;
+}
+
+.btn.primary kbd {
+  border-color: color-mix(in srgb, var(--on-primary) 35%, transparent);
+  color: var(--on-primary);
+  background: color-mix(in srgb, var(--on-primary) 12%, transparent);
+}
+
+.toast a {
+  color: var(--primary-hover);
+  text-decoration: none;
+}
+
+.toast a:hover {
+  text-decoration: underline;
+}
+
+/* Full-window veil while tearing down redact after capture */
+.feedback-capture-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 10001;
+  background: var(--canvas);
+  pointer-events: none;
+}
+
+/* Feedback redact: soft skeleton bars + blanked faces (no hard black flash) */
+html.feedback-redact,
+html.feedback-redact * {
+  transition: none !important;
+  animation: none !important;
+}
+
+html.feedback-redact .lane-row .name,
+html.feedback-redact .lane-row .folder,
+html.feedback-redact [data-branch-name],
+html.feedback-redact .remote-alert span,
+html.feedback-redact #lane-head h1,
+html.feedback-redact #lane-head .path,
+html.feedback-redact .authorship-pill,
+html.feedback-redact .row .msg .text,
+html.feedback-redact .row .who > span,
+html.feedback-redact .row .ref,
+html.feedback-redact .row .sha,
+html.feedback-redact .changes-head,
+html.feedback-redact .fx-file,
+html.feedback-redact .commit-msg,
+html.feedback-redact .file-pane-diff,
+html.feedback-redact .file-history,
+html.feedback-redact .blame-line,
+html.feedback-redact .file-read,
+html.feedback-redact #loading-path,
+html.feedback-redact .tab:not(.add),
+html.feedback-redact .settings-body .mono,
+html.feedback-redact .palette .item .label,
+html.feedback-redact .palette .item .path {
+  color: transparent !important;
+  background: color-mix(in srgb, var(--surface-3) 88%, var(--hairline)) !important;
+  border-radius: 4px;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* Avatars / authorship faces - blank circle, hide photo + tool badge */
+html.feedback-redact .row .who .avatar,
+html.feedback-redact .authorship-pill .avatar,
+html.feedback-redact .lane-head .avatar {
+  background: color-mix(in srgb, var(--surface-3) 88%, var(--hairline)) !important;
+  border-color: transparent !important;
+  color: transparent !important;
+  box-shadow: none !important;
+}
+
+html.feedback-redact .row .who .avatar img,
+html.feedback-redact .authorship-pill .avatar img,
+html.feedback-redact .lane-head .avatar img,
+html.feedback-redact .row .who .ai-badge,
+html.feedback-redact .row .who .who-mark,
+html.feedback-redact .row .who .icon,
+html.feedback-redact .authorship-pill img,
+html.feedback-redact .authorship-pill .ai-badge {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Soft blur on denser surfaces (diffs / file bodies) instead of solid slabs */
+html.feedback-redact .file-pane-diff,
+html.feedback-redact .file-read,
+html.feedback-redact .file-history,
+html.feedback-redact .blame-line {
+  filter: blur(7px) !important;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent) !important;
+}
+
 /* Unpushed tip commits (not on origin/<branch>) */
 .row.unpushed .sha {
   color: var(--primary);
@@ -853,7 +1039,7 @@ button.env-link {
   overflow: auto;
 }
 
-/* #7 — left rail density; #26 — changes claim a column (don’t cover Push/Pull) */
+/* #7 - left rail density; #26 - changes claim a column (don’t cover Push/Pull) */
 :root {
   --rail-w: 300px;
   --changes-w: min(380px, 40vw);
@@ -907,7 +1093,7 @@ button.env-link {
   color: var(--ink-tertiary);
 }
 
-/* #14 / #18 / #20 / #22 — branch overview: scroll + compact */
+/* #14 / #18 / #20 / #22 - branch overview: scroll + compact */
 .branch-list {
   padding: 2px 0 8px 8px;
   display: flex;
@@ -967,7 +1153,7 @@ button.env-link {
   background: var(--surface-3);
 }
 
-/* Working tree — not a commit; make the expected action obvious (wash only — no left-edge flag). */
+/* Working tree - not a commit; make the expected action obvious (wash only - no left-edge flag). */
 .window.app .row.wip {
   color: var(--ink-muted);
   background: color-mix(in srgb, var(--warning) 5%, transparent);
@@ -1196,7 +1382,7 @@ button.env-link {
   border: 0;
 }
 
-/* #46 — baseline picker beside the Branches toggle */
+/* #46 - baseline picker beside the Branches toggle */
 .window.app .panel .branch-head {
   display: flex;
   align-items: center;

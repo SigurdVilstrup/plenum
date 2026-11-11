@@ -1,0 +1,337 @@
+<!doctype html>
+<!-- avoid-ai-design-ignore-file: SD7, K7 (focus-visible rules live in mock.css) -->
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plenum feedback mocks</title>
+    <link rel="icon" href="../assets/app-icon-16.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="mock.css" />
+    <script src="icons.js"></script>
+    <style>
+      body.desk.stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 28px;
+        padding: 32px 16px 48px;
+      }
+      body.desk.stack .window {
+        flex-shrink: 0;
+      }
+      .feedback-target-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .feedback-target-chip {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--hairline);
+        background: var(--surface-2);
+        color: var(--ink-muted);
+        font-size: 12px;
+      }
+      .feedback-target-chip.muted {
+        color: var(--ink-subtle);
+      }
+      .feedback-warn,
+      .feedback-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 0 0 16px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--ink-subtle);
+      }
+      .feedback-warn .icon,
+      .feedback-note .icon {
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .feedback-note {
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--hairline);
+        background: var(--surface-2);
+        color: var(--ink-muted);
+      }
+      .feedback-note.bad {
+        border-color: color-mix(in srgb, var(--danger) 45%, var(--hairline));
+        background: color-mix(in srgb, var(--danger) 10%, var(--surface-2));
+        color: var(--ink-muted);
+      }
+      .feedback-note.bad strong {
+        color: var(--danger);
+        font-weight: 600;
+      }
+      .feedback-note code {
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      .feedback-preview {
+        margin: 0 0 16px;
+      }
+      .feedback-preview > span {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--ink-subtle);
+      }
+      .feedback-preview figure {
+        margin: 0;
+        border: 1px solid var(--hairline-strong);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      .feedback-preview svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .feedback-preview figcaption {
+        padding: 8px 10px;
+        border-top: 1px solid var(--hairline);
+        font-size: 11px;
+        color: var(--ink-tertiary);
+      }
+      .toast {
+        position: absolute;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface-3);
+        border: 1px solid var(--hairline-strong);
+        color: var(--ink);
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        z-index: 20;
+        white-space: nowrap;
+      }
+      .toast a {
+        color: var(--primary-hover);
+        text-decoration: none;
+      }
+      .toast a:hover {
+        text-decoration: underline;
+      }
+      .toast .icon {
+        color: var(--success);
+      }
+      .btn:disabled,
+      .btn[aria-disabled='true'] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body class="desk stack">
+    <!-- 1. Ready to send -->
+    <div class="window">
+      <header class="titlebar">
+        <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="appmark" aria-label="Plenum">
+          <img src="../assets/app-icon-16.svg" width="16" height="16" alt="" />
+        </div>
+        <nav class="tabstrip" aria-label="Open repositories">
+          <button class="tab active" type="button" aria-current="page">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-folder-simple"></use></svg>
+            Mobaro Web
+            <span class="close" aria-label="Close tab"><svg class="icon sm" aria-hidden="true"><use href="#i-x"></use></svg></span>
+          </button>
+        </nav>
+        <div class="title-actions">
+          <span class="live"><i aria-hidden="true"></i><span>synced 2m ago</span></span>
+        </div>
+      </header>
+      <div class="body" aria-hidden="true">
+        <aside class="panel"></aside>
+        <main class="main">
+          <header class="lane-head"></header>
+          <section class="graph"><div class="rows"></div></section>
+        </main>
+      </div>
+      <div class="modal-layer">
+        <form class="modal" role="dialog" aria-labelledby="feedback-title-1" onsubmit="return false">
+          <div class="eyebrow">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-pencil-simple"></use></svg>
+            Feedback
+          </div>
+          <h1 id="feedback-title-1">What’s broken?</h1>
+          <label class="field">
+            Comment
+            <textarea rows="3" readonly>Lane switcher truncates long branch names before I can read them.</textarea>
+          </label>
+          <div class="field">
+            <span>Target</span>
+            <div class="feedback-target-row">
+              <span class="feedback-target-chip">feat/invoice-pdf-export-v2</span>
+              <button class="btn" type="button">Point at UI</button>
+              <button class="btn" type="button">Clear</button>
+            </div>
+          </div>
+          <div class="feedback-preview">
+            <span>Screenshot that will be sent</span>
+            <figure>
+              <svg viewBox="0 0 480 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Redacted window preview">
+                <rect width="480" height="220" fill="#010102" />
+                <rect x="0" y="0" width="480" height="28" fill="#0f1011" />
+                <rect x="12" y="10" width="10" height="10" rx="5" fill="#34343a" />
+                <rect x="28" y="10" width="10" height="10" rx="5" fill="#34343a" />
+                <rect x="44" y="10" width="10" height="10" rx="5" fill="#34343a" />
+                <rect x="72" y="8" width="88" height="14" rx="4" fill="#2a2b30" />
+                <rect x="0" y="28" width="120" height="192" fill="#0f1011" />
+                <rect x="12" y="44" width="72" height="8" rx="2" fill="#2a2b30" />
+                <rect x="12" y="64" width="96" height="10" rx="2" fill="#2a2b30" />
+                <rect x="12" y="84" width="84" height="10" rx="2" fill="#2a2b30" />
+                <rect x="12" y="104" width="90" height="10" rx="2" fill="#2a2b30" />
+                <rect x="120" y="28" width="360" height="28" fill="#141516" />
+                <rect x="136" y="38" width="120" height="10" rx="2" fill="#2a2b30" />
+                <rect x="136" y="72" width="200" height="8" rx="2" fill="#2a2b30" />
+                <rect x="136" y="92" width="168" height="8" rx="2" fill="#2a2b30" />
+                <rect x="136" y="112" width="188" height="8" rx="2" fill="#2a2b30" />
+                <rect x="136" y="132" width="152" height="8" rx="2" fill="#2a2b30" />
+                <rect x="352" y="72" width="64" height="8" rx="2" fill="#2a2b30" />
+                <rect x="352" y="92" width="48" height="8" rx="2" fill="#2a2b30" />
+                <rect x="352" y="112" width="56" height="8" rx="2" fill="#2a2b30" />
+                <!-- highlight on lane row -->
+                <rect x="8" y="78" width="104" height="22" fill="rgba(94,106,210,0.22)" stroke="#5e6ad2" stroke-width="2" />
+              </svg>
+              <figcaption>Repo text replaced with grey bars. Describe content in the comment.</figcaption>
+            </figure>
+          </div>
+          <p class="feedback-warn">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-warning-circle"></use></svg>
+            <span>Opens a public GitHub issue via your <code class="mono">gh</code> login. Screenshot is redacted; nothing private leaves this Mac.</span>
+          </p>
+          <div class="row-end">
+            <button class="btn" type="button">Cancel <kbd>esc</kbd></button>
+            <button class="btn primary" type="submit">Send feedback <kbd>⌘↩</kbd></button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="caption">1 · Ready. <code>gh</code> is available. Redacted preview is what gets gist’d and linked on the issue.</p>
+
+    <!-- 2. Needs gh -->
+    <div class="window">
+      <header class="titlebar">
+        <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="appmark" aria-label="Plenum">
+          <img src="../assets/app-icon-16.svg" width="16" height="16" alt="" />
+        </div>
+        <nav class="tabstrip" aria-label="Open repositories">
+          <button class="tab active" type="button" aria-current="page">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-folder-simple"></use></svg>
+            Mobaro Web
+            <span class="close" aria-label="Close tab"><svg class="icon sm" aria-hidden="true"><use href="#i-x"></use></svg></span>
+          </button>
+        </nav>
+        <div class="title-actions">
+          <span class="live"><i aria-hidden="true"></i><span>synced 2m ago</span></span>
+        </div>
+      </header>
+      <div class="body" aria-hidden="true">
+        <aside class="panel"></aside>
+        <main class="main">
+          <header class="lane-head"></header>
+          <section class="graph"><div class="rows"></div></section>
+        </main>
+      </div>
+      <div class="modal-layer">
+        <form class="modal" role="dialog" aria-labelledby="feedback-title-2" onsubmit="return false">
+          <div class="eyebrow">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-pencil-simple"></use></svg>
+            Feedback
+          </div>
+          <h1 id="feedback-title-2">What’s broken?</h1>
+          <label class="field">
+            Comment
+            <textarea rows="3" readonly>Lane switcher truncates long branch names before I can read them.</textarea>
+          </label>
+          <div class="field">
+            <span>Target</span>
+            <div class="feedback-target-row">
+              <span class="feedback-target-chip">feat/invoice-pdf-export-v2</span>
+              <button class="btn" type="button">Point at UI</button>
+              <button class="btn" type="button">Clear</button>
+            </div>
+          </div>
+          <div class="feedback-preview">
+            <span>Screenshot that will be sent</span>
+            <figure>
+              <svg viewBox="0 0 480 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Redacted window preview">
+                <rect width="480" height="220" fill="#010102" />
+                <rect x="0" y="0" width="480" height="28" fill="#0f1011" />
+                <rect x="72" y="8" width="88" height="14" rx="4" fill="#2a2b30" />
+                <rect x="0" y="28" width="120" height="192" fill="#0f1011" />
+                <rect x="12" y="64" width="96" height="10" rx="2" fill="#2a2b30" />
+                <rect x="12" y="84" width="84" height="10" rx="2" fill="#2a2b30" />
+                <rect x="120" y="28" width="360" height="192" fill="#141516" />
+                <rect x="136" y="72" width="200" height="8" rx="2" fill="#2a2b30" />
+                <rect x="136" y="92" width="168" height="8" rx="2" fill="#2a2b30" />
+                <rect x="8" y="78" width="104" height="22" fill="rgba(94,106,210,0.22)" stroke="#5e6ad2" stroke-width="2" />
+              </svg>
+              <figcaption>Repo text replaced with grey bars. Describe content in the comment.</figcaption>
+            </figure>
+          </div>
+          <div class="feedback-note bad">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-warning-circle"></use></svg>
+            <div>
+              <strong>GitHub CLI required.</strong>
+              Install <code>gh</code> and run <code>gh auth login</code>, then send again. A copy is kept on this Mac either way.
+            </div>
+          </div>
+          <div class="row-end">
+            <button class="btn" type="button">Cancel <kbd>esc</kbd></button>
+            <button class="btn" type="button">Save locally only</button>
+            <button class="btn primary" type="submit" aria-disabled="true" disabled>Send feedback <kbd>⌘↩</kbd></button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="caption">2 · Blocked. Missing or logged-out <code>gh</code>. Send stays disabled; local save still works.</p>
+
+    <!-- 3. Sent -->
+    <div class="window">
+      <header class="titlebar">
+        <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="appmark" aria-label="Plenum">
+          <img src="../assets/app-icon-16.svg" width="16" height="16" alt="" />
+        </div>
+        <nav class="tabstrip" aria-label="Open repositories">
+          <button class="tab active" type="button" aria-current="page">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-folder-simple"></use></svg>
+            Mobaro Web
+            <span class="close" aria-label="Close tab"><svg class="icon sm" aria-hidden="true"><use href="#i-x"></use></svg></span>
+          </button>
+        </nav>
+        <div class="title-actions">
+          <span class="live"><i aria-hidden="true"></i><span>synced 2m ago</span></span>
+        </div>
+      </header>
+      <div class="body" aria-hidden="true">
+        <aside class="panel"></aside>
+        <main class="main">
+          <header class="lane-head"></header>
+          <section class="graph"><div class="rows"></div></section>
+        </main>
+      </div>
+      <div class="toast" role="status">
+        <svg class="icon sm" aria-hidden="true"><use href="#i-check-circle"></use></svg>
+        <span>Sent to the Plenum team</span>
+      </div>
+    </div>
+    <p class="caption">3 · After send. Toast links the public issue; local outbox keeps the same report.</p>
+  </body>
+</html>

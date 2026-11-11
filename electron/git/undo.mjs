@@ -72,7 +72,7 @@ export async function restorePaths(root, laneIndex, { sha: snap, paths }) {
   await ours(lane.path, snap);
   if (!list.length) throw new Error('Nothing to restore.');
   if ((await git(['status', '--porcelain', '--', ...list], lane.path)).trim()) {
-    throw new Error('Those files changed since the revert — not restored.');
+    throw new Error('Those files changed since the revert. Not restored.');
   }
   const present = [];
   const gone = [];
@@ -122,8 +122,8 @@ export async function restoreLane(root, { path: lanePath, sha: snap }) {
 export async function uncommit(root, laneIndex, tip) {
   const { lane } = await laneAt(root, laneIndex);
   sha(tip);
-  if ((await git(['rev-parse', 'HEAD'], lane.path)).trim() !== tip) throw new Error('The branch has moved since that commit — not undone.');
-  if ((await git(['branch', '-r', '--contains', tip], lane.path)).trim()) throw new Error('Already pushed — can’t undo that commit.');
+  if ((await git(['rev-parse', 'HEAD'], lane.path)).trim() !== tip) throw new Error('The branch has moved since that commit. Not undone.');
+  if ((await git(['branch', '-r', '--contains', tip], lane.path)).trim()) throw new Error('Already pushed. Can’t undo that commit.');
   await git(['reset', '--soft', 'HEAD~1'], lane.path);
   return loadBoard(root);
 }

@@ -42,7 +42,7 @@ const refPill = (r, { running = false, current = false } = {}) => {
   return `<button type="button" class="${cls}" data-branch-name="${esc(r.name)}" title="${title}">${body}</button>`;
 };
 
-/** Uniform row centers — no day-divider gaps. */
+/** Uniform row centers - no day-divider gaps. */
 export function layoutGraphRows(commits) {
   const rows = commits.map((_, i) => ({ cy: i * ROW + ROW / 2 }));
   return { rows, height: Math.max(ROW, commits.length * ROW) };
@@ -161,7 +161,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const whenTitle = c.at
       ? `${new Date(c.at * 1000).toISOString()}${c.unpushed ? ' · not on remote' : ''} · Show commit changes`
       : (c.unpushed ? 'Not on remote · Show commit changes' : 'Show commit changes');
-    // Keep author tooltip on `.who` only — a title on the row steals hover from the avatar.
+    // Keep author tooltip on `.who` only - a title on the row steals hover from the avatar.
     parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}">
         <span></span>
         <span class="who" title="${esc(whoTitle)}">${who}</span>

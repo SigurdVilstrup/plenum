@@ -1,7 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'vite';
 import electronPath from 'electron';
+import { loadRepoEnv } from '../electron/load-env.mjs';
 
+loadRepoEnv();
 spawnSync(process.execPath, ['scripts/stamp-build-info.mjs'], { stdio: 'inherit' });
 
 const server = await createServer({
