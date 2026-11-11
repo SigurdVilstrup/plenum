@@ -2668,7 +2668,7 @@ a.navitem {
   }
 }
 
-/* Runnable lanes: running ring, Running section, env strip, data badge, drift, Run sheet, setup sheet */
+/* Runnable lanes: running ring, env strip + services fold-out, data badge, drift, Run sheet, setup sheet */
 
 /* A lane that is running gets a ring around its readiness mark. Readiness stays the dot. */
 .mark.running {
@@ -2683,46 +2683,12 @@ a.navitem {
   opacity: 0.9;
 }
 
-.mark.live-ring {
-  color: var(--success);
-}
-.mark.live-ring i {
-  width: 6px;
-  height: 6px;
-  background: currentColor;
-  border-color: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
-  animation: breathe 2.4s ease-in-out infinite;
-}
-
-.lane-row.run-row {
-  grid-template-columns: 16px 1fr auto auto;
-}
-.lane-row.run-row .meta.mono {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-subtle);
-}
-.lane-row.run-row .stop {
-  width: 18px;
-  height: 18px;
-  color: var(--ink-tertiary);
-  opacity: 0;
-}
-.lane-row.run-row:hover .stop,
-.lane-row.run-row.selected .stop {
-  opacity: 1;
-}
-.lane-row.run-row .stop:hover {
-  color: var(--danger);
-}
-
 /* Environment strip under the lane header */
 .env-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
+  min-height: 36px;
   padding: 0 16px;
   border-top: 1px solid var(--hairline);
   background: var(--surface-1);
@@ -2730,6 +2696,11 @@ a.navitem {
   color: var(--ink-subtle);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.env-dot {
+  margin: 0 4px;
+  color: var(--ink-tertiary);
 }
 
 .env-row .btn {

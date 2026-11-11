@@ -169,7 +169,7 @@ Meaning is fixed per icon so it can be learned once:
 Window 1280x800, 11px radius, hairline-strong border, one soft drop shadow on the desk only.
 
 - Title bar, 52px: traffic lights at 14px inset with 8px gaps, the 16px app mark, then the tab strip. Right: live sync dot with "synced n ago" and the palette button with its `⌘K` key cap. Nothing else; theme and settings are not title bar material.
-- Lanes panel, 260px: sections Protected, Lanes, Running (only when something is running), Branches without a lane. Rows are 16px mark, name, trailing meta. Folder under the name only when it differs. Running rows show the web port in mono and a Stop button on hover. A Settings row (`⌘,`) sits at the bottom, the way Mac sidebars do.
+- Lanes panel, 260px: sections Protected, Lanes, Branches without a lane. Rows are 16px mark, name, trailing meta. Folder under the name only when it differs. Running is a success ring on the mark, not a second list; named service links open from a Services dropdown on the selected lane header. A Settings row (`⌘,`) sits at the bottom, the way Mac sidebars do.
 - Selected lane header, two rows. Head row, 56px: lane icon, name, path; then facts (behind, uncommitted, base, authorship pill); then a framed folder icon button (Reveal in Finder) and Open in Cursor. Environment strip, 36px, on surface-1: Run or Stop, Test, a hairline separator, URL chips (`web :5101`), a separator, the `shared data` badge, and the drift fact in warning when the lane has migrations the shared database has not run. On the protected row the strip has no buttons: it names the shared services and links to Lane setup.
 - Title bar readout: "synced 1s ago · 2 running". The count appears only when it is above zero.
 - Graph: column header (Graph, Commit, Author, SHA, When), then 30px rows. The graph column is 136px wide with 24px between lanes. An SVG overlay draws edges and nodes at row centers. A legend footer explains tip colors and the WIP row.
@@ -201,7 +201,7 @@ One 16px slot per lane row, four states:
 - Safe to remove: `check-circle` in success, settles in once.
 - Protected primary: `shield-check` in subtle.
 
-Running is not a fifth state. A running lane keeps its readiness mark and gains a 1.5px success ring around it. In the graph, the lane's ref pill gains a 6px success dot. In the Running section the row dot is success and breathes with the live sync dot.
+Running is not a fifth state. A running lane keeps its readiness mark and gains a 1.5px success ring around it. In the graph, the lane's ref pill gains a 6px success dot. Named ports open from a Services dropdown on the lane header.
 
 ## Motion
 
@@ -210,7 +210,7 @@ Quiet, and mostly once. The point is to show state change, not to decorate.
 - Working dot pulses forever at 1.6s, between 100% and 45% opacity.
 - Safe check scales from 0.6 to 1 once over 320ms when the lane becomes safe.
 - Behind arrow nudges 2px down once over 480ms when the count rises.
-- Live sync dot breathes at 2.4s; it is the only always-on motion in the title bar. Running row dots breathe on the same clock.
+- Live sync dot breathes at 2.4s; it is the only always-on motion in the title bar.
 - Selection changes fade over 120ms. Graph dimming is a 120ms opacity change.
 - `prefers-reduced-motion` turns all of it off.
 

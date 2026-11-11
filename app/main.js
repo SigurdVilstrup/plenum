@@ -1341,23 +1341,6 @@ function paintPanel() {
     ${rows}
   </div>`;
 
-  const running = lanes.filter((l) => l.running);
-  if (running.length) {
-    const runningRows = running.map((l) => {
-      const port = l.ports ? Object.values(l.ports)[0] : null;
-      return `<button class="lane-row run-row ${l.index === selected ? 'selected' : ''}" type="button" data-lane="${l.index}">
-        <span class="mark live-ring"><i></i></span>
-        <span class="name">${esc(l.name)}</span>
-        <span class="meta mono">${port != null ? `:${esc(port)}` : ''}</span>
-        <span class="stop iconbtn" role="button" data-act="down" title="Stop lane" aria-label="Stop ${esc(l.name)}">${iconHTML('stop')}</span>
-      </button>`;
-    }).join('');
-    html += `<div class="section">
-      <div class="section-head"><span title="Lanes running their own stack. Ports offset per lane; data shared unless the manifest says otherwise.">Running <span class="count">${running.length}</span></span></div>
-      ${runningRows}
-    </div>`;
-  }
-
   const allBranches = b.branches || [];
   const locals = allBranches.filter((br) => !br.remote);
   const remotes = allBranches.filter((br) => br.remote);
@@ -1426,13 +1409,6 @@ function paintPanel() {
       e.stopPropagation();
       const lane = laneByIndex(Number(btn.dataset.lane));
       if (lane) openLaneCtxMenu(e.clientX, e.clientY, lane);
-    });
-  });
-  el.panel.querySelectorAll('.run-row [data-act="down"]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const lane = laneByIndex(Number(btn.closest('[data-lane]')?.dataset.lane));
-      if (lane) handleAction('down', lane);
     });
   });
   el.panel.querySelector('[data-new-lane]')?.addEventListener('click', openCreateLane);
@@ -1633,19 +1609,15 @@ function runActionsHTML(l) {
   // Primary never runs the stack - keep lane setup in Settings, not a permanent banner (#27).
   if (l.isPrimary) return '';
   if (l.readiness === 'safe' && !l.running) {
-    return `<span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span>`;
+    return `<div class="env-row"><span class="env-note">${iconHTML('stop', 'sm')}Not running. Merged lanes are not started.</span></div>`;
   }
   if (!l.runnable) {
-    return `<span class="env-note">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>${laneSetupLink()}`;
+    return `<div class="env-row"><span class="env-note">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>${laneSetupLink()}</div>`;
   }
   const runBtn = l.running
     ? `<button class="btn" type="button" data-act="down" title="Stop lane">${iconHTML('stop', 'sm')}Stop</button>`
     : `<button class="btn" type="button" data-act="up" title="Run lane">${iconHTML('play', 'sm')}Run</button>`;
-  const urls = Object.entries(l.urls || {}).map(([name, url]) => {
-    let port = '';
-    try { port = new URL(url).port; } catch { /* ignore */ }
-    return `<button class="chip url" type="button" data-act="openUrl" data-url="${esc(url)}" title="${esc(url)}">${iconHTML('globe-simple', 'sm')}${esc(name)} <span class="mono">:${esc(port)}</span></button>`;
-  }).join('');
+  const entries = Object.entries(l.urls || {});
   const badge = l.dataMode === 'shared'
     ? `<span class="badge data" title="Databases shared across lanes. Set a service to snapshot in .plenum/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
     : l.dataMode === 'snapshot'
@@ -1654,7 +1626,22 @@ function runActionsHTML(l) {
   const tests = l.lastTest
     ? `<span class="env-note">${iconHTML(l.lastTest.ok ? 'check-circle' : 'warning-circle', 'sm')}tests ${l.lastTest.ok ? 'passed' : 'failed'}</span>`
     : '';
-  return `${runBtn}<button class="btn" type="button" data-act="test" title="Run tests">${iconHTML('flask', 'sm')}Test</button><span class="env-sep"></span>${urls}${urls && badge ? '<span class="env-sep"></span>' : ''}${badge}${tests}`;
+  let servicesToggle = '';
+  if (l.running) {
+    const n = entries.length;
+    const label = n === 0
+      ? 'No ports declared'
+      : `${n} service${n === 1 ? '' : 's'}`;
+    servicesToggle = `<button class="btn" type="button" data-act="servicesMenu" aria-haspopup="menu" title="Open a named port from ports.expose">${iconHTML('caret-down', 'sm')}${esc(label)}</button>`;
+  } else if (entries.length) {
+    const preview = entries.map(([name, url]) => {
+      let port = '';
+      try { port = new URL(url).port; } catch { /* ignore */ }
+      return `<span class="mono">${esc(name)}:${esc(port)}</span>`;
+    }).join('<span class="env-dot">·</span>');
+    servicesToggle = `<span class="env-note" title="Resolved from ports.expose + offset × lane index">opens ${preview}</span>`;
+  }
+  return `<div class="env-row">${runBtn}<button class="btn" type="button" data-act="test" title="Run tests">${iconHTML('flask', 'sm')}Test</button><span class="env-sep"></span>${servicesToggle}${badge || tests ? '<span class="env-sep"></span>' : ''}${badge}${tests}</div>`;
 }
 
 function paintHeader() {
@@ -1687,7 +1674,7 @@ function paintHeader() {
       </div>
     </div>`;
     const primaryEnv = runActionsHTML(l);
-    if (primaryEnv) html += `<div class="env-row">${primaryEnv}</div>`;
+    if (primaryEnv) html += primaryEnv;
   } else {
     const behind = l.readiness === 'safe'
       ? `<span class="fact ok">${iconHTML('check-circle', 'sm')}<strong>merged</strong> into ${esc(b.teamBranch)}</span>`
@@ -1713,7 +1700,7 @@ function paintHeader() {
         ${editorBtnHTML()}
       </div>
     </div>
-    <div class="env-row">${runActionsHTML(l)}</div>`;
+    ${runActionsHTML(l)}`;
   }
   el.laneHead.innerHTML = html;
   el.laneHead.querySelector('.title').addEventListener('contextmenu', (e) => {
@@ -1723,9 +1710,55 @@ function paintHeader() {
   el.laneHead.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      if (btn.dataset.act === 'servicesMenu') {
+        openServicesMenu(btn, l);
+        return;
+      }
       handleAction(btn.dataset.act, l, btn.dataset.url);
     });
   });
+}
+
+function openServicesMenu(anchor, lane) {
+  const entries = Object.entries(lane.urls || {});
+  const rect = anchor.getBoundingClientRect();
+  dismissCtxMenus();
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu services-menu';
+  menu.setAttribute('role', 'menu');
+  menu.style.left = `${Math.max(8, rect.left)}px`;
+  menu.style.top = `${rect.bottom + 4}px`;
+  if (!entries.length) {
+    const empty = document.createElement('button');
+    empty.type = 'button';
+    empty.className = 'services-menu-empty';
+    empty.textContent = 'Add ports.expose in lane.yaml';
+    empty.addEventListener('click', () => {
+      menu.remove();
+      openLaneSetup(state.board?.root);
+    });
+    menu.appendChild(empty);
+  } else {
+    for (const [name, url] of entries) {
+      let port = '';
+      try { port = new URL(url).port; } catch { /* ignore */ }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute('role', 'menuitem');
+      btn.title = url;
+      btn.innerHTML = `<span class="service-name">${esc(name)}</span><span class="mono">:${esc(port)}</span>${iconHTML('arrow-square-out', 'sm')}`;
+      btn.addEventListener('click', () => {
+        menu.remove();
+        invoke('os.openExternal', url).catch(() => {});
+      });
+      menu.appendChild(btn);
+    }
+  }
+  attachCtxMenu(menu);
+  const menuRect = menu.getBoundingClientRect();
+  if (menuRect.right > window.innerWidth - 8) {
+    menu.style.left = `${Math.max(8, window.innerWidth - menuRect.width - 8)}px`;
+  }
 }
 
 async function handleAction(act, lane, url) {

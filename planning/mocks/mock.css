@@ -1555,46 +1555,12 @@ a.navitem {
   opacity: 0.9;
 }
 
-.mark.live-ring {
-  color: var(--success);
-}
-.mark.live-ring i {
-  width: 6px;
-  height: 6px;
-  background: currentColor;
-  border-color: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
-  animation: breathe 2.4s ease-in-out infinite;
-}
-
-.lane-row.run-row {
-  grid-template-columns: 16px 1fr auto auto;
-}
-.lane-row.run-row .meta.mono {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-subtle);
-}
-.lane-row.run-row .stop {
-  width: 18px;
-  height: 18px;
-  color: var(--ink-tertiary);
-  opacity: 0;
-}
-.lane-row.run-row:hover .stop,
-.lane-row.run-row.selected .stop {
-  opacity: 1;
-}
-.lane-row.run-row .stop:hover {
-  color: var(--danger);
-}
-
 /* Environment strip under the lane header */
 .env-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
+  min-height: 36px;
   padding: 0 16px;
   border-top: 1px solid var(--hairline);
   background: var(--surface-1);
@@ -1602,6 +1568,55 @@ a.navitem {
   color: var(--ink-subtle);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.env-dot {
+  margin: 0 4px;
+  color: var(--ink-tertiary);
+}
+
+.services-dd {
+  position: relative;
+}
+.services-dd > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.services-dd > summary::-webkit-details-marker { display: none; }
+.services-dd .services-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-menu);
+}
+.services-dd .services-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 12px;
+}
+.services-dd .services-menu-item:hover {
+  background: var(--surface-3);
+}
+.services-dd .service-name { font-weight: 500; flex: 1; }
+.services-dd .mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+.services-dd .icon {
+  color: var(--ink-tertiary);
+  margin-left: auto;
 }
 
 .env-row .btn {

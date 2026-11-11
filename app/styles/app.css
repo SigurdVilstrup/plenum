@@ -669,6 +669,35 @@ button.env-link {
 .ctx-menu button:hover { background: var(--surface-3); }
 .ctx-menu button.danger { color: var(--danger); }
 
+.services-menu {
+  min-width: 200px;
+}
+.services-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.services-menu .service-name {
+  font-weight: 500;
+  flex: 1;
+}
+.services-menu .mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+.services-menu .icon {
+  color: var(--ink-tertiary);
+  margin-left: auto;
+}
+.services-menu button:hover .icon {
+  color: var(--primary-hover);
+}
+.services-menu .services-menu-empty {
+  color: var(--ink-subtle);
+  font-size: 12px;
+}
+
 .tab .close { display: none !important; }
 
 /* Graph | avatar | Commit (flex, ellipsis only when tight) | SHA | When */

@@ -119,24 +119,6 @@ function renderPanel(sc, selected) {
     })
     .join('');
 
-  const running = sc.lanes.filter((l) => l.running);
-  const runningRows = running
-    .map(
-      (l) => `<button class="lane-row run-row ${l.lane === selected ? 'selected' : ''}" type="button" data-lane="${l.lane}">
-        <span class="mark live-ring"><i></i></span>
-        <span class="name">${l.name}</span>
-        <span class="meta mono">:${l.urls[0].port}</span>
-        <span class="stop iconbtn" role="button" title="Stop lane" aria-label="Stop ${l.name}">${icon('stop')}</span>
-      </button>`,
-    )
-    .join('');
-  const runningSection = running.length
-    ? `<div class="section">
-      <div class="section-head"><span title="Lanes with their own copy of the stack running. Ports are offset per lane; data is shared unless the manifest says otherwise.">Running <span class="count">${running.length}</span></span></div>
-      ${runningRows}
-    </div>`
-    : '';
-
   return `${mainRow}
     <div class="section">
       <div class="section-head">
@@ -145,7 +127,6 @@ function renderPanel(sc, selected) {
       </div>
       ${rows}
     </div>
-    ${runningSection}
     <div class="section">
       <button class="lane-row" type="button" aria-expanded="false">
         <span class="mark">${icon('caret-right')}</span>
@@ -234,8 +215,8 @@ function gitActions(l) {
   return a.join('');
 }
 
-// The environment strip: run, test, URLs, and what this lane shares. Shared data is a fact,
-// not a dialog; the only gate is migration drift, and that is a sheet on Run.
+// The environment strip: run, test, and (when up) a fold-out of named service links.
+// Shared data is a fact, not a dialog; the only gate is migration drift, and that is a sheet on Run.
 function renderEnvRow(sc, l) {
   if (l.readiness === 'safe') {
     return `<div class="env-row">
@@ -247,18 +228,31 @@ function renderEnvRow(sc, l) {
   const runBtn = l.running
     ? `<button class="btn" type="button" data-stop>${icon('stop', 'sm')}Stop</button>`
     : `<button class="btn" type="button" data-up>${icon('play', 'sm')}Run</button>`;
-  const urls = l.running
-    ? l.urls.map((u) => `<a class="chip url" href="#" title="http://localhost:${u.port}">${icon('globe-simple', 'sm')}${u.n} <span class="mono">:${u.port}</span></a>`).join('')
-    : `<span class="env-note">ports <span class="mono">+${l.offset}</span> when started</span>`;
   const drift = l.drift
     ? `<span class="fact drift" title="Migrations in this lane that the shared database has not run. Run will ask before applying them.">${icon('warning-circle', 'sm')}<strong>${l.drift} migration${l.drift > 1 ? 's' : ''}</strong> not in shared DB</span>`
     : '';
   const tests = l.tests ? `<span class="env-note">${icon('check-circle', 'sm')}tests ${l.tests}</span>` : '';
+  let servicesToggle = '';
+  if (l.running) {
+    const n = l.urls.length;
+    const items = l.urls.map((u) =>
+      `<a class="services-menu-item" href="http://localhost:${u.port}" title="http://localhost:${u.port}">
+        <span class="service-name">${u.n}</span>
+        <span class="mono">:${u.port}</span>
+        ${icon('arrow-square-out', 'sm')}
+      </a>`).join('');
+    servicesToggle = `<details class="services-dd">
+      <summary class="btn">${icon('caret-down', 'sm')}${n} service${n === 1 ? '' : 's'}</summary>
+      <div class="services-menu" role="menu">${items}</div>
+    </details>`;
+  } else {
+    servicesToggle = `<span class="env-note">opens ${l.urls.map((u) => `<span class="mono">${u.n}:${u.port}</span>`).join('<span class="env-dot">·</span>')}</span>`;
+  }
   return `<div class="env-row">
     ${runBtn}
     <button class="btn" type="button">${icon('flask', 'sm')}Test</button>
     <span class="env-sep"></span>
-    ${urls}
+    ${servicesToggle}
     <span class="env-sep"></span>
     <span class="badge data" title="${dataTitle}">${icon('database', 'sm')}shared data</span>
     ${drift}
