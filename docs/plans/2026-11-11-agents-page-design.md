@@ -81,7 +81,7 @@ Expected locations, to be verified by the builder against each client's current 
 
 Reads (`repo.doctor`, `lane.status`) are always allowed. "Ask me" arrives in release 3 and becomes the default for the last two rows then.
 
-"Remove lanes: Allow" keeps today's behaviour: safe removes go through, unsafe ones still need `force`. Whether a forced remove should be treated more strictly than a safe one is decided in release 3, where it can ask.
+"Remove lanes: Allow" lets safe removes through. A forced remove (`lane.remove` with `force`, which discards uncommitted work) is refused over MCP in releases 1 and 2, whatever the setting says, for the same reason as forced starts below: there is no way to ask yet. In release 3 it becomes a question. (Changed during the build after a security review; not in the originally approved text.)
 
 Forced starts: `lane.up` with `force` skips the migration-drift check, the point where the app shows a person the three-choice sheet. Over MCP a forced start is refused in releases 1 and 2, whatever the switch says, with a message that the user has to start that lane from the board. In release 3 it becomes a question like a forced remove. Normal starts are unaffected. (Sigurd's decision.)
 

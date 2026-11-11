@@ -95,7 +95,7 @@ const TOOLS = [
       properties: {
         lane: { type: ['integer', 'string'], description: 'Lane index' },
         path: { type: 'string', description: 'Repo root (default: cwd)' },
-        force: { type: 'boolean', description: 'Remove even when dirty or unmerged (discards uncommitted work in the worktree)' },
+        force: { type: 'boolean', description: 'Not available to agents: a forced remove is always refused. Ask the user to remove an unsafe lane from the Plenum board.' },
       },
       required: ['lane'],
     },

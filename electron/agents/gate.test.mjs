@@ -28,3 +28,17 @@ test('forced start is refused whatever the settings, for any truthy force', () =
   }
   assert.equal(refusal('lane.up', { lane: 1, force: false }, d), null);
 });
+
+const FORCE_REMOVE = "Refused: agents can't remove a lane with force, because that discards uncommitted work. Ask the user to remove this lane from the Plenum board.";
+
+test('forced remove is refused for any truthy force under defaults', () => {
+  for (const force of [true, 'true', 1]) {
+    assert.equal(refusal('lane.remove', { lane: 1, force }, d), FORCE_REMOVE);
+  }
+  assert.equal(refusal('lane.remove', { lane: 1, force: false }, d), null);
+});
+
+test('force message wins over the turned-off message', () => {
+  assert.equal(refusal('lane.remove', { lane: 1, force: true }, { ...d, remove: 'never' }), FORCE_REMOVE);
+  assert.match(refusal('lane.up', { lane: 1, force: true }, { ...d, run: false }), /can't start a lane with force/);
+});
