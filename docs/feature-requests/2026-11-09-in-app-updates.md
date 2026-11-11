@@ -2,7 +2,7 @@
 
 **Source:** local dogfood feedback `2026-11-09T00-26-43.990Z-825c55`  
 **Date:** 9 November 2026  
-**Status:** open
+**Status:** implemented (T3 pattern)
 
 ## Ask
 
@@ -12,14 +12,18 @@ Support in-app updates so Plenum can roll out builds multiple times a day withou
 
 Dogfooding moves fast. Unsigned local packs already work; the gap is discoverability and install friction when a new build lands.
 
-## Direction (not committed)
+## Direction (shipped)
 
-- Prefer the smallest path that fits current unsigned local distribution (e.g. check a known URL / GitHub release for a newer `package.json` version, download DMG/zip, prompt to replace).
-- Notarization / Sparkle / electron-updater can wait until distribution is public.
-- Keep Settings → General version row as the “you are here” signal once updates exist.
+Same pattern as T3 Code:
 
-## Non-goals for a first cut
+- `electron-updater` against GitHub Releases (`latest-mac.yml` + zip + blockmap).
+- Background check on launch (+ every 4 minutes). **No auto-download / no auto-install.**
+- Settings → General version row: Check → Download → Install & Restart.
+- Sidebar foot shows a cloud icon when an update is available / ready.
+- Release workflow uploads DMG (first install) plus updater assets.
 
-- Silent forced updates
-- Delta patches
-- Channel / beta / stable matrix
+## Still later
+
+- Code signing / notarization (dogfood packs remain `identity: null`; signature verify is off for now).
+- Channel / beta / stable matrix.
+- Forced minimum-version gates.

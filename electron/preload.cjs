@@ -18,7 +18,9 @@ const ALLOWED = new Set([
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',
   'prefs.get', 'prefs.set', 'git.identity.get', 'git.identity.set',
   'feedback.capture', 'feedback.save', 'feedback.send',
-  'app.version', 'os.editors', 'os.diffMergeTools',
+  'app.version', 'app.update.state', 'app.update.check', 'app.update.download',
+  'app.update.install', 'app.update.act',
+  'os.editors', 'os.diffMergeTools',
 ]);
 
 contextBridge.exposeInMainWorld('plenum', {
@@ -27,5 +29,10 @@ contextBridge.exposeInMainWorld('plenum', {
     return ipcRenderer.invoke(channel, ...args);
   },
   onEdit: (cb) => ipcRenderer.on('edit', (_e, cmd, text) => cb(cmd, text)),
+  onUpdate: (cb) => {
+    const handler = (_e, state) => cb(state);
+    ipcRenderer.on('update', handler);
+    return () => ipcRenderer.removeListener('update', handler);
+  },
   setZoom: (f) => webFrame.setZoomFactor(Math.min(1.25, Math.max(0.8, Number(f) || 1))),
 });

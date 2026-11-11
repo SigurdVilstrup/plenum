@@ -36,7 +36,7 @@ Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup liv
 | `npm run smoke:init` | Fresh multi-worktree fixture with a local bare remote |
 | `npm start` | Production build + Electron |
 | `npm run pack` | Unsigned `Plenum.app` in `release/mac*` |
-| `npm run dist` | Same + `.dmg` |
+| `npm run dist` | Same + `.dmg` + updater `.zip` / `latest-mac.yml` |
 | `npm run icons` | Rebuild `build/icon.icns` from `planning/assets/app-icon-1024.png` |
 | `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
 
@@ -51,6 +51,14 @@ open release/mac*/Plenum.app
 ```
 
 Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Packaging is unsigned (`identity: null`) for local use; notarize later for distribution.
+
+### In-app updates (T3 pattern)
+
+Packaged builds use `electron-updater` against GitHub Releases. The app checks in the background; you click to download, then again to install & restart. First installs still use the `.dmg`; updates use the `.zip` + `latest-mac.yml` (+ `*.blockmap` for differential downloads) published on each `v*` tag.
+
+- Disable: `PLENUM_DISABLE_AUTO_UPDATE=1`
+- Override feed repo: `PLENUM_UPDATE_REPOSITORY=owner/repo`
+- Private release auth: `PLENUM_UPDATE_GITHUB_TOKEN` (or `GH_TOKEN`)
 
 ## Layout
 

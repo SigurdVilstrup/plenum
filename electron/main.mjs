@@ -25,6 +25,7 @@ import {
 } from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
 import { env as brandEnv } from './paths.mjs';
+import { createUpdater } from './updates.mjs';
 
 loadRepoEnv();
 
@@ -81,6 +82,7 @@ function appIcon() {
 }
 
 let win;
+let updates;
 
 function createWindow() {
   const icon = appIcon();
@@ -162,6 +164,18 @@ app.whenReady().then(async () => {
     { role: 'windowMenu' },
   ]));
   createWindow();
+  updates = createUpdater({
+    getVersion: () => app.getVersion(),
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    send: (state) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        w.webContents.send('update', state);
+      }
+    },
+  });
+  updates.configure();
+  updates.startBackground();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -172,6 +186,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  updates?.stop();
   supervisor.stopAll();
 });
 
@@ -226,6 +241,11 @@ ipcMain.handle('app.version', () => {
     committedAt: info.committedAt,
   };
 });
+ipcMain.handle('app.update.state', () => updates?.getState() || null);
+ipcMain.handle('app.update.check', () => updates?.check('manual') || null);
+ipcMain.handle('app.update.download', () => updates?.download() || null);
+ipcMain.handle('app.update.install', () => updates?.install() || null);
+ipcMain.handle('app.update.act', () => updates?.act() || null);
 ipcMain.handle('os.editors', () => listEditors());
 ipcMain.handle('os.diffMergeTools', () => listDiffMergeTools());
 

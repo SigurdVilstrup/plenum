@@ -23,16 +23,23 @@ jobs:
 
       - run: npm test
 
-      - name: Build Mac DMG
+      - name: Build Mac DMG + updater zip
         env:
           # Unsigned local/dogfood builds (package.json sets identity: null).
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Still emit latest-mac.yml / *.blockmap for electron-updater (publish never uploads).
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # electron-builder auto-publishes on a git tag; we upload via softprops below.
         run: npm run build && npx electron-builder --mac --publish never
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.dmg
+          # DMG for first install; zip + yml + blockmap for in-app electron-updater (T3 pattern).
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
           generate_release_notes: true
           fail_on_unmatched_files: true

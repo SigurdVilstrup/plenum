@@ -82,6 +82,8 @@ const state = {
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, setupTabId: null },
   appInfo: { version: '', commit: '', committedAt: '' },
+  /** electron-updater state from main (`app.update.state` / `onUpdate`). */
+  update: null,
   historyLimit: 120,
   editors: [],
   diffMergeTools: [],
@@ -251,6 +253,75 @@ function versionDetailHTML() {
   const when = formatCommitAt(committedAt);
   const rest = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
   return `<span class="mono">${ver} · ${rest}</span>`;
+}
+
+/** Mirror of electron/updates.mjs actionLabel for the Settings / foot button. */
+function updateActionLabel(u = state.update) {
+  if (!u || !u.enabled) return null;
+  const v = u.availableVersion || u.downloadedVersion;
+  switch (u.status) {
+    case 'available': return v ? `Download ${v}` : 'Download update';
+    case 'downloading': {
+      const pct = u.downloadPercent;
+      return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
+    }
+    case 'downloaded': return 'Install & Restart';
+    case 'checking': return 'Checking…';
+    case 'error': return u.canRetry ? 'Retry' : 'Update unavailable';
+    case 'up-to-date':
+    case 'idle': return 'Check for updates';
+    default: return null;
+  }
+}
+
+function updateActionBusy(u = state.update) {
+  return u?.status === 'checking' || u?.status === 'downloading';
+}
+
+function updateControlHTML() {
+  const u = state.update;
+  if (!u) return '';
+  if (!u.enabled) {
+    return `<span class="status" title="${esc(u.message || 'Updates unavailable')}"><i></i>Dev</span>`;
+  }
+  const label = updateActionLabel(u);
+  if (!label) return '';
+  const busy = updateActionBusy(u);
+  const tip = u.message
+    || (u.status === 'up-to-date' ? 'You’re on the latest GitHub release.'
+      : u.status === 'available' ? 'Downloads in the background. Install when ready.'
+        : u.status === 'downloaded' ? 'Quits Plenum and swaps in the new build.'
+          : 'Checks GitHub Releases for a newer Plenum.');
+  return `<button class="btn" type="button" data-update-act${busy ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
+}
+
+function applyUpdateState(next) {
+  if (!next || typeof next !== 'object') return;
+  const prev = state.update;
+  state.update = next;
+  const statusChanged = !prev
+    || prev.status !== next.status
+    || prev.availableVersion !== next.availableVersion
+    || prev.downloadedVersion !== next.downloadedVersion
+    || prev.message !== next.message
+    || Boolean(prev?.enabled) !== Boolean(next.enabled);
+  const progressChanged = prev?.downloadPercent !== next.downloadPercent;
+  if (!statusChanged && !progressChanged) return;
+  if (state.settings.open) {
+    renderSettings();
+    return;
+  }
+  if (statusChanged) {
+    paint();
+    return;
+  }
+  // Progress-only: keep the foot button label current without rebuilding the board.
+  const label = updateActionLabel(next);
+  el.panel?.querySelectorAll('[data-update-act]').forEach((btn) => {
+    if (!label) return;
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  });
 }
 
 function paintVersion() {
@@ -1292,6 +1363,7 @@ function paintPanel() {
   el.panel.classList.toggle('is-refreshing', refreshing);
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
   el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
+  bindUpdateAct(el.panel);
   el.panel.querySelectorAll('[data-lane]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.selectedLane = Number(btn.dataset.lane);
@@ -1925,11 +1997,36 @@ function startFeedbackPick() {
 
 /** Footer shared by the board sidebar and the Settings sidebar so both look identical. */
 function panelFootHTML(settingsActive = false) {
+  const u = state.update;
+  const showUpdate = u?.enabled && (u.status === 'available' || u.status === 'downloading' || u.status === 'downloaded' || (u.status === 'error' && u.canRetry));
+  const updateLabel = updateActionLabel(u) || 'Update';
+  const updateBusy = updateActionBusy(u);
+  const updateBtn = showUpdate
+    ? `<button class="iconbtn${u.status === 'downloaded' ? ' active' : ''}" type="button" data-update-act${updateBusy ? ' disabled' : ''} title="${esc(updateLabel)}" aria-label="${esc(updateLabel)}">${iconHTML('cloud-arrow-down')}</button>`
+    : '';
   return `<div class="panel-foot">
     <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
     <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
+    ${updateBtn}
     <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
   </div>`;
+}
+
+async function runUpdateAct() {
+  try {
+    const next = await invoke('app.update.act');
+    if (next) applyUpdateState(next);
+  } catch { /* toasted */ }
+}
+
+function bindUpdateAct(root) {
+  root.querySelectorAll('[data-update-act]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      runUpdateAct();
+    });
+  });
 }
 
 let feedbackPreviewPng = null;
@@ -3419,8 +3516,8 @@ const SETTINGS_PAGES = {
           'Version',
           '',
           versionDetailHTML(),
-          '',
-          'From package.json. Bump with npm run version:patch (or minor/major) before you pack.',
+          updateControlHTML(),
+          'Packaged builds check GitHub Releases (T3-style: download, then Install & Restart). Dev builds stay on npm run pack / dist.',
         )}
       </div>
       <div class="group-head">Open with</div>
@@ -3822,6 +3919,8 @@ function renderSettings() {
   if (page === 'repositories') bindRepos(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
   bindPrefs(el.settingsBody);
+  bindUpdateAct(el.settingsBody);
+  bindUpdateAct(el.settingsNav);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
   el.settingsNav.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   el.settingsNav.querySelector('[data-settings]')?.addEventListener('click', closeSettings);
@@ -4166,6 +4265,13 @@ async function boot() {
     state.appInfo = { version: '', commit: '', committedAt: '' };
   }
   paintVersion();
+  try {
+    const u = await invoke('app.update.state');
+    if (u) state.update = u;
+  } catch { /* updater optional */ }
+  if (typeof api?.onUpdate === 'function') {
+    api.onUpdate((u) => applyUpdateState(u));
+  }
   if (typeof ResizeObserver !== 'undefined' && el.titlebar) {
     const ro = new ResizeObserver(() => syncSearchCollapse());
     ro.observe(el.titlebar);
