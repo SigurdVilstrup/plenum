@@ -5,17 +5,17 @@
 :root,
 [data-theme='dark'] {
   color-scheme: dark;
-  /* Dark · muted — cool charcoal, lavender signal */
-  --canvas: #010102;
-  --surface-1: #0f1011;
-  --surface-2: #141516;
-  --surface-3: #18191a;
-  --hairline: #23252a;
-  --hairline-strong: #34343a;
-  --ink: #f7f8f8;
-  --ink-muted: #d0d6e0;
-  --ink-subtle: #8a8f98;
-  --ink-tertiary: #62666d;
+  /* Dark · muted — neutral charcoal gray, lavender signal */
+  --canvas: #1a1b1e;
+  --surface-1: #232427;
+  --surface-2: #2c2d31;
+  --surface-3: #35363b;
+  --hairline: #45474d;
+  --hairline-strong: #5c5f66;
+  --ink: #fafafb;
+  --ink-muted: #d8dbe1;
+  --ink-subtle: #aeb3bc;
+  --ink-tertiary: #8f949d;
   --primary: #5e6ad2;
   --primary-hover: #7a84e0;
   --on-primary: #ffffff;
@@ -34,7 +34,7 @@
   --lane-2: #3d9a8b;
   --lane-3: #d0689a;
   --lane-4: #8c6bb1;
-  --scrim: rgba(1, 1, 2, 0.72);
+  --scrim: rgba(12, 12, 14, 0.66);
   --on-danger: #ffffff;
   --traffic-close: #ff5f57;
   --traffic-min: #febc2e;
@@ -142,19 +142,19 @@ html[data-font='ibm-plex'] {
 
 /* Dark · vibrant — lifted cool greys + a touch more lavender in the air. */
 [data-theme='dark'][data-chroma='vibrant'] {
-  --canvas: #0b0c14;
-  --surface-1: #141625;
-  --surface-2: #1a1d30;
-  --surface-3: #21243a;
-  --hairline: #2a2e44;
-  --hairline-strong: #3a4060;
-  --ink: #eef0ff;
-  --ink-muted: #c8cce8;
-  --ink-subtle: #8b91b8;
-  --ink-tertiary: #636990;
+  --canvas: #1a1b26;
+  --surface-1: #232536;
+  --surface-2: #2c2f44;
+  --surface-3: #363a53;
+  --hairline: #454a68;
+  --hairline-strong: #5c6284;
+  --ink: #fafaff;
+  --ink-muted: #d6d9f0;
+  --ink-subtle: #afb4d2;
+  --ink-tertiary: #9096b8;
   --primary-hover: #7a84e0;
   --primary-bg: rgba(94, 106, 210, 0.18);
-  --scrim: rgba(11, 12, 20, 0.72);
+  --scrim: rgba(14, 15, 24, 0.66);
 }
 
 /* Light · vibrant — cooler, more saturated paper (not cream). */
@@ -1357,6 +1357,11 @@ a.iconbtn,
   color: var(--ink);
 }
 
+.panel-foot .iconbtn.active {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
 .panel-foot .iconbtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -2177,7 +2182,7 @@ button.ref.primary:hover {
 /* Settings */
 .settings {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: var(--rail-w, 300px) 1fr;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -2185,48 +2190,26 @@ button.ref.primary:hover {
 }
 
 .settings-nav {
-  width: 260px;
+  width: var(--rail-w, 300px);
   border-right: 1px solid var(--hairline);
   background: var(--surface-1);
-  padding: 10px 8px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.settings-nav .panel-foot {
+  flex-shrink: 0;
+}
+
+.settings-nav-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
   gap: 2px;
-}
-
-.settings-nav-foot {
-  margin-top: auto;
-  padding: 8px 2px 8px;
-  border-top: 1px solid var(--hairline);
-}
-
-.settings-nav-foot .foot-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-subtle);
-  font: inherit;
-  font-size: 12px;
-}
-
-.settings-nav-foot .foot-link .icon {
-  color: var(--ink-tertiary);
-}
-
-.settings-nav-foot .foot-link:hover {
-  background: var(--surface-3);
-  color: var(--ink);
-}
-
-.settings-nav-foot .foot-link:hover .icon {
-  color: var(--ink);
 }
 
 a.navitem {
