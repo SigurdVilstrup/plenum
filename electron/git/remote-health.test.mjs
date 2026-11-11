@@ -24,18 +24,34 @@ test('parseGithubRemote covers https and ssh', () => {
   assert.equal(parseGithubRemote('https://gitlab.com/x/y.git'), null);
 });
 
-test('probeOrigin reports missing GitHub repo', async () => {
+test('probeOrigin ok when git can ls-remote (private HTTP 404 is fine)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-remote-'));
+  sh(['init'], dir);
+  sh(['remote', 'add', 'origin', 'https://github.com/SigurdVilstrup/plenum.git'], dir);
+  const fetchImpl = async () => ({ status: 404, headers: { get: () => null } });
+  const info = await probeOrigin(dir, {
+    fetchImpl,
+    lsRemote: async () => 'deadbeef\trefs/heads/main\n',
+  });
+  assert.equal(info.status, 'ok');
+  assert.equal(info.display, 'github.com/SigurdVilstrup/plenum');
+});
+
+test('probeOrigin reports stale when git cannot find the repo', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-remote-'));
   sh(['init'], dir);
   sh(['remote', 'add', 'origin', 'https://github.com/SigurdVilstrup/overlook.git'], dir);
   const fetchImpl = async () => ({ status: 404, headers: { get: () => null } });
-  const info = await probeOrigin(dir, { fetchImpl });
+  const info = await probeOrigin(dir, {
+    fetchImpl,
+    lsRemote: async () => { throw new Error('ERROR: Repository not found.'); },
+  });
   assert.equal(info.status, 'missing');
-  assert.match(info.detail, /overlook/);
+  assert.match(info.detail, /stale|overlook/i);
   assert.equal(info.display, 'github.com/SigurdVilstrup/overlook');
 });
 
-test('probeOrigin reports renamed GitHub repo', async () => {
+test('probeOrigin reports renamed GitHub repo after git miss', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-remote-'));
   sh(['init'], dir);
   sh(['remote', 'add', 'origin', 'https://github.com/Acme/old.git'], dir);
@@ -43,14 +59,31 @@ test('probeOrigin reports renamed GitHub repo', async () => {
     status: 301,
     headers: { get: () => 'https://github.com/Acme/new' },
   });
-  const info = await probeOrigin(dir, { fetchImpl });
+  const info = await probeOrigin(dir, {
+    fetchImpl,
+    lsRemote: async () => { throw new Error('Repository not found.'); },
+  });
   assert.equal(info.status, 'renamed');
   assert.match(info.detail, /Acme\/new/);
+});
+
+test('probeOrigin unknown on auth/network noise', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-remote-'));
+  sh(['init'], dir);
+  sh(['remote', 'add', 'origin', 'https://github.com/SigurdVilstrup/plenum.git'], dir);
+  const info = await probeOrigin(dir, {
+    fetchImpl: async () => ({ status: 404, headers: { get: () => null } }),
+    lsRemote: async () => { throw new Error('ssh: connect to host github.com port 22: Operation timed out'); },
+  });
+  assert.equal(info.status, 'unknown');
 });
 
 test('probeOrigin none when no origin', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-remote-'));
   sh(['init'], dir);
-  const info = await probeOrigin(dir, { fetchImpl: async () => ({ status: 200, headers: { get: () => null } }) });
+  const info = await probeOrigin(dir, {
+    fetchImpl: async () => ({ status: 200, headers: { get: () => null } }),
+    lsRemote: async () => { throw new Error('should not run'); },
+  });
   assert.equal(info.status, 'none');
 });

@@ -1133,7 +1133,7 @@ function paintPanel() {
       ? 'No origin remote set'
       : origin.status === 'renamed'
         ? `Origin moved — ${esc(origin.display)}${origin.effectiveDisplay ? ` → ${esc(origin.effectiveDisplay)}` : ''}`
-        : `Can’t find this on GitHub — ${esc(origin.display || 'unknown')}`;
+        : `Origin URL is stale — ${esc(origin.display || 'unknown')}`;
     html += `<div class="section">
       <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
     </div>`;
