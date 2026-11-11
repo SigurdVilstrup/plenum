@@ -21,6 +21,7 @@ const ALLOWED = new Set([
   'app.version', 'app.update.state', 'app.update.check', 'app.update.download',
   'app.update.install', 'app.update.act',
   'os.editors', 'os.diffMergeTools',
+  'agents.get', 'agents.setSettings', 'agents.preview', 'agents.add', 'agents.remove', 'agents.linkOnPath',
 ]);
 
 contextBridge.exposeInMainWorld('plenum', {
