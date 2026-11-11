@@ -69,19 +69,21 @@ CI FTPs those files on each `v*` tag (see `docs/updates-feed.md`). Secrets: `FTP
 - `bin/plenum.mjs` — CLI + `plenum mcp` (stdio)
 - `planning/` — product, design, mocks
 
-## MCP (Cursor)
+## Agents
 
-Point Cursor at the local stdio server (`repo.doctor`, `lane.create|up|down|test|status|remove`):
+Settings → Agents → Add wires Cursor, Claude Code or Codex to Plenum (`repo.doctor`, `lane.create|up|down|test|status|remove`). Restart the tool afterwards. Plenum writes `~/.plenum/bin/plenum` on launch; it runs the bundled CLI, so no Node or `PATH` setup.
+
+Any other MCP client, by hand (use the absolute path):
 
 ```json
 {
   "mcpServers": {
     "plenum": {
-      "command": "node",
-      "args": ["/absolute/path/to/plenum/bin/plenum.mjs", "mcp"]
+      "command": "/Users/you/.plenum/bin/plenum",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-Or if `plenum` is on your `PATH`: `"command": "plenum", "args": ["mcp"]`.
+Defaults: agents can start/stop/test and create lanes; remove is Allow, writing `.plenum/lane.yaml` is Never. Change them under What agents may do (`~/.plenum/agents.json`); they bind MCP calls, not the `plenum` CLI. Agents never get `force`, and only write a manifest in a repo that has none.

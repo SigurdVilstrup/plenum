@@ -35,6 +35,8 @@ Walk (board):
 7. Shared-data drift (pending migrations) opens a sheet and blocks Run until you force or clear it. Snapshot services seed before Run when `mode: snapshot` + a `snapshot:` command.
 8. Safe lane → Remove.
 
+Agents: set up in Settings → Agents (Add per client). Defaults: start/stop/test and create on, remove Allow, write lane setup Never; MCP only, the CLI is not restricted.
+
 Same verbs on CLI / MCP (`plenum` or `plenum mcp`):
 
 ```bash
