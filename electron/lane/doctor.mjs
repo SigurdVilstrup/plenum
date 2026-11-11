@@ -89,7 +89,7 @@ export async function doctor(repoPath) {
  * @param {string} repoPath
  * @param {string} yaml
  */
-export async function acceptManifest(repoPath, yaml) {
+export async function acceptManifest(repoPath, yaml, opts = {}) {
   if (typeof yaml !== 'string' || !yaml.trim()) {
     throw new Error('yaml must be a non-empty string');
   }
@@ -116,6 +116,25 @@ export async function acceptManifest(repoPath, yaml) {
   await fs.unlink(tmp).catch(() => {});
 
   // ponytail: fixed single-file write; multi-file accept if doctor ever proposes more
+  if (opts.createOnly) {
+    for (const p of [dir, dest]) {
+      const st = await fs.lstat(p).catch(() => null);
+      if (st && st.isSymbolicLink()) throw new Error('Refused: .plenum/lane.yaml must not be a symlink.');
+    }
+    await fs.mkdir(dir, { recursive: true });
+    if ((await fs.realpath(dir)) !== path.join(await fs.realpath(root), '.plenum')) {
+      throw new Error('path escape rejected');
+    }
+    try {
+      await fs.writeFile(dest, text, { encoding: 'utf8', flag: 'wx' });
+    } catch (err) {
+      if (err && err.code === 'EEXIST') {
+        throw new Error('Refused: this repo already has lane setup. Agents can create it but not replace it; the user edits .plenum/lane.yaml themselves.');
+      }
+      throw err;
+    }
+    return dest;
+  }
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(dest, text, 'utf8');
   return dest;

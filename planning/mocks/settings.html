@@ -207,87 +207,100 @@
         </section>
 
         <section class="settings-body" data-page="agents" hidden>
+          <style>
+            [data-page="agents"] .row-actions { display: inline-flex; align-items: center; gap: 8px; }
+            [data-page="agents"] .agents-note { padding: 0 14px 12px 48px; font-size: 12px; color: var(--ink-subtle); }
+            [data-page="agents"] .agents-note + .list-row { border-top: 1px solid var(--hairline); }
+            [data-page="agents"] .agents-note pre { margin: 6px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--radius-sm); background: var(--canvas); font-family: var(--mono); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+          </style>
           <h1>Agents</h1>
-          <p class="lede">One local MCP server and one CLI expose the same lanes to any agent, IDE or script. Plenum never runs an agent; agents call Plenum.</p>
+          <p class="lede">Let Cursor, Claude Code and Codex create, start and test lanes through Plenum.</p>
 
-          <div class="group-head">Local MCP server</div>
+          <div class="group-head">Command</div>
           <div class="list">
-            <div class="list-row">
-              <svg class="icon" aria-hidden="true"><use href="#i-broadcast"></use></svg>
-              <div class="name">Endpoint<small>Loopback only</small></div>
-              <div class="detail"><span class="mono">http://127.0.0.1:7340/mcp</span> · also <span class="mono">plenum mcp</span> over stdio</div>
-              <span class="status on"><i></i>Running</span>
-              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Local MCP server"></button>
-            </div>
-            <div class="list-row">
+            <div class="list-row" title="Agents don't need this. It's for using plenum in your own shell.">
               <svg class="icon" aria-hidden="true"><use href="#i-terminal-window"></use></svg>
-              <div class="name">CLI<small>Same verbs, same binary</small></div>
-              <div class="detail"><span class="mono">plenum</span> on PATH · <span class="mono">doctor, create, up, down, test, status, remove, mcp</span></div>
-              <span class="status on"><i></i>0.1.0</span>
+              <div class="name">plenum<small>0.1.0</small></div>
+              <div class="detail"><span class="mono">~/.plenum/bin/plenum</span></div>
+              <span class="status on"><i></i>On your PATH</span>
               <span></span>
             </div>
           </div>
 
-          <div class="group-head">Connected clients<small>Detected from each tool's MCP config. Add writes the two lines; nothing else changes.</small></div>
+          <div class="group-head">Clients<small>What each tool needs to reach Plenum.</small></div>
           <div class="list">
             <div class="list-row">
               <svg class="icon" aria-hidden="true"><use href="#i-plugs-connected"></use></svg>
-              <div class="name">Cursor<small class="mono">~/.cursor/mcp.json</small></div>
-              <div class="detail">Last call <span class="mono">lane.up feat/export-csv</span>, 4m ago</div>
-              <span class="status on"><i></i>Connected</span>
-              <button class="btn" type="button">Remove</button>
+              <div class="name">Cursor</div>
+              <div class="detail"><span class="mono">~/.cursor/mcp.json</span></div>
+              <span class="row-actions"><span class="status on"><i></i>Set up</span><button class="btn" type="button">Remove</button></span>
+              <span></span>
             </div>
             <div class="list-row">
               <svg class="icon" aria-hidden="true"><use href="#i-plugs-connected"></use></svg>
-              <div class="name">Claude Code<small class="mono">~/.claude.json</small></div>
-              <div class="detail">Last call <span class="mono">repo.doctor</span>, yesterday</div>
-              <span class="status on"><i></i>Connected</span>
-              <button class="btn" type="button">Remove</button>
+              <div class="name">Claude Code</div>
+              <div class="detail"><span class="mono">~/.claude.json</span></div>
+              <span class="row-actions"><span class="status on"><i></i>Set up</span><button class="btn" type="button">Remove</button></span>
+              <span></span>
             </div>
             <div class="list-row">
               <svg class="icon" aria-hidden="true"><use href="#i-plugs-connected"></use></svg>
-              <div class="name">Codex<small class="mono">~/.codex/config.toml</small></div>
-              <div class="detail">Not configured</div>
-              <span class="status"><i></i>Off</span>
-              <button class="btn" type="button">Add</button>
+              <div class="name">Codex</div>
+              <div class="detail">Doesn't know about Plenum yet.</div>
+              <span class="row-actions"><span class="status warn"><i></i>Missing</span><button class="btn" type="button">Show lines</button><button class="btn primary" type="button">Add</button></span>
+              <span></span>
+            </div>
+            <div class="agents-note">Adds to <span class="mono">~/.codex/config.toml</span>:<pre>[mcp_servers.plenum]
+command = "/Users/you/.plenum/bin/plenum"
+args = ["mcp"]</pre></div>
+          </div>
+
+          <div class="group-head">Repositories<small>Agents can only start lanes where the repo has lane setup.</small></div>
+          <div class="list">
+            <div class="list-row">
+              <svg class="icon" aria-hidden="true"><use href="#i-folder-simple"></use></svg>
+              <div class="name">plenum</div>
+              <div class="detail"></div>
+              <span class="status on"><i></i>Ready for agents</span>
+              <span></span>
             </div>
             <div class="list-row">
-              <svg class="icon" aria-hidden="true"><use href="#i-terminal-window"></use></svg>
-              <div class="name">Anything else<small>Scripts, CI, other IDEs</small></div>
-              <div class="detail">Point it at the endpoint above, or call the CLI. Output is JSON with <span class="mono">--json</span>.</div>
-              <span class="status on"><i></i>Always on</span>
+              <svg class="icon" aria-hidden="true"><use href="#i-folder-simple"></use></svg>
+              <div class="name">billing-api</div>
+              <div class="detail">No lane setup yet. Agents can create lanes but not start them.</div>
+              <button class="btn" type="button">Lane setup…</button>
               <span></span>
             </div>
           </div>
 
-          <div class="group-head">What agents may do<small>Reads are always allowed. Agents get lane verbs. Commit, push and merge stay with whoever is in the lane.</small></div>
+          <div class="group-head">What agents may do<small>Applies to Plenum's agent tools, not the <span class="mono">plenum</span> command in a shell. Commit, push and merge stay with whoever is in the lane.</small></div>
           <div class="list">
-            <div class="list-row">
+            <div class="list-row" title="Lets agents run the repo's start, stop and test commands on lane ports. Starting past the migration check stays with you.">
               <svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg>
-              <div class="name">Start and stop lanes<small class="mono">lane.up, lane.down, lane.test</small></div>
-              <div class="detail">Runs the repo's own commands with the lane's ports and env</div>
+              <div class="name">Start, stop and test lanes<small class="mono">lane.up, lane.down, lane.test</small></div>
+              <div class="detail"></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Start, stop and test lanes"></button>
               <span></span>
-              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Agents may start and stop lanes"></button>
             </div>
-            <div class="list-row">
+            <div class="list-row" title="Lets agents create worktrees from the team branch.">
               <svg class="icon" aria-hidden="true"><use href="#i-tree-structure"></use></svg>
               <div class="name">Create lanes<small class="mono">lane.create</small></div>
-              <div class="detail">From latest team branch, in the lanes folder</div>
+              <div class="detail"></div>
+              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Create lanes"></button>
               <span></span>
-              <button class="switch on" type="button" role="switch" aria-checked="true" aria-label="Agents may create lanes"></button>
             </div>
-            <div class="list-row">
+            <div class="list-row" title="Agents can remove lanes that are safe to remove. Unsafe ones stay with you on the board.">
               <svg class="icon" aria-hidden="true"><use href="#i-warning-circle"></use></svg>
               <div class="name">Remove lanes<small class="mono">lane.remove</small></div>
-              <div class="detail">Same guard as the app: refused when work would be lost</div>
-              <select class="select" aria-label="Remove lanes"><option>Ask me</option><option>Allow</option><option>Never</option></select>
+              <div class="detail"></div>
+              <select class="select" aria-label="Remove lanes"><option selected>Allow</option><option>Never</option></select>
               <span></span>
             </div>
-            <div class="list-row">
+            <div class="list-row" title="Lets an agent create .plenum/lane.yaml in a repo that has none. It never replaces one.">
               <svg class="icon" aria-hidden="true"><use href="#i-files"></use></svg>
-              <div class="name">Write lane setup<small class="mono">repo.doctor --write</small></div>
-              <div class="detail">The doctor may propose; writing <span class="mono">.plenum/lane.yaml</span> is a decision</div>
-              <select class="select" aria-label="Write lane setup"><option>Ask me</option><option>Allow</option><option>Never</option></select>
+              <div class="name">Write lane setup<small class="mono">repo.doctor</small></div>
+              <div class="detail"></div>
+              <select class="select" aria-label="Write lane setup"><option>Allow</option><option selected>Never</option></select>
               <span></span>
             </div>
           </div>

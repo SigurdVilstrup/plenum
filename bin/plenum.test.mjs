@@ -129,3 +129,40 @@ test('registry file roundtrip: up writes, getProc reads, down clears', async () 
     fs.rmSync(wt, { recursive: true, force: true });
   }
 });
+
+/** The launcher sets ELECTRON_RUN_AS_NODE; lane commands must not inherit it. */
+test('plenum test does not pass ELECTRON_RUN_AS_NODE to the lane command', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-cli-env-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-cli-env-home-'));
+  const wt = path.join(os.tmpdir(), `ovl-cli-env-wt-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  try {
+    sh(['init', '-b', 'main', root]);
+    sh(['config', 'user.email', 't@e.com'], root);
+    sh(['config', 'user.name', 'T'], root);
+    sh(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'x\n');
+    sh(['add', 'README'], root);
+    sh(['commit', '-m', 'init'], root);
+    sh(['worktree', 'add', '-b', 'feat/one', wt], root);
+    fs.mkdirSync(path.join(root, '.plenum'));
+    fs.writeFileSync(
+      path.join(root, '.plenum', 'lane.yaml'),
+      'version: 1\nrun: node -e "setInterval(()=>{}, 1000)"\ntest: node -e "process.exit(process.env.ELECTRON_RUN_AS_NODE ? 1 : 0)"\nports:\n  offset: 100\n  expose:\n    web: 5001\n',
+    );
+
+    const result = spawnSync(process.execPath, [CLI, 'test', '1', '--json', root], {
+      encoding: 'utf8',
+      timeout: 10000,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HOME: home, PLENUM_HOME: home },
+    });
+    assert.equal(result.error, undefined, result.stderr || String(result.error));
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true, JSON.stringify(out));
+    assert.equal(out.code, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});

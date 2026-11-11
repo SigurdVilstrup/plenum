@@ -3028,10 +3028,32 @@ a.btn {
   min-width: 0;
 }
 
-.agents-stub .list {
+.list-row.off {
   opacity: 0.6;
 }
 
-.agents-stub :disabled {
-  cursor: not-allowed;
+/* Under-row note on the Agents page: PATH command, preview lines, restart hint */
+.agents-note {
+  padding: 0 14px 12px 48px;
+  font-size: 12px;
+  color: var(--ink-subtle);
+}
+
+.agents-note + .list-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.agents-note pre {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
 }

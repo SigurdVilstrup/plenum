@@ -5,10 +5,14 @@
  */
 import readline from 'node:readline';
 import path from 'node:path';
-import { doctor } from '../lane/doctor.mjs';
+import fs from 'node:fs';
+import { manifestPath } from '../paths.mjs';
+import { doctor, acceptManifest } from '../lane/doctor.mjs';
 import { up, down, test as runTest } from '../lane/supervisor.mjs';
 import { loadBoard } from '../git/board.mjs';
 import { createLane, removeLane } from '../git/ops.mjs';
+import { getAgentSettings } from '../agents/settings.mjs';
+import { refusal } from '../agents/gate.mjs';
 
 const PROTOCOL = '2024-11-05';
 const SERVER_INFO = { name: 'plenum', version: '0.1.0' };
@@ -16,10 +20,13 @@ const SERVER_INFO = { name: 'plenum', version: '0.1.0' };
 const TOOLS = [
   {
     name: 'repo.doctor',
-    description: 'Read the repo and propose a lane manifest. Writes nothing.',
+    description: 'Read the repo and propose a lane manifest. Writes nothing unless write is true, and then only when the repo has no lane.yaml yet.',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string', description: 'Repo root (default: cwd)' } },
+      properties: {
+        path: { type: 'string', description: 'Repo root (default: cwd)' },
+        write: { type: 'boolean', description: 'Write the proposed lane.yaml (only if none exists and the user allows it)' },
+      },
     },
   },
   {
@@ -43,7 +50,7 @@ const TOOLS = [
       properties: {
         lane: { type: ['integer', 'string'], description: 'Lane index' },
         path: { type: 'string', description: 'Repo root (default: cwd)' },
-        force: { type: 'boolean', description: 'Skip drift gate (start anyway)' },
+        force: { type: 'boolean', description: 'Not available to agents: a forced start is always refused. Ask the user to start the lane from the Plenum board.' },
       },
       required: ['lane'],
     },
@@ -82,13 +89,13 @@ const TOOLS = [
   },
   {
     name: 'lane.remove',
-    description: 'Remove a lane worktree. Refuses when not safe unless force is true.',
+    description: 'Remove a lane worktree. Refuses when the lane is not safe to remove.',
     inputSchema: {
       type: 'object',
       properties: {
         lane: { type: ['integer', 'string'], description: 'Lane index' },
         path: { type: 'string', description: 'Repo root (default: cwd)' },
-        force: { type: 'boolean', description: 'Remove even when dirty or unmerged (discards uncommitted work in the worktree)' },
+        force: { type: 'boolean', description: 'Not available to agents: a forced remove is always refused. Ask the user to remove an unsafe lane from the Plenum board.' },
       },
       required: ['lane'],
     },
@@ -125,9 +132,22 @@ function errorResult(err) {
 
 /** @param {string} name @param {Record<string, unknown>} [args] */
 export async function callTool(name, args = {}) {
+  const refused = refusal(name, args, getAgentSettings());
+  if (refused) throw new Error(refused);
   switch (name) {
-    case 'repo.doctor':
-      return textResult(await doctor(repoPath(args.path)));
+    case 'repo.doctor': {
+      const root = repoPath(args.path);
+      const result = await doctor(root);
+      if (!args.write) return textResult(result);
+      if (fs.existsSync(manifestPath(root))) {
+        throw new Error('Refused: this repo already has lane setup. Agents can create it but not replace it; the user edits .plenum/lane.yaml themselves.');
+      }
+      if (!result.canAccept) {
+        throw new Error(`Can't write lane setup yet:\n${result.findings.join('\n')}`);
+      }
+      await acceptManifest(root, result.proposedYaml, { createOnly: true });
+      return textResult({ ...result, written: manifestPath(root) });
+    }
     case 'lane.create': {
       if (!args.name) throw new Error('name required');
       return textResult(await createLane(repoPath(args.path), {

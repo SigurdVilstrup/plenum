@@ -26,6 +26,9 @@ import {
 import { readBuildInfo } from './build-info.mjs';
 import { env as brandEnv } from './paths.mjs';
 import { createUpdater } from './updates.mjs';
+import { ensureLauncher, launcherPath, pathStatus, linkOnPath } from './agents/launcher.mjs';
+import { agentsHome, getAgentSettings, setAgentSettings } from './agents/settings.mjs';
+import { listClients, previewAdd, addClient, removeClient } from './agents/clients.mjs';
 
 loadRepoEnv();
 
@@ -112,6 +115,12 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  try {
+    // rootDir is app.asar when packaged, the repo when not; Electron-as-node runs the CLI from either.
+    ensureLauncher({ packaged: app.isPackaged, execPath: process.execPath, cliPath: path.join(rootDir, 'bin', 'plenum.mjs'), home: agentsHome() });
+  } catch (err) {
+    console.error('plenum launcher not written:', err);
+  }
   protocol.handle('plenum-img', (request) => {
     try {
       const abs = new URL(request.url).searchParams.get('p');
@@ -246,6 +255,12 @@ ipcMain.handle('app.update.check', () => updates?.check('manual') || null);
 ipcMain.handle('app.update.download', () => updates?.download() || null);
 ipcMain.handle('app.update.install', () => updates?.install() || null);
 ipcMain.handle('app.update.act', () => updates?.act() || null);
+ipcMain.handle('agents.get', () => ({ settings: getAgentSettings(), launcher: { path: launcherPath(), ...pathStatus() }, clients: listClients() }));
+ipcMain.handle('agents.setSettings', (_e, partial) => setAgentSettings(partial));
+ipcMain.handle('agents.preview', (_e, id) => previewAdd(id));
+ipcMain.handle('agents.add', (_e, id) => addClient(id));
+ipcMain.handle('agents.remove', (_e, id) => removeClient(id));
+ipcMain.handle('agents.linkOnPath', () => linkOnPath());
 ipcMain.handle('os.editors', () => listEditors());
 ipcMain.handle('os.diffMergeTools', () => listDiffMergeTools());
 

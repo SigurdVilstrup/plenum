@@ -177,3 +177,75 @@ test('dumpManifest quotes env.copy paths that need it', async () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+const OK_YAML = 'version: 1\nrun: echo hi\n';
+const EXISTS_MSG = /already has lane setup/;
+const SYMLINK_MSG = /must not be a symlink/;
+
+function bareRoot() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-create-only-'));
+}
+
+test('acceptManifest createOnly writes when no lane.yaml exists', async () => {
+  const root = bareRoot();
+  try {
+    const dest = await acceptManifest(root, OK_YAML, { createOnly: true });
+    assert.equal(fs.readFileSync(dest, 'utf8'), OK_YAML);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('acceptManifest createOnly refuses to replace an existing lane.yaml', async () => {
+  const root = bareRoot();
+  try {
+    fs.mkdirSync(path.join(root, '.plenum'));
+    const dest = path.join(root, '.plenum', 'lane.yaml');
+    fs.writeFileSync(dest, 'version: 1\nrun: original\n');
+    await assert.rejects(() => acceptManifest(root, OK_YAML, { createOnly: true }), EXISTS_MSG);
+    assert.equal(fs.readFileSync(dest, 'utf8'), 'version: 1\nrun: original\n');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('acceptManifest createOnly refuses a symlinked .plenum', async () => {
+  const root = bareRoot();
+  const outside = bareRoot();
+  try {
+    fs.symlinkSync(outside, path.join(root, '.plenum'));
+    await assert.rejects(() => acceptManifest(root, OK_YAML, { createOnly: true }), SYMLINK_MSG);
+    assert.deepEqual(fs.readdirSync(outside), []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('acceptManifest createOnly refuses a dangling lane.yaml symlink', async () => {
+  const root = bareRoot();
+  const outside = bareRoot();
+  try {
+    const target = path.join(outside, 'target.yaml');
+    fs.mkdirSync(path.join(root, '.plenum'));
+    fs.symlinkSync(target, path.join(root, '.plenum', 'lane.yaml'));
+    await assert.rejects(() => acceptManifest(root, OK_YAML, { createOnly: true }), SYMLINK_MSG);
+    assert.ok(!fs.existsSync(target));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('acceptManifest without createOnly still replaces an existing lane.yaml', async () => {
+  const root = bareRoot();
+  try {
+    fs.mkdirSync(path.join(root, '.plenum'));
+    const dest = path.join(root, '.plenum', 'lane.yaml');
+    fs.writeFileSync(dest, 'version: 1\nrun: original\n');
+    await acceptManifest(root, OK_YAML);
+    assert.equal(fs.readFileSync(dest, 'utf8'), OK_YAML);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
