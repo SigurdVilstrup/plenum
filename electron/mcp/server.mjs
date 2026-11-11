@@ -9,6 +9,8 @@ import { doctor } from '../lane/doctor.mjs';
 import { up, down, test as runTest } from '../lane/supervisor.mjs';
 import { loadBoard } from '../git/board.mjs';
 import { createLane, removeLane } from '../git/ops.mjs';
+import { getAgentSettings } from '../agents/settings.mjs';
+import { refusal } from '../agents/gate.mjs';
 
 const PROTOCOL = '2024-11-05';
 const SERVER_INFO = { name: 'plenum', version: '0.1.0' };
@@ -125,6 +127,8 @@ function errorResult(err) {
 
 /** @param {string} name @param {Record<string, unknown>} [args] */
 export async function callTool(name, args = {}) {
+  const refused = refusal(name, args, getAgentSettings());
+  if (refused) throw new Error(refused);
   switch (name) {
     case 'repo.doctor':
       return textResult(await doctor(repoPath(args.path)));

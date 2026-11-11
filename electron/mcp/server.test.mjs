@@ -5,6 +5,52 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { toolNames, handleMessage, callTool } from './server.mjs';
+import { setAgentSettings, defaultAgentSettings } from '../agents/settings.mjs';
+
+// Never read the real ~/.plenum/agents.json: whole file runs against a temp home.
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-home-'));
+process.env.PLENUM_HOME = HOME;
+const resetSettings = () => setAgentSettings(defaultAgentSettings(), HOME);
+
+const callMsg = (name, args) =>
+  handleMessage({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } });
+
+test('tools/call returns isError with the refusal when a setting is off', async () => {
+  try {
+    setAgentSettings({ create: false }, HOME);
+    const res = await callMsg('lane.create', { name: 'x', path: '/nonexistent' });
+    assert.equal(res.result.isError, true);
+    assert.match(res.result.content[0].text, /^Refused: creating lanes is turned off for agents\./);
+  } finally {
+    resetSettings();
+  }
+});
+
+test('a flipped setting applies to the next call without a restart', async () => {
+  try {
+    setAgentSettings({ create: false }, HOME);
+    const off = await callMsg('lane.create', { name: 'x', path: '/nonexistent' });
+    assert.match(off.result.content[0].text, /^Refused:/);
+
+    setAgentSettings({ create: true }, HOME);
+    const on = await callMsg('lane.create', { name: 'x', path: '/nonexistent' });
+    assert.equal(on.result.isError, true);
+    assert.doesNotMatch(on.result.content[0].text, /^Refused:/);
+  } finally {
+    resetSettings();
+  }
+});
+
+test('switched-off tools stay in tools/list', async () => {
+  try {
+    setAgentSettings({ run: false, create: false, remove: 'never' }, HOME);
+    const res = await handleMessage({ jsonrpc: '2.0', id: 10, method: 'tools/list' });
+    assert.equal(res.result.tools.length, 7);
+    assert.deepEqual(res.result.tools.map((t) => t.name), toolNames());
+  } finally {
+    resetSettings();
+  }
+});
 
 test('tools/list returns the 7 PRODUCT tool names', async () => {
   const names = toolNames();
