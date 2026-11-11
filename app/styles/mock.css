@@ -1357,20 +1357,6 @@ a.iconbtn,
   opacity: 0.4;
   pointer-events: none;
 }
-.lane-run .iconbtn.busy {
-  opacity: 0.9;
-  pointer-events: none;
-}
-.lane-run .iconbtn .btn-spin {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border-width: 1.5px;
-  border-color: color-mix(in srgb, currentColor 35%, transparent);
-  border-top-color: currentColor;
-  display: block;
-  flex: 0 0 auto;
-}
 .lane-run .lane-fact {
   display: inline-flex;
   align-items: center;
@@ -1960,8 +1946,8 @@ a.navitem.back {
   border-color: var(--hairline-strong);
 }
 
-.btn:disabled,
-.btn[disabled] {
+.btn:disabled:not(.busy),
+.btn[disabled]:not(.busy) {
   opacity: 0.45;
   color: var(--ink-tertiary);
   pointer-events: none;

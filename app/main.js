@@ -638,8 +638,8 @@ function endOp(tabId, act) {
   paintOpBusy();
 }
 
-/** Lane run controls show busy on the icon button itself — no floating bar. */
-const INLINE_BUSY_ACTS = new Set(['up', 'down', 'test']);
+/** These acts show busy on the action button itself — no floating graph bar. */
+const INLINE_BUSY_ACTS = new Set(['up', 'down', 'test', 'stash', 'stashPop', 'commit', 'pull', 'push']);
 
 function paintOpBusy() {
   const host = el.graph || el.main || document.body;
@@ -786,6 +786,8 @@ function paint() {
   bindWipCommitFields();
   attachOlderSentinel(el.graph.querySelector('.rows'));
   if (state.changes) paintChanges();
+  const op = state.opsByTab.get(state.store.activeId);
+  if (op?.act) setActionBusy(op.act, true);
 }
 
 let olderObserver = null;
@@ -1602,19 +1604,20 @@ function gitActionsHTML(l) {
   if (state.conflictRoot) {
     a.push(`<button class="btn" type="button" data-act="conflicts" title="Pick up the conflict walk">${iconHTML('warning-circle', 'sm')}Resolve conflicts</button>`);
   }
+  // Keep data-act even when muted so busy overlays can reattach after paint.
   a.push(l.dirty
     ? `<button class="btn" type="button" data-act="commit" title="Commit on ${esc(l.name)}">${iconHTML('git-commit', 'sm')}Commit</button>`
-    : `<button class="btn" type="button" disabled title="Working tree clean">${iconHTML('git-commit', 'sm')}Commit</button>`);
+    : `<button class="btn" type="button" data-act="commit" disabled title="Working tree clean">${iconHTML('git-commit', 'sm')}Commit</button>`);
   a.push(l.dirty
     ? `<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`
-    : `<button class="btn" type="button" disabled title="Nothing to stash">${iconHTML('stack', 'sm')}Stash</button>`);
+    : `<button class="btn" type="button" data-act="stash" disabled title="Nothing to stash">${iconHTML('stack', 'sm')}Stash</button>`);
   a.push(stashes
     ? `<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop${stashes > 1 ? ` · ${stashes}` : ''}</button>`
-    : `<button class="btn" type="button" disabled title="No stash">${iconHTML('stack', 'sm')}Pop</button>`);
+    : `<button class="btn" type="button" data-act="stashPop" disabled title="No stash">${iconHTML('stack', 'sm')}Pop</button>`);
   a.push(`<button class="btn" type="button" data-act="pull" title="Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
   a.push(l.unpushed
     ? `<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`
-    : `<button class="btn" type="button" disabled title="Nothing to push">${iconHTML('arrow-up', 'sm')}Push</button>`);
+    : `<button class="btn" type="button" data-act="push" disabled title="Nothing to push">${iconHTML('arrow-up', 'sm')}Push</button>`);
   if (!l.isPrimary && l.readiness !== 'safe') {
     if (l.behind) {
       a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase onto a tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
@@ -1838,27 +1841,14 @@ async function handleAction(act, lane, url) {
 function setActionBusy(act, on) {
   document.querySelectorAll(`[data-act="${act}"]`).forEach((btn) => {
     btn.classList.toggle('busy', on);
-    btn.disabled = on;
-    const iconOnly = btn.classList.contains('iconbtn');
-    if (iconOnly) {
-      // Same box, same size: swap the glyph for a spinner (no extra node beside it).
-      if (on) {
-        if (btn.dataset.busyHtml == null) btn.dataset.busyHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="spinner btn-spin" aria-hidden="true"></i>';
-      } else if (btn.dataset.busyHtml != null) {
-        btn.innerHTML = btn.dataset.busyHtml;
-        delete btn.dataset.busyHtml;
-      }
-      return;
-    }
-    const spin = btn.querySelector(':scope > .btn-spin');
-    if (on && !spin) {
-      const i = document.createElement('i');
-      i.className = 'spinner btn-spin';
-      i.setAttribute('aria-hidden', 'true');
-      btn.prepend(i);
-    } else if (!on && spin) {
-      spin.remove();
+    // CSS ::after draws the spinner — never inject a node (that was widening flex buttons).
+    btn.querySelectorAll(':scope > .btn-spin').forEach((n) => n.remove());
+    if (on) {
+      if (btn.dataset.busyDisable == null) btn.dataset.busyDisable = btn.disabled ? '1' : '0';
+      btn.disabled = true;
+    } else if (btn.dataset.busyDisable != null) {
+      btn.disabled = btn.dataset.busyDisable === '1';
+      delete btn.dataset.busyDisable;
     }
   });
 }
@@ -2396,20 +2386,35 @@ async function openStashPopSheet(lane) {
           </label>`).join('')}
       </div>
       <div class="group-head">Files in stash</div>
-      <div data-stash-files><p class="lede">Loading…</p></div>
+      <div data-stash-files class="stash-files-pane is-loading" aria-busy="true">
+        <p class="lede"><i class="btn-spin" aria-hidden="true"></i> Loading files…</p>
+      </div>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">${iconHTML('stack', 'sm')}Pop selected</button>
+        <button class="btn primary" type="submit" data-stash-pop-submit>${iconHTML('stack', 'sm')}Pop selected</button>
       </div>
     </form>`);
   const modal = el.sheetLayer.querySelector('.modal');
   const filesEl = modal.querySelector('[data-stash-files]');
+  const submitBtn = modal.querySelector('[data-stash-pop-submit]');
+  const setPopBusy = (on) => {
+    submitBtn.classList.toggle('busy', on);
+    submitBtn.disabled = on;
+    modal.querySelectorAll('input[name=stash], [data-close]').forEach((n) => { n.disabled = on; });
+    submitBtn.querySelectorAll(':scope > .btn-spin').forEach((n) => n.remove());
+  };
   const loadPreview = async (ref) => {
-    filesEl.innerHTML = '<p class="lede">Loading…</p>';
+    filesEl.classList.add('is-loading');
+    filesEl.setAttribute('aria-busy', 'true');
+    filesEl.innerHTML = '<p class="lede"><i class="btn-spin" aria-hidden="true"></i> Loading files…</p>';
     try {
       const data = await invoke('lane.stashShow', ...pin(ref));
+      filesEl.classList.remove('is-loading');
+      filesEl.removeAttribute('aria-busy');
       filesEl.innerHTML = renderFiles(data.files || []);
     } catch (e) {
+      filesEl.classList.remove('is-loading');
+      filesEl.removeAttribute('aria-busy');
       filesEl.innerHTML = `<p class="lede">${esc(e.message || 'Couldn’t load stash')}</p>`;
     }
   };
@@ -2422,13 +2427,20 @@ async function openStashPopSheet(lane) {
   });
   modal.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const tabId = state.store.activeId;
+    if (submitBtn.disabled) return;
+    const tabId = beginOp('stashPop');
+    if (!tabId) return;
     const root = state.board?.root;
+    setPopBusy(true);
     try {
       const board = await invoke('lane.stashPop', ...pin(lane.index, selected));
       closeSheet();
       if (settleBoard(tabId, root, board)) toast(`Popped ${selected} onto ${lane.name}`, 'ok');
     } catch { /* toasted */ }
+    finally {
+      endOp(tabId, 'stashPop');
+      if (modal.isConnected) setPopBusy(false);
+    }
   });
 }
 
