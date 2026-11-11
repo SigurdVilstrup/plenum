@@ -3727,27 +3727,58 @@ const SETTINGS_PAGES = {
       </div>`;
   },
   agents: () => {
-    const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled title="Not wired yet. Preview only."></button>`;
-    const ask = (label) => `<select class="select" aria-label="${label}" disabled title="Not wired yet. Preview only."><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
-    return `<h1>Agents</h1>
-      <p class="lede">Preview only. Agents already hit lanes via <span class="mono">plenum mcp</span> (stdio) and the <span class="mono">plenum</span> CLI. These switches don’t do anything yet.</p>
-      <div class="agents-stub">
-        <div class="group-head">Local MCP</div>
-        <div class="list">
-          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">plenum mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at plenum mcp. No HTTP MCP port yet.')}
-          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appInfo.version || '…')}</span>`, 'Put the plenum binary on your PATH for shells and scripts.')}
-        </div>
-        <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
-        <div class="list">
-          ${['Cursor', 'Claude Code', 'Codex'].map((n) => settingsRow('plugs-connected', n, '', 'Not detected yet', `<span class="status"><i></i>Later</span><button class="btn" type="button" disabled title="Coming later">Add</button>`, `Will read and write this client’s MCP config when Agents ships for real.`)).join('')}
-        </div>
-        <div class="group-head">What agents may do<small>Reads stay open. Commit / push / merge stay with whoever is in the lane.</small></div>
-        <div class="list">
-          ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Let agents run the repo’s start/stop/test commands on lane ports.')}
-          ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Let agents create worktrees from the team branch.')}
-          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Safe removes stay one-click. Unsafe ones ask before force-removing the folder.')}
-          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team call. Leave this on Ask until you trust it.')}
-        </div>
+    const a = state.agents;
+    const head = `<h1>Agents</h1><p class="lede">Let Cursor, Claude Code and Codex create, start and test lanes through Plenum.</p>`;
+    if (!a) return `${head}<p class="lede">Loading…</p>`;
+    const status = (kind, text) => `<span class="status${kind ? ` ${kind}` : ''}"><i></i>${text}</span>`;
+    const btn = (label, attr, primary = false) => `<button class="btn${primary ? ' primary' : ''}" type="button" ${attr}>${label}</button>`;
+    const note = (body) => `<div class="agents-note">${body}</div>`;
+    const { launcher } = a;
+    const cmd = settingsRow('terminal-window', 'plenum', esc(state.appInfo.version || '…'), `<span class="mono">${esc(launcher.shown || launcher.path)}</span>`,
+      launcher.onPath ? status('on', 'On your PATH') : btn('Add to PATH', 'data-agent-link'),
+      "Agents don't need this. It's for using plenum in your own shell.")
+      + (!launcher.onPath && agentsView.linkCmd ? note(`Run this in Terminal:<pre>${esc(agentsView.linkCmd)}</pre>`) : '');
+    const clientRow = (c) => {
+      const id = `data-client="${esc(c.id)}"`;
+      const file = esc(c.shown || c.file);
+      const row = {
+        'not-installed': ['Not installed on this Mac.', ''],
+        missing: ["Doesn't know about Plenum yet.", status('warn', 'Missing') + btn('Show lines', `data-agent-lines ${id}`) + btn('Add', `data-agent-add ${id}`, true)],
+        ok: [`<span class="mono">${file}</span>`, status('on', 'Set up') + btn('Remove', `data-agent-remove ${id}`)],
+        stale: ['Points at an old Plenum.', status('warn', 'Out of date') + btn('Show lines', `data-agent-lines ${id}`) + btn('Fix', `data-agent-add ${id}`, true)],
+        unreadable: [`<span class="mono">${file}</span>: ${esc(c.reason)}`, status('warn', "Can't edit")],
+      }[c.state] || ['', ''];
+      const html = settingsRow('plugs-connected', esc(c.label), '', row[0], row[1] && `<span class="row-actions">${row[1]}</span>`);
+      const lines = agentsView.lines[c.id];
+      return (c.state === 'not-installed' ? html.replace('class="list-row"', 'class="list-row off"') : html)
+        + ((c.state === 'missing' || c.state === 'stale') && lines ? note(`Adds to <span class="mono">${esc(c.shown || lines.file)}</span>:<pre>${esc(lines.lines)}</pre>`) : '')
+        + (c.state === 'ok' && agentsView.restart[c.id] ? note(`Restart ${esc(c.label)} to pick it up.`) : '');
+    };
+    const tabs = state.store.tabs;
+    const repos = !tabs.length
+      ? `<p class="lede">Open a repository to see whether agents can run it.</p>`
+      : `<div class="list">${tabs.map((t) => {
+        const b = state.repoBoards.get(t.path);
+        const root = b?.root || t.path;
+        return settingsRow('folder-simple', esc(t.title), '', b && !b.hasManifest ? 'No lane setup yet. Agents can create lanes but not start them.' : '',
+          !b ? status('', 'Loading…') : b.hasManifest ? status('on', 'Ready for agents') : btn('Lane setup…', `data-setup-root="${esc(root)}"`));
+      }).join('')}</div>`;
+    const s = a.settings;
+    const sw = (key, label) => `<button class="switch${s[key] ? ' on' : ''}" type="button" role="switch" aria-checked="${!!s[key]}" aria-label="${label}" data-agent-set="${key}"></button>`;
+    const sel = (key, label) => `<select class="select" aria-label="${label}" data-agent-set="${key}">${[['allow', 'Allow'], ['never', 'Never']].map(([v, t]) => `<option value="${v}"${s[key] === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    return `${head}
+      <div class="group-head">Command</div>
+      <div class="list">${cmd}</div>
+      <div class="group-head">Clients<small>What each tool needs to reach Plenum.</small></div>
+      <div class="list">${a.clients.map(clientRow).join('')}</div>
+      <div class="group-head">Repositories<small>Agents can only start lanes where the repo has lane setup.</small></div>
+      ${repos}
+      <div class="group-head">What agents may do<small>Applies to agents using Plenum's tools. Commit, push and merge stay with whoever is in the lane.</small></div>
+      <div class="list">
+        ${settingsRow('play', 'Start, stop and test lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('run', 'Start, stop and test lanes'), "Lets agents run the repo's start, stop and test commands on lane ports. Starting past the migration check stays with you.")}
+        ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('create', 'Create lanes'), 'Lets agents create worktrees from the team branch.')}
+        ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', sel('remove', 'Remove lanes'), 'Agents can remove lanes that are safe to remove. Unsafe ones stay with you on the board.')}
+        ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor</span>', '', sel('writeSetup', 'Write lane setup'), 'Lets an agent create .plenum/lane.yaml in a repo that has none. It never replaces one.')}
       </div>`;
   },
 };
@@ -3896,6 +3927,81 @@ function bindRepos(root) {
   }));
 }
 
+/** Agents page view-only bits: preview lines and restart notes per client, and the PATH command. */
+const agentsView = { lines: {}, restart: {}, linkCmd: '' };
+
+function rerenderAgents() {
+  if (!(state.settings.open && state.settings.page === 'agents')) return;
+  const top = el.settingsBody.scrollTop;
+  renderSettings();
+  el.settingsBody.scrollTop = top;
+}
+
+// Configs change outside Plenum, so refetch on every open; the old data stays up meanwhile.
+async function loadAgents() {
+  seedActiveRepoBoard();
+  for (const t of state.store.tabs) {
+    if (state.repoBoards.has(t.path)) continue;
+    api.invoke('board.get', t.path).then((b) => { state.repoBoards.set(t.path, b); rerenderAgents(); }, () => {});
+  }
+  try {
+    const a = await invoke('agents.get');
+    a.launcher.shown = await prettyPath(a.launcher.path);
+    for (const c of a.clients) c.shown = await prettyPath(c.file);
+    state.agents = a;
+  } catch { /* toasted; keep what was there */ }
+  rerenderAgents();
+}
+
+function bindAgents(root) {
+  root.querySelector('[data-agent-link]')?.addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      const res = await invoke('agents.linkOnPath');
+      if (res.ok) {
+        agentsView.linkCmd = '';
+        state.agents.launcher.onPath = true;
+        toast('Added plenum to your PATH', 'ok');
+      } else agentsView.linkCmd = res.command;
+    } catch { /* toasted */ }
+    rerenderAgents();
+  });
+  root.querySelectorAll('[data-agent-lines]').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.dataset.client;
+    if (agentsView.lines[id]) delete agentsView.lines[id];
+    else try { agentsView.lines[id] = await invoke('agents.preview', id); } catch { return; }
+    rerenderAgents();
+  }));
+  const change = (channel) => async (e) => {
+    const id = e.currentTarget.dataset.client;
+    const was = state.agents.clients.find((x) => x.id === id)?.state;
+    e.currentTarget.closest('.list-row').querySelectorAll('button').forEach((x) => { x.disabled = true; });
+    try {
+      const c = await invoke(channel, id);
+      c.shown = await prettyPath(c.file);
+      state.agents.clients = state.agents.clients.map((x) => (x.id === id ? c : x));
+      delete agentsView.lines[id];
+      agentsView.restart[id] = channel === 'agents.add';
+      const l = c.label;
+      toast(channel === 'agents.remove' ? `Removed Plenum from ${l}` : was === 'stale' ? `Updated ${l}` : `Added Plenum to ${l}`, 'ok');
+    } catch { /* toasted; re-render puts the row back as it was */ }
+    rerenderAgents();
+  };
+  root.querySelectorAll('[data-agent-add]').forEach((b) => b.addEventListener('click', change('agents.add')));
+  root.querySelectorAll('[data-agent-remove]').forEach((b) => b.addEventListener('click', change('agents.remove')));
+  root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => openLaneSetup(b.dataset.setupRoot)));
+  const save = async (key, v) => {
+    try {
+      state.agents.settings = await invoke('agents.setSettings', { [key]: v });
+      toast('Saved', 'ok');
+    } catch { /* toasted */ }
+    rerenderAgents();
+  };
+  root.querySelectorAll('.switch[data-agent-set]').forEach((n) => n.addEventListener('click', () =>
+    save(n.dataset.agentSet, n.getAttribute('aria-checked') !== 'true')));
+  root.querySelectorAll('select[data-agent-set]').forEach((n) => n.addEventListener('change', () => save(n.dataset.agentSet, n.value)));
+}
+
 async function loadAccounts() {
   try { state.accounts = await invoke('accounts.list'); } catch { return; }
   if (state.settings.open && state.settings.page === 'accounts') renderSettings();
@@ -3967,6 +4073,7 @@ function openSettings(page = state.settings.page) {
   renderSettings();
   if (page === 'accounts') { loadIdentity(); loadAccounts(); }
   if (page === 'repositories') loadRepos();
+  if (page === 'agents') loadAgents();
   if (page === 'setup') loadSetup(state.settings.setupRoot || state.board?.root);
 }
 
@@ -3987,6 +4094,7 @@ function renderSettings() {
   if (page === 'appearance') renderGraph(el.settingsBody.querySelector('.theme-preview'), { commits: PREVIEW_COMMITS, selectedLane: 1, selectedCommit: 'a1b2c3d', currentBranch: 'feat/hover', gravatar: false });
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);
+  if (page === 'agents' && state.agents) bindAgents(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
   bindPrefs(el.settingsBody);
   bindUpdateAct(el.settingsBody);
