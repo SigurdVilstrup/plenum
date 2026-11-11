@@ -17,6 +17,7 @@ import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
 import {
+  DEFAULT_FEEDBACK_URL,
   paintHighlight,
   writeFeedbackReport,
   collectFeedbackEnv,
@@ -339,7 +340,7 @@ ipcMain.handle('feedback.send', async (_e, dir) => {
     throw new Error('bad report path');
   }
   const meta = await sendFeedbackReport(reportDir, {
-    endpoint: brandEnv('FEEDBACK_URL'),
+    endpoint: brandEnv('FEEDBACK_URL', DEFAULT_FEEDBACK_URL),
     anonKey: brandEnv('SUPABASE_ANON_KEY'),
   });
   return {

@@ -13,6 +13,13 @@ const FILL_A = 0.25;
 const BORDER_A = 0.7;
 const BORDER_PX = 2;
 
+/**
+ * Public relay (Supabase Edge Function). Packaged builds ship without `.env`,
+ * so this is the endpoint they use; PLENUM_FEEDBACK_URL overrides it.
+ */
+export const DEFAULT_FEEDBACK_URL =
+  'https://nditdrfcnglhyxlimxwu.supabase.co/functions/v1/submit-feedback';
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAIL = 254;
 

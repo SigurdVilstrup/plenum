@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  DEFAULT_FEEDBACK_URL,
   buildMeta,
   buildUploadPayload,
   collectFeedbackEnv,
@@ -12,6 +13,12 @@ import {
   sendFeedbackReport,
   writeFeedbackReport,
 } from './feedback.mjs';
+
+test('packaged builds have a relay endpoint without .env', () => {
+  const url = new URL(DEFAULT_FEEDBACK_URL);
+  assert.equal(url.protocol, 'https:');
+  assert.equal(url.pathname, '/functions/v1/submit-feedback');
+});
 
 test('buildMeta shapes v2 report', () => {
   const meta = buildMeta({
