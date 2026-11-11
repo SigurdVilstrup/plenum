@@ -166,7 +166,7 @@ const codexFile = (text) => { const s = setup(); const f = s.p('.codex/config.to
 const countHeaders = (t) => (t.match(/^\[mcp_servers\.plenum\]/gm) || []).length;
 
 test('toml: header with trailing comment / spaces / quoted key is a recognised block', () => {
-  for (const h of ['[mcp_servers.plenum] # mine', '[ mcp_servers . plenum ]  ', '[mcp_servers."plenum"]']) {
+  for (const h of ['[mcp_servers.plenum] # mine', '[ mcp_servers . plenum ]  ', '[mcp_servers."plenum"]', '  [mcp_servers.plenum]']) {
     const { opts, f } = codexFile(`[a]\nx = 1\n\n${h}\ncommand = "old"\n\n[b]\ny = 2\n`);
     assert.equal(state(opts, 'codex').state, 'stale', h);
     assert.equal(addClient('codex', opts).state, 'ok', h);
@@ -178,9 +178,16 @@ test('toml: header with trailing comment / spaces / quoted key is a recognised b
   }
 });
 
+test('toml: an indented, correct entry reads ok', () => {
+  const { opts } = codexFile(`  [mcp_servers.plenum]\n  command = "${LAUNCHER}"\n  args = ["mcp"]\n`);
+  assert.equal(state(opts, 'codex').state, 'ok');
+});
+
 test('toml: plenum entry in an uneditable form (inline table / dotted key) → unreadable, nothing written', () => {
   for (const bad of [
     '[mcp_servers]\nplenum = { command = "plenum" }\n',
+    'mcp_servers = { plenum = { command = "plenum" } }\n[tools]\nweb = true\n',
+    '[mcp_servers]\nplenum.command = "plenum"\n',
     'mcp_servers.plenum.command = "plenum"\n[tools]\nweb = true\n',
   ]) {
     const { opts, f } = codexFile(bad);

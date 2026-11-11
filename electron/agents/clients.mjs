@@ -25,8 +25,9 @@ const ctx = (id, { userHome = os.homedir(), launcher = launcherPath(), appsDir =
 const tomlStr = (s) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 const tomlBlock = (launcher) => `[mcp_servers.plenum]\ncommand = ${tomlStr(launcher)}\nargs = ["mcp"]\n`;
 const KEY = String.raw`(?:"[^"]*"|[A-Za-z0-9_-]+)`;
-const HEADER = new RegExp(String.raw`^\[\s*mcp_servers\s*\.\s*(?:plenum|"plenum")\s*(?:\.\s*${KEY}\s*)*\]\s*(?:#.*)?$`);
-const UNEDITABLE = /^\s*(?:mcp_servers\s*\.\s*(?:plenum|"plenum")\b|(?:plenum|"plenum")\s*=)/;
+const HEADER = new RegExp(String.raw`^\s*\[\s*mcp_servers\s*\.\s*(?:plenum|"plenum")\s*(?:\.\s*${KEY}\s*)*\]\s*(?:#.*)?$`);
+// Fail safe: any non-comment line that looks like a plenum entry we can't edit. A false positive only refuses.
+const UNEDITABLE = (l) => !/^\s*#/.test(l) && ((/plenum/.test(l) && /mcp_servers/.test(l)) || /^\s*(?:plenum|"plenum")\s*[.=]/.test(l));
 const TABLE = /^\s*\[/;
 
 // Line range [start, end) of the plenum block in TOML text, or null.
@@ -45,8 +46,8 @@ const tomlUnstr = (s) => s.replace(/\\(["\\])/g, '$1');
 
 function tomlEntryOk(lines, [s, e], launcher) {
   const body = lines.slice(s, e);
-  const cmd = body.map((l) => l.match(/^command\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/)).find(Boolean);
-  const args = body.some((l) => /^args\s*=\s*\[\s*"mcp"\s*\]\s*$/.test(l));
+  const cmd = body.map((l) => l.match(/^\s*command\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/)).find(Boolean);
+  const args = body.some((l) => /^\s*args\s*=\s*\[\s*"mcp"\s*\]\s*$/.test(l));
   return !!cmd && tomlUnstr(cmd[1]) === launcher && args;
 }
 
@@ -60,7 +61,7 @@ function inspect(c) {
     const lines = text.replace(/\n$/, '').split('\n');
     const r = tomlRange(lines);
     if (!r) {
-      return lines.some((l) => UNEDITABLE.test(l))
+      return lines.some(UNEDITABLE)
         ? { state: 'unreadable', reason: "has a plenum entry in a form Plenum can't edit" }
         : { state: 'missing', text, lines };
     }
