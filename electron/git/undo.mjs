@@ -11,6 +11,19 @@ function sha(v) {
   return String(v);
 }
 
+/** Only snapshots this module wrote (they live under refs/plenum/undo/) may be replayed. */
+async function ours(cwd, v) {
+  const id = sha(v);
+  if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/plenum/undo/${id}`], cwd))) throw new Error('Unknown undo snapshot.');
+  return id;
+}
+
+/** Lanes removed through lane.remove, keyed by path. The renderer only names the path. */
+const removed = new Map();
+export function rememberLane(root, lane) {
+  removed.set(lane.path, { root, branch: lane.branch, head: lane.head });
+}
+
 function relPaths(paths) {
   const list = [...new Set((Array.isArray(paths) ? paths : []).map(String))];
   for (const p of list) {
@@ -56,7 +69,7 @@ export async function snapshotLane(root, laneIndex, paths) {
 export async function restorePaths(root, laneIndex, { sha: snap, paths }) {
   const { lane } = await laneAt(root, laneIndex);
   const list = relPaths(paths);
-  sha(snap);
+  await ours(lane.path, snap);
   if (!list.length) throw new Error('Nothing to restore.');
   if ((await git(['status', '--porcelain', '--', ...list], lane.path)).trim()) {
     throw new Error('Those files changed since the revert — not restored.');
@@ -68,7 +81,13 @@ export async function restorePaths(root, laneIndex, { sha: snap, paths }) {
     await git(['checkout', snap, '--', ...present], lane.path);
     await git(['reset', '-q', '--', ...present], lane.path);
   }
-  for (const p of gone) fs.rmSync(path.join(lane.path, p), { force: true });
+  const top = fs.realpathSync(lane.path);
+  for (const p of gone) {
+    const target = path.join(lane.path, p);
+    // Never follow a symlinked directory out of the lane.
+    const parent = fs.existsSync(path.dirname(target)) ? fs.realpathSync(path.dirname(target)) : null;
+    if (parent && (parent === top || parent.startsWith(top + path.sep))) fs.rmSync(target, { force: true });
+  }
   return loadBoard(root);
 }
 
@@ -76,11 +95,15 @@ export async function restorePaths(root, laneIndex, { sha: snap, paths }) {
  * Re-add a removed worktree on its branch (or detached head) and replay the snapshot
  * of its uncommitted files. Ignored files (node_modules, .env) are not recreated.
  */
-export async function restoreLane(root, { path: lanePath, branch, head, sha: snap }) {
+export async function restoreLane(root, { path: lanePath, sha: snap }) {
   const board = await loadBoard(root);
   const primary = board.lanes[0].path;
-  if (!path.isAbsolute(String(lanePath)) || fs.existsSync(lanePath)) throw new Error('Lane folder is already back or taken.');
+  const rec = removed.get(lanePath);
+  if (!rec || rec.root !== root) throw new Error('Nothing to restore for that lane.');
+  const { branch, head } = rec;
+  if (fs.existsSync(lanePath)) throw new Error('Lane folder is already back or taken.');
   sha(head);
+  if (snap) await ours(primary, snap);
   await git(['worktree', 'prune'], primary);
   if (branch && (await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], primary))) {
     await git(['worktree', 'add', lanePath, branch], primary);
@@ -88,9 +111,10 @@ export async function restoreLane(root, { path: lanePath, branch, head, sha: sna
     await git(['worktree', 'add', '--detach', lanePath, head], primary);
   }
   if (snap) {
-    await git(['read-tree', '--reset', '-u', sha(snap)], lanePath);
+    await git(['read-tree', '--reset', '-u', snap], lanePath);
     await git(['reset', '-q'], lanePath);
   }
+  removed.delete(lanePath);
   return loadBoard(root);
 }
 

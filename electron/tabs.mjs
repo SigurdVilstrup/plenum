@@ -190,8 +190,14 @@ export function restoreTab(snap, index) {
     favicon: String(snap?.favicon || '').startsWith('data:') ? snap.favicon : null,
     faviconRel: snap?.faviconRel ? String(snap.faviconRel) : null,
   };
-  if (!tab.id || !fs.existsSync(tab.path)) throw new Error('Tab can’t be restored.');
   const i = data.tabs.findIndex((t) => t.id === tab.id);
+  if (!tab.id || !path.isAbsolute(tab.path) || tab.path !== path.resolve(tab.path)) throw new Error('Tab can’t be restored.');
+  // An existing tab keeps its path; a closed one must come back to a real checkout.
+  if (i >= 0 ? data.tabs[i].path !== tab.path : !fs.existsSync(path.join(tab.path, '.git'))) throw new Error('Tab can’t be restored.');
+  if (tab.faviconRel) {
+    tab.faviconRel = String(tab.faviconRel).replace(/\\/g, '/').replace(/^[/\\]+/, '');
+    if (!repoImageFileUrl(tab.path, tab.faviconRel)) tab.faviconRel = null;
+  }
   if (i >= 0) data.tabs[i] = tab;
   else if (data.tabs.some((t) => t.path === tab.path)) throw new Error('That repository is already open.');
   else data.tabs.splice(Math.min(Math.max(0, Number(index) || 0), data.tabs.length), 0, tab);

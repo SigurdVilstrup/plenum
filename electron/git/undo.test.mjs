@@ -67,8 +67,10 @@ test('remove lane → restoreLane brings back worktree and uncommitted files', a
   fs.writeFileSync(path.join(lane.path, 'u.txt'), 'untracked\n');
   const snap = await undo.snapshotLane(root, lane.index);
   await ops.removeLane(root, lane.index, { force: true });
+  undo.rememberLane(root, lane);
   assert.ok(!fs.existsSync(lane.path));
-  board = await undo.restoreLane(root, { path: lane.path, branch: lane.branch, head: snap.head, sha: snap.sha });
+  await assert.rejects(undo.restoreLane(root, { path: '/tmp/not-removed-by-us' }), /Nothing to restore/);
+  board = await undo.restoreLane(root, { path: lane.path, sha: snap.sha });
   const back = board.lanes.find((l) => l.branch === 'feat/one');
   assert.ok(back);
   assert.equal(fs.readFileSync(path.join(lane.path, 'a.txt'), 'utf8'), 'wip\n');

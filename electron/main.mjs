@@ -137,7 +137,7 @@ app.whenReady().then(async () => {
   }
   // Undo / Copy / Paste go to the page first: it decides between a focused text field
   // (native editing) and the app-level action (undo last git op, copy SHA, paste repo path).
-  const edit = (cmd) => () => win?.webContents.send('edit', cmd);
+  const edit = (cmd) => () => win?.webContents.send('edit', cmd, cmd === 'paste' ? clipboard.readText() : undefined);
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' },
     { label: 'Edit', submenu: [
@@ -201,7 +201,6 @@ ipcMain.handle('undo.restoreBranch', (_e, ...args) => withRoot(undo.restoreBranc
 
 const NATIVE_EDIT = new Set(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll']);
 ipcMain.handle('edit.native', (e, cmd) => { if (NATIVE_EDIT.has(cmd)) e.sender[cmd](); });
-ipcMain.handle('clipboard.read', () => clipboard.readText());
 ipcMain.handle('clipboard.write', (_e, text) => clipboard.writeText(String(text ?? '')));
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
@@ -481,7 +480,12 @@ ipcMain.handle('accounts.removeHttps', async (_e, { host, username }) => {
 ipcMain.handle('accounts.list', accountsList);
 ipcMain.handle('git.identity.get', () => getIdentity(activePath()));
 ipcMain.handle('git.identity.set', (_e, payload) => setIdentity(activePath(), payload || {}));
-ipcMain.handle('lane.remove', (_e, ...args) => withRoot(ops.removeLane, ...args));
+ipcMain.handle('lane.remove', (_e, ...args) => withRoot(async (root, idx, opts) => {
+  const lane = (await loadBoard(root)).lanes.find((l) => l.index === idx);
+  const board = await ops.removeLane(root, idx, opts);
+  if (lane) undo.rememberLane(root, lane);
+  return board;
+}, ...args));
 ipcMain.handle('lane.commit', (_e, ...args) => withRoot(ops.commitLane, ...args));
 ipcMain.handle('lane.revert', (_e, ...args) => withRoot(ops.revertLaneChanges, ...args));
 ipcMain.handle('lane.push', (_e, ...args) => withRoot(ops.pushLane, ...args));

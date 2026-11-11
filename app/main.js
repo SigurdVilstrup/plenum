@@ -426,9 +426,9 @@ function copyFocused() {
 }
 
 /** ⌘V outside a text field: a repo path opens that repo, anything else goes to the palette search. */
-async function pasteIntoApp() {
+async function pasteIntoApp(clip) {
   if (el.sheetLayer.classList.contains('open') || state.settings.open) return;
-  const text = String(await api.invoke('clipboard.read')).trim();
+  const text = String(clip ?? '').trim();
   if (!text || text.includes('\n')) return;
   if (/^(\/|~\/)/.test(text)) return openRepoPath(text);
   openPalette();
@@ -437,11 +437,11 @@ async function pasteIntoApp() {
 }
 
 const isEditable = (n) => Boolean(n?.matches?.('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button])'));
-api.onEdit((cmd) => {
+api.onEdit((cmd, text) => {
   const editable = isEditable(document.activeElement);
   if (cmd === 'undo') return editable ? api.invoke('edit.native', 'undo') : undoLast();
   if (cmd === 'copy') return editable || window.getSelection()?.toString() ? api.invoke('edit.native', 'copy') : copyFocused();
-  if (cmd === 'paste') return editable ? api.invoke('edit.native', 'paste') : pasteIntoApp();
+  if (cmd === 'paste') return editable ? api.invoke('edit.native', 'paste') : pasteIntoApp(text);
 });
 
 /** Undo for create lane: remove the new worktree (and its branch when we made it) if still untouched. */
@@ -2445,7 +2445,7 @@ function openRemoveSheet(lane) {
       const undoable = Boolean(lane.head) && (!lane.dirty || Boolean(snap));
       if (undoable) {
         pushUndo(`remove lane ${lane.name}`, tabId, () => invoke('undo.restoreLane', ...pin({
-          path: lane.path, branch: lane.branch, head: lane.head, sha: snap?.sha,
+          path: lane.path, sha: snap?.sha,
         })), { selectLane: lane.index });
       }
       if (settleBoard(tabId, root, board, { selectLane: 0 })) {
