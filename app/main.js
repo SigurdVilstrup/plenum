@@ -232,8 +232,8 @@ function versionDetailHTML() {
   const ver = esc(version || '…');
   if (!commit) return `<span class="mono">${ver}</span>`;
   const when = formatCommitAt(committedAt);
-  const line2 = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
-  return `<span class="mono">${ver}<br>${line2}</span>`;
+  const rest = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
+  return `<span class="mono">${ver} · ${rest}</span>`;
 }
 
 function paintVersion() {
