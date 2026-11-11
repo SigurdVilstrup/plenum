@@ -706,7 +706,10 @@ a.iconbtn,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 10px 8px 12px;
+  /* Match .lane-head .head-row so the shared hairline lines up (#53). */
+  height: 56px;
+  box-sizing: border-box;
+  padding: 0 12px;
   border-bottom: 1px solid var(--hairline);
   flex-shrink: 0;
 }
