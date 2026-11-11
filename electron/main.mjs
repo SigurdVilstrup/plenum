@@ -189,6 +189,7 @@ ipcMain.handle('app.version', () => {
   };
 });
 ipcMain.handle('os.editors', () => listEditors());
+ipcMain.handle('os.diffMergeTools', () => listDiffMergeTools());
 
 // Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
 ipcMain.handle('feedback.save', async (_e, payload) => {
@@ -328,6 +329,29 @@ function listEditors() {
       available: editorAvailable(e),
     })),
     { id: 'custom', label: 'Other app…', available: true },
+  ];
+}
+
+function fileMergeAvailable() {
+  const apps = [
+    '/Applications/Xcode.app/Contents/Applications/FileMerge.app',
+    '/Applications/FileMerge.app',
+    path.join(home, 'Applications/FileMerge.app'),
+  ];
+  const bins = [
+    '/Applications/Xcode.app/Contents/Developer/usr/bin/opendiff',
+    '/Library/Developer/CommandLineTools/usr/bin/opendiff',
+  ];
+  return apps.some((p) => fs.existsSync(p)) || bins.some((p) => fs.existsSync(p));
+}
+
+/** Tools allowed by prefs.diffTool / prefs.mergeTool — probe installs like editors. */
+function listDiffMergeTools() {
+  return [
+    { id: 'internal', label: 'Built-in', available: true },
+    { id: 'opendiff', label: 'FileMerge', available: fileMergeAvailable() },
+    { id: 'vscode', label: 'VS Code', available: editorAvailable(EDITORS.vscode) },
+    { id: 'cursor', label: 'Cursor', available: editorAvailable(EDITORS.cursor) },
   ];
 }
 

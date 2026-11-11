@@ -82,6 +82,7 @@ const state = {
   appInfo: { version: '', commit: '', committedAt: '' },
   historyLimit: 120,
   editors: [],
+  diffMergeTools: [],
   loadingOlder: false,
   /** Tab ids with a quiet board/branch refresh in flight (#47). */
   refreshingByTab: new Set(),
@@ -2883,7 +2884,14 @@ const SETTINGS_PAGES = {
       .map((e) => [e.id, e.label]);
     const rowIcon = p.editor === 'custom' ? 'folder-simple' : editorIcon();
 
-    const external = [['internal', 'Internal (coming soon)']];
+    const tools = state.diffMergeTools.length ? state.diffMergeTools : [
+      { id: 'internal', label: 'Built-in', available: true },
+      { id: 'opendiff', label: 'FileMerge', available: true },
+      { id: 'vscode', label: 'VS Code', available: true },
+      { id: 'cursor', label: 'Cursor', available: true },
+    ];
+    const diffOpts = tools.filter((t) => t.available || t.id === p.diffTool).map((t) => [t.id, t.label]);
+    const mergeOpts = tools.filter((t) => t.available || t.id === p.mergeTool).map((t) => [t.id, t.label]);
     return `<h1>General</h1><p class="lede">Where Plenum opens editors, terminals, and folders on this Mac.</p>
       <div class="group-head">About</div>
       <div class="list">
@@ -2904,10 +2912,10 @@ const SETTINGS_PAGES = {
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
         ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Plenum launches when Terminal is Other app.') : ''}
       </div>
-      <div class="group-head">Diff and merge<small>Built-in view isn’t ready yet. These picks wait for it.</small></div>
+      <div class="group-head">Diff and merge<small>Nothing opens yet — your choice is saved for when Diff and Merge ship.</small></div>
       <div class="list">
-        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'), 'Where diffs will open once Plenum has a diff view. External tools come later.')}
-        ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'), 'Where conflict merges will open once Plenum has a merge view. External tools come later.')}
+        ${settingsRow('files', 'Diff tool', '', 'Saved only — not opened yet', selectHTML('diffTool', diffOpts, p.diffTool, 'Diff tool'), 'Installed tools on this Mac. Stored only for now — Plenum won’t open this tool until Diff/Merge launch.')}
+        ${settingsRow('git-merge', 'Merge tool', '', 'Saved only — not opened yet', selectHTML('mergeTool', mergeOpts, p.mergeTool, 'Merge tool'), 'Installed tools on this Mac. Stored only for now — Plenum won’t open this tool until Diff/Merge launch.')}
       </div>
       <div class="group-head">Folders</div>
       <div class="list">
@@ -3567,6 +3575,9 @@ async function boot() {
   try {
     state.editors = await invoke('os.editors');
   } catch { state.editors = []; }
+  try {
+    state.diffMergeTools = await invoke('os.diffMergeTools');
+  } catch { state.diffMergeTools = []; }
   const store = await invoke('tabs.list');
   applyStore(store);
   if (store.activeId) {

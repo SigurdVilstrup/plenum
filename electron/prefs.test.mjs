@@ -64,3 +64,12 @@ test('setPrefs drops unknown keys, bad enums and relative paths', () => {
   assert.equal(p.editorPath, '');
   assert.equal(p.cloneDefaultPath, '~/Dev');
 });
+
+test('setPrefs accepts diff and merge tool enums', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  const p = setPrefs({ diffTool: 'vscode', mergeTool: 'opendiff' }, dir);
+  assert.equal(p.diffTool, 'vscode');
+  assert.equal(p.mergeTool, 'opendiff');
+  assert.equal(setPrefs({ diffTool: 'beyondcompare' }, dir).diffTool, 'vscode');
+  assert.equal(setPrefs({ mergeTool: 'kaleidoscope' }, dir).mergeTool, 'opendiff');
+});

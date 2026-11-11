@@ -15,7 +15,7 @@ const ALLOWED = new Set([
   'file.diff', 'file.history', 'file.blame', 'file.show',
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',
   'prefs.get', 'prefs.set', 'git.identity.get', 'git.identity.set',
-  'feedback.save', 'app.version', 'os.editors',
+  'feedback.save', 'app.version', 'os.editors', 'os.diffMergeTools',
 ]);
 
 contextBridge.exposeInMainWorld('plenum', {
