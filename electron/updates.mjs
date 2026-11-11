@@ -6,6 +6,8 @@
  * Default feed is the public generic URL on plenum.sh (no GitHub token).
  * Override with PLENUM_UPDATE_FEED_URL, or PLENUM_UPDATE_REPOSITORY=owner/repo for GitHub.
  * Dogfood UI without files: ~/.plenum/mock-update containing a semver (e.g. `0.2.7`).
+ *
+ * Releases are Developer ID–signed + notarized so Squirrel.Mac can install the zip.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -336,10 +338,6 @@ export function createUpdater(opts) {
     updater.autoInstallOnAppQuit = false;
     updater.allowPrerelease = false;
     updater.fullChangelog = false;
-    // Dogfood packs are unsigned (identity: null). Signature checks would block every update.
-    if (typeof updater.verifyUpdateCodeSignature === 'boolean') {
-      updater.verifyUpdateCodeSignature = false;
-    }
 
     const feed = resolveUpdateFeed(envGet);
     if (feed.provider === 'github') {
@@ -472,6 +470,7 @@ export function createUpdater(opts) {
         return snapshot();
       }
       // isSilent=false, isForceRunAfter=true — same as T3 quitAndInstall options.
+      // Requires Developer ID–signed (+ notarized) releases for Squirrel.Mac on macOS.
       updater.quitAndInstall(false, true);
     } catch (err) {
       publish(reduceOnInstallFailure(state, errMessage(err)));

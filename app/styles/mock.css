@@ -1398,25 +1398,21 @@ a.iconbtn,
   color: var(--ink);
 }
 
-/* In-app update CTA — far right, after Feedback. */
+/* In-app update CTA — iconbtn-sized, accent fill + notification dot. */
 .panel-foot .foot-update {
   position: relative;
-  margin-left: 6px;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 28px;
   height: 28px;
-  padding: 0 10px 0 8px;
+  padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--primary);
   color: var(--on-primary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
   cursor: pointer;
-  max-width: 100%;
   flex-shrink: 0;
 }
 
@@ -1435,20 +1431,16 @@ a.iconbtn,
   cursor: wait;
 }
 
-.panel-foot .foot-update.ready {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--on-primary) 35%, transparent);
-}
-
 .panel-foot .foot-update-dot {
   position: absolute;
-  top: -3px;
-  right: -3px;
+  top: -2px;
+  right: -2px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #f04438;
+  background: var(--danger);
   border: 2px solid var(--surface-1);
-  box-shadow: 0 0 0 1px color-mix(in srgb, #f04438 40%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent);
   animation: update-dot-pulse 1.6s ease-in-out infinite;
 }
 

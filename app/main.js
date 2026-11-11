@@ -366,16 +366,12 @@ function applyUpdateState(next) {
     paint();
     return;
   }
-  // Progress-only: keep the foot / settings button copy current without rebuilding the board.
+  // Progress-only: refresh tooltips (foot is icon-only; Settings keeps its label via paint).
   const tip = updateHoverTip(next);
-  const foot = updateFootLabel(next);
-  const label = updateActionLabel(next);
-  document.querySelectorAll('[data-update-act]').forEach((btn) => {
+  document.querySelectorAll('.foot-update[data-update-act]').forEach((btn) => {
     btn.title = tip;
     btn.setAttribute('aria-label', tip.replace(/\n/g, ' — '));
-    const text = btn.querySelector('[data-update-label]');
-    if (text && foot) text.textContent = foot;
-    else if (!text && label) btn.textContent = label;
+    btn.classList.toggle('busy', updateActionBusy(next));
   });
 }
 
@@ -2056,16 +2052,14 @@ function panelFootHTML(settingsActive = false) {
   // Foot CTA only for a real update path — failed checks stay in Settings (“Try again”).
   const showUpdate = u?.enabled && (u.status === 'available' || u.status === 'downloading' || u.status === 'downloaded');
   const updateBusy = updateActionBusy(u);
-  const footLabel = updateFootLabel(u) || 'Install update';
   const tip = updateHoverTip(u);
   const tipAttr = esc(tip);
   const aria = esc(tip.replace(/\n/g, ' — '));
-  const ready = u?.status === 'downloaded';
+  // Icon-only: accent fill + notification dot (label lives in the tooltip).
   const updateBtn = showUpdate
-    ? `<button class="foot-update${ready ? ' ready' : ''}${updateBusy ? ' busy' : ''}" type="button" data-update-act${updateBusy ? ' disabled' : ''} title="${tipAttr}" aria-label="${aria}">
+    ? `<button class="foot-update${updateBusy ? ' busy' : ''}" type="button" data-update-act${updateBusy ? ' disabled' : ''} title="${tipAttr}" aria-label="${aria}">
         <span class="foot-update-dot" aria-hidden="true"></span>
         ${iconHTML('cloud-arrow-down')}
-        <span data-update-label>${esc(footLabel)}</span>
       </button>`
     : '';
   return `<div class="panel-foot">

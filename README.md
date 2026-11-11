@@ -50,7 +50,7 @@ open release/mac*/Plenum.app
 # optional: drag into /Applications
 ```
 
-Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Packaging is unsigned (`identity: null`) for local use; notarize later for distribution.
+Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Local `npm run pack` / `dist` stay unsigned; GitHub Releases are Developer ID–signed and notarized.
 
 ### In-app updates (T3 pattern)
 

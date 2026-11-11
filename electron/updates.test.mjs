@@ -164,7 +164,6 @@ test('createUpdater configures no-auto download/install and runs check', async (
   u.configure();
   assert.equal(fake.autoDownload, false);
   assert.equal(fake.autoInstallOnAppQuit, false);
-  assert.equal(fake.verifyUpdateCodeSignature, false);
   assert.equal(u.getState().status, 'idle');
 
   await u.act();
@@ -183,7 +182,6 @@ test('createUpdater configures no-auto download/install and runs check', async (
 test('mock-update file forces available without calling GitHub', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-'));
   fs.writeFileSync(path.join(dir, 'mock-update'), '0.3.0\n');
-  // Point RUN_HOME-equivalent by writing where readMockUpdateVersion looks — use env.
   const prev = process.env.PLENUM_MOCK_UPDATE;
   process.env.PLENUM_MOCK_UPDATE = '0.3.0';
   try {
@@ -225,5 +223,5 @@ test('PLENUM_DISABLE_AUTO_UPDATE disables the updater', () => {
   });
   const s = u.configure();
   assert.equal(s.enabled, false);
-  assert.match(s.message, /PLENUM_DISABLE_AUTO_UPDATE/);
+  assert.equal(s.status, 'disabled');
 });
