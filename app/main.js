@@ -1318,12 +1318,13 @@ function gitActionsHTML(l) {
   return a.join('');
 }
 
+const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', custom: 'arrow-square-out' };
 const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed' }[state.prefs.editor] || 'editor');
+const editorIcon = () => EDITOR_ICON[state.prefs.editor] || 'cursor';
 
 function editorBtnHTML() {
   const n = editorName();
-  const ic = !state.prefs.editor || state.prefs.editor === 'cursor' ? 'cursor' : 'arrow-square-out';
-  return `<button class="iconbtn framed primary" type="button" data-act="editor" title="Open in ${n}" aria-label="Open in ${n}">${iconHTML(ic)}</button>`;
+  return `<button class="iconbtn framed primary" type="button" data-act="editor" title="Open in ${n}" aria-label="Open in ${n}">${iconHTML(editorIcon())}</button>`;
 }
 
 function laneSetupLink() {
@@ -2873,7 +2874,6 @@ const SETTINGS_PAGES = {
   general: () => {
     const p = state.prefs;
     const custom = (key, ph) => `<input class="input mono" data-pref="${key}" value="${esc(p[key])}" placeholder="${ph}" aria-label="${ph}" />`;
-    const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', custom: 'folder-simple' };
     const editorOpts = (state.editors.length ? state.editors : [
       { id: 'cursor', label: 'Cursor', available: true },
       { id: 'vscode', label: 'VS Code', available: true },
@@ -2881,7 +2881,7 @@ const SETTINGS_PAGES = {
       { id: 'custom', label: 'Other app…', available: true },
     ]).filter((e) => e.available || e.id === p.editor)
       .map((e) => [e.id, e.label]);
-    const editorIcon = EDITOR_ICON[p.editor] || 'cursor';
+    const rowIcon = p.editor === 'custom' ? 'folder-simple' : editorIcon();
 
     const external = [['internal', 'Internal (coming soon)']];
     return `<h1>General</h1><p class="lede">Where Plenum opens editors, terminals, and folders on this Mac.</p>
@@ -2898,7 +2898,7 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Open with</div>
       <div class="list">
-        ${settingsRow(editorIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden.')}
+        ${settingsRow(rowIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden.')}
         ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Plenum launches when Editor is Other app.') : ''}
         ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create also opens that worktree in your editor.')}
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
