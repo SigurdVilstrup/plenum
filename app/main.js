@@ -3026,7 +3026,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">About</div>
       <div class="list">
         ${settingsRow(
-          'stack',
+          'plenum',
           'Version',
           '',
           versionDetailHTML(),
