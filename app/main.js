@@ -82,6 +82,8 @@ const state = {
   historyLimit: 120,
   editors: [],
   loadingOlder: false,
+  /** Tab ids with a quiet board/branch refresh in flight (#47). */
+  refreshingByTab: new Set(),
   /** Bumped on every tab switch so superseded select/load work stops painting. */
   switchSeq: 0,
   pendingGraphScroll: null,
@@ -381,6 +383,7 @@ const OP_LABELS = {
   down: 'Stopping',
   test: 'Testing',
   remove: 'Removing',
+  history: 'Loading history',
 };
 
 function beginOp(act, detail) {
@@ -776,6 +779,7 @@ function openCtxMenu(x, y, tab, anchor) {
     if (wasActive) snapshotWarm(tab.id);
     dropWarm(tab.id);
     state.opsByTab.delete(tab.id);
+    state.refreshingByTab.delete(tab.id);
     const res = await invoke('tabs.close', tab.id);
     applyStore(res.store);
     if (!wasActive) {
@@ -1103,27 +1107,34 @@ function paintPanel() {
   const allBranches = b.branches || [];
   const locals = allBranches.filter((br) => !br.remote);
   const remotes = allBranches.filter((br) => br.remote);
+  const refreshing = state.refreshingByTab.has(state.store.activeId);
   const localBody = locals.length
-    ? renderBranchListHTML(locals, b, selected)
+    ? renderBranchListHTML(locals, b, selected, refreshing)
     : `<div class="empty-note">None</div>`;
   const remoteBody = remotes.length
-    ? renderBranchListHTML(remotes, b, selected)
+    ? renderBranchListHTML(remotes, b, selected, refreshing)
     : `<div class="empty-note">None</div>`;
-  html += `<div class="section section-branches">
+  const branchMeta = refreshing
+    ? `<i class="spinner btn-spin" aria-hidden="true"></i><span class="sr-only">Refreshing</span>`
+    : `${locals.length}`;
+  const remoteMeta = refreshing
+    ? `<i class="spinner btn-spin" aria-hidden="true"></i><span class="sr-only">Refreshing</span>`
+    : `${remotes.length}`;
+  html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
     <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips — ↓↑ only when drifted from upstream (origin/…). Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
-      <span class="meta">${locals.length}</span>
+      <span class="meta">${branchMeta}</span>
     </button>
-    <div class="branch-list"${state.branchesOpen ? '' : ' hidden'}>${localBody}</div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
-  html += `<div class="section section-branches">
+  html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
     <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips on origin. Check out or open as lane when you need one.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Remotes</span>
-      <span class="meta">${remotes.length}</span>
+      <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="branch-list"${state.remotesOpen ? '' : ' hidden'}>${remoteBody}</div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${remoteBody}</div>
   </div>`;
 
   const foot = `<div class="panel-foot">
@@ -1132,6 +1143,7 @@ function paintPanel() {
   </div>`;
 
   el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${foot}`;
+  el.panel.classList.toggle('is-refreshing', refreshing);
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
   el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   el.panel.querySelectorAll('[data-lane]').forEach((btn) => {
@@ -1201,7 +1213,7 @@ function branchMetaHTML(br) {
   return `<span class="metas"><span class="meta ${cls}" title="vs ${esc(br.upstream)}">${esc(bits.join(' '))}</span></span>`;
 }
 
-function branchRowHTML(br, label, board, selectedLane) {
+function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   const where = br.isPrimary
     ? 'primary'
     : br.hasLane
@@ -1214,6 +1226,7 @@ function branchRowHTML(br, label, board, selectedLane) {
     || (!br.hasLane && current && (current.branch === br.name || current.branch === br.short));
   const title = [
     br.name,
+    refreshing ? 'list refreshing' : null,
     isCurrent ? 'checked out here' : where,
     br.hasLane ? 'Click to select this worktree' : 'Right-click → Switch branch',
     br.upstream ? `tracks ${br.upstream}` : 'no upstream',
@@ -1224,14 +1237,16 @@ function branchRowHTML(br, label, board, selectedLane) {
   const mark = isCurrent
     ? iconHTML('check-circle', 'sm current')
     : iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
-  return `<button class="lane-row branch-row${isCurrent ? ' selected current' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}">
+  // Keep lane selection clickable while the list refreshes; block checkout targets only.
+  const block = refreshing && !br.hasLane;
+  return `<button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
     ${mark}
     <span class="name">${esc(label)}</span>
     ${branchMetaHTML(br)}
   </button>`;
 }
 
-function renderBranchListHTML(branches, board, selectedLane) {
+function renderBranchListHTML(branches, board, selectedLane, refreshing = false) {
   const { singles, folders } = groupBranchesByPrefix(branches);
   const entries = [
     ...singles.map((s) => ({ kind: 'single', sort: s.label, ...s })),
@@ -1240,7 +1255,7 @@ function renderBranchListHTML(branches, board, selectedLane) {
   const parts = [];
   for (const entry of entries) {
     if (entry.kind === 'single') {
-      parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane));
+      parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane, refreshing));
       continue;
     }
     const open = !state.collapsedBranchFolders.has(entry.key);
@@ -1249,7 +1264,7 @@ function renderBranchListHTML(branches, board, selectedLane) {
       <span class="name">${esc(entry.key)}/</span>
     </button>`);
     if (open) {
-      parts.push(`<div class="branch-folder-kids">${entry.items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane)).join('')}</div>`);
+      parts.push(`<div class="branch-folder-kids">${entry.items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane, refreshing)).join('')}</div>`);
     }
   }
   return parts.join('');
@@ -1807,6 +1822,7 @@ function dismissCtxMenus() {
 }
 
 async function updateBranchRow(name) {
+  if (state.refreshingByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   const tabId = beginOp('branch-update', br.short || br.name);
@@ -1822,6 +1838,7 @@ async function updateBranchRow(name) {
 }
 
 async function pushBranchRow(name) {
+  if (state.refreshingByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br || br.remote) return;
   const tabId = beginOp('branch-push', br.short || br.name);
@@ -1837,6 +1854,7 @@ async function pushBranchRow(name) {
 }
 
 async function checkoutBranchRow(name) {
+  if (state.refreshingByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   // Already checked out somewhere → select that worktree (no second checkout).
@@ -1929,6 +1947,7 @@ function openLaneCtxMenu(x, y, lane) {
 }
 
 function openBranchCtxMenu(x, y, name) {
+  if (state.refreshingByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   const lane = laneByIndex(state.selectedLane);
@@ -3392,28 +3411,43 @@ async function refresh() {
   const tabId = state.store.activeId;
   const root = state.board?.root;
   if (!root || !tabId) return;
+  if (state.refreshingByTab.has(tabId)) return;
   const limit = state.historyLimit || 120;
+  state.refreshingByTab.add(tabId);
+  if (state.store.activeId === tabId) paintPanel();
+  let board = null;
   try {
-    const board = await invoke('board.get', root, { historyLimit: limit });
-    settleBoard(tabId, root, board);
+    board = await invoke('board.get', root, { historyLimit: limit });
   } catch { /* toasted */ }
+  finally {
+    state.refreshingByTab.delete(tabId);
+  }
+  if (board) settleBoard(tabId, root, board);
+  else if (state.store.activeId === tabId) paintPanel();
 }
 
 async function loadOlderHistory() {
   if (!state.board?.historyHasMore || state.loadingOlder) return;
-  const tabId = state.store.activeId;
+  const tabId = beginOp('history');
+  if (!tabId) return;
   const root = state.board.root;
   const next = Math.min(5000, (state.historyLimit || 120) + 120);
   state.historyLimit = next;
   state.loadingOlder = true;
   const foot = el.graph.querySelector('[data-load-older]');
-  if (foot) foot.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>Loading older…</span>`;
+  if (foot) {
+    foot.setAttribute('aria-busy', 'true');
+    foot.innerHTML = `<i class="spinner btn-spin" aria-hidden="true"></i><span>Loading older…</span>`;
+  }
   let board = null;
   try {
     board = await invoke('board.get', root, { historyLimit: next });
   } catch { /* toasted */ }
-  if (state.store.activeId !== tabId) {
+  finally {
     state.loadingOlder = false;
+    endOp(tabId, 'history');
+  }
+  if (state.store.activeId !== tabId) {
     const w = state.warmTabs.get(tabId);
     if (w && board) {
       w.board = board;
@@ -3421,11 +3455,13 @@ async function loadOlderHistory() {
     }
     return;
   }
-  state.loadingOlder = false;
   if (board) applyBoard(board);
   else {
     const idle = el.graph.querySelector('[data-load-older]');
-    if (idle) idle.innerHTML = '';
+    if (idle) {
+      idle.removeAttribute('aria-busy');
+      idle.innerHTML = '';
+    }
   }
 }
 
