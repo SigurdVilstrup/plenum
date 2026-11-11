@@ -8,6 +8,8 @@ export function defaultPrefs() {
   return {
     version: 1,
     theme: 'system',
+    accent: 'lavender',
+    lightPalette: 'cool',
     zoom: 1,
     fontPack: 'system',
     editor: 'cursor',
@@ -63,6 +65,8 @@ export function getPrefs(userDataDir) {
 
 const ENUMS = {
   theme: ['system', 'light', 'dark'],
+  accent: ['lavender', 'slate', 'teal'],
+  lightPalette: ['cool', 'neutral'],
   fontPack: ['system', 'inter-jetbrains', 'ibm-plex'],
   editor: ['cursor', 'vscode', 'zed', 'custom'],
   terminal: ['terminal', 'iterm', 'custom'],

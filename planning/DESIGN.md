@@ -32,16 +32,16 @@ colors:
     lane-3: "#d0689a"
     lane-4: "#8c6bb1"
   light:
-    canvas: "#ffffff"
-    surface-1: "#f7f8f8"
-    surface-2: "#f1f2f3"
-    surface-3: "#e9eaec"
-    hairline: "#e3e4e8"
-    hairline-strong: "#cfd1d7"
-    ink: "#0a0a0b"
-    ink-muted: "#3c3f45"
-    ink-subtle: "#6b7079"
-    ink-tertiary: "#8f949d"
+    canvas: "#f5f6f8" # cool slate paper (#29)
+    surface-1: "#eef0f4"
+    surface-2: "#e6e9ef"
+    surface-3: "#dce1e9"
+    hairline: "#d2d7e1"
+    hairline-strong: "#bcc3d0"
+    ink: "#0c0d12"
+    ink-muted: "#353943"
+    ink-subtle: "#5c6472"
+    ink-tertiary: "#858d9b"
     primary: "#5e6ad2"
     primary-hover: "#4a55bd"
     success: "#1f8a3b"
@@ -50,7 +50,7 @@ colors:
     human: "#2f6fdb"
     assisted: "#a97d00"
     agent: "#d9541e"
-    lane-0: "#a4a8b3"
+    lane-0: "#9aa1ae"
     lane-1: "#5e6ad2"
     lane-2: "#2f8a7b"
     lane-3: "#c2558a"
@@ -182,7 +182,7 @@ Tabs live in the title bar and attach to the content below: the active tab share
 
 ## Settings and sheets
 
-Settings is a page in the main window (`⌘,`), not a second window. The title bar, tab strip and palette stay; the board is replaced by a 220px sidebar whose first item is Board (`esc`), then General, Appearance, Integrations, Repositories, Agents. Appearance holds the theme choice (System, Light, Dark); the app follows the OS by default and there is no toggle in the main window. Repositories is per git repository: team branch, lanes folder, lane setup status with Edit file or Lane setup…, and services. Lane setup (the doctor) is a page under Repositories with a breadcrumb, two columns (findings, proposed manifest) and a footer with Copy and Write; Esc returns to Repositories. Agents holds the local MCP endpoint and CLI, connected clients with their last call, and the lane verbs agents may use (start and stop, create, remove, write the manifest), each a switch or an Ask me / Allow / Never select. Git verbs are never offered to agents. Nothing in the manifest is editable here except by opening the file; Settings shows it.
+Settings is a page in the main window (`⌘,`), not a second window. The title bar, tab strip and palette stay; the board is replaced by a 220px sidebar whose first item is Board (`esc`), then General, Appearance, Integrations, Repositories, Agents. Appearance holds Theme (mode, accent, light surfaces) plus zoom/font/avatars; the app follows the OS by default and there is no theme toggle in the main window. Repositories is per git repository: team branch, lanes folder, lane setup status with Edit file or Lane setup…, and services. Lane setup (the doctor) is a page under Repositories with a breadcrumb, two columns (findings, proposed manifest) and a footer with Copy and Write; Esc returns to Repositories. Agents holds the local MCP endpoint and CLI, connected clients with their last call, and the lane verbs agents may use (start and stop, create, remove, write the manifest), each a switch or an Ask me / Allow / Never select. Git verbs are never offered to agents. Nothing in the manifest is editable here except by opening the file; Settings shows it.
 
 Dialogs are Mac sheets: they hang from the bottom of the title bar, square at the top and rounded at the bottom, over a light scrim. New lane, Remove lane and Run (when there is drift) are 460px sheets. Lane setup, the doctor, is the one wide sheet at 760px: findings on the left, the proposed manifest in a mono block on the right, the shared-data note across the bottom, and two buttons.
 
@@ -216,7 +216,7 @@ Quiet, and mostly once. The point is to show state change, not to decorate.
 
 ## Brand
 
-App icon: a macOS squircle (rx 224 on 1024) on surface-1 with a hairline-strong border. Inside, the graph as one glyph: a trunk in ink-subtle, two lanes leaving it without crossing, round caps, and one lavender tip. Sixteen-pixel version keeps the trunk, one lane, and the dot. Masters in `assets/app-icon.svg` and `assets/app-icon-16.svg`; no gradients, no glow, no wordmark inside the icon.
+App icon (#29 variant S): rimless glass squircle (cool dark tile + soft sheen, no light stroke). Layered mark in cool metal with a hot lavender bottom plate. Masters in `assets/app-icon.svg` / `assets/app-icon-16.svg`; rebuild Dock/DMG with `npm run icons`. Appearance → Theme can retint UI primary (lavender / slate / teal) without changing the Dock asset.
 
 ## Do
 

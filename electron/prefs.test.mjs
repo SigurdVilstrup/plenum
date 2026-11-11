@@ -17,8 +17,17 @@ test('setPrefs merges and persists', () => {
   assert.equal(p.theme, 'dark');
   assert.equal(p.zoom, 1.1);
   assert.equal(p.fontPack, 'system');
+  assert.equal(p.accent, 'lavender');
+  assert.equal(p.lightPalette, 'cool');
   assert.equal(p.gravatar, true);
   assert.equal(p.tabFavicons, true);
+});
+
+test('setPrefs accepts accent and lightPalette', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.equal(setPrefs({ accent: 'teal', lightPalette: 'neutral' }, dir).accent, 'teal');
+  assert.equal(getPrefs(dir).lightPalette, 'neutral');
+  assert.equal(setPrefs({ accent: 'neon' }, dir).accent, 'teal');
 });
 
 test('setPrefs toggles gravatar', () => {

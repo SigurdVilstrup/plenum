@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Plenum mark — D + liquid glass (round 2)</title>
+<style>
+  :root {
+    --ink: var(--foreground, #e8e9ed);
+    --muted: var(--muted-foreground, #8b8d96);
+    --hair: var(--border, #34343a);
+    --lavender: var(--primary, #5e6ad2);
+    --desk: #c4a882;
+    --panel: var(--card, #121316);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    padding: 8px 0 24px;
+    color: var(--ink);
+    font: 13px/1.45 var(--font-sans, -apple-system, BlinkMacSystemFont, system-ui, sans-serif);
+  }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .lede { margin: 0 0 18px; color: var(--muted); max-width: 52rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+  figure {
+    margin: 0;
+    padding: 16px;
+    border: 1px solid var(--hair);
+    border-radius: var(--radius, 12px);
+    background: var(--panel);
+  }
+  .label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px; gap: 8px;
+  }
+  .label strong { font-size: 13px; font-weight: 600; }
+  .label span { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stages { display: grid; gap: 8px; }
+  .desk, .darkwall, .lightwall {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    border-radius: 8px; padding: 16px 12px; min-height: 100px;
+  }
+  .desk { background: var(--desk); }
+  .darkwall { background: #2a2b30; }
+  .lightwall { background: #e8eaef; }
+  .tile {
+    width: 72px; height: 72px; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 8px 22px rgba(0,0,0,.32);
+  }
+  .tile svg { display: block; width: 72px; height: 72px; }
+  .mini { display: flex; gap: 10px; align-items: center; }
+  .f32, .f16 {
+    display: grid; place-items: center;
+    background: #0f1011;
+  }
+  .f32 { width: 32px; height: 32px; border-radius: 7px; }
+  .f16 { width: 16px; height: 16px; border-radius: 3.5px; }
+  .f32 svg, .f16 svg { display: block; }
+  figcaption { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 3.2em; }
+  figcaption em { color: #b8bac2; font-style: normal; }
+  .note {
+    margin: 20px 0 0; padding: 16px; border-radius: var(--radius, 10px);
+    border: 1px dashed var(--hair); color: var(--muted); font-size: 12px; max-width: 52rem;
+  }
+</style>
+</head>
+<body>
+  <h1>Plenum mark — five from D + liquid glass</h1>
+  <p class="lede">Round 2 from your notes: keep the <strong>lavender bottom plate</strong>, drop the <strong>light/white rim</strong>, explore a <strong>liquid glass</strong> read. Same layered mark. Pick a letter.</p>
+  <div class="grid" id="board"></div>
+  <p class="note">Reply with K–O (or a mix). No rim stroke on any of these — the tile edge is fill only.</p>
+
+<script>
+/* Plate paths: 1 top → 5 bottom (D uses plate 5 as the accent). */
+const P1 = `M12.50,6.00 L11.24,6.29 L9.98,6.97 L8.91,8.13 L8.23,10.27 L8.23,12.01 L8.91,14.05 L9.88,15.22 L11.63,16.09 L12.99,16.28 L30.74,16.19 L32.58,16.57 L33.55,17.16 L53.54,17.16 L51.50,16.38 L41.22,16.38 L38.99,15.60 L37.63,14.44 L36.75,12.99 L36.17,9.78 L35.40,8.13 L34.33,7.07 L32.49,6.19 L31.42,6.00 Z`;
+const P2 = `M10.07,15.31 L11.04,15.90 L12.99,16.28 L30.74,16.19 L32.00,16.38 L33.75,17.25 L34.72,18.22 L35.49,19.68 L35.78,21.04 L35.69,22.88 L35.20,24.24 L34.13,25.60 L32.68,26.47 L31.81,26.66 L12.99,26.66 L11.63,26.96 L10.17,27.83 L37.72,27.83 L38.99,26.96 L40.73,26.47 L51.60,26.47 L53.05,26.08 L54.22,25.31 L55.28,23.85 L55.67,22.69 L55.77,20.84 L55.09,18.71 L53.44,17.06 L51.50,16.38 L41.22,16.38 L39.76,15.99 L38.60,15.31 Z`;
+const P3 = `M33.55,25.99 L31.81,26.66 L12.99,26.66 L11.92,26.86 L9.98,27.93 L9.01,29.09 L8.23,31.32 L8.43,33.75 L9.01,35.01 L9.88,35.98 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.39,37.43 L33.65,38.21 L53.63,38.21 L52.57,37.63 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.31,36.46 L37.14,35.49 L36.27,34.23 L35.78,32.58 L35.88,30.74 L36.56,29.09 L37.63,27.83 L39.47,26.76 L40.73,26.47 L51.60,26.47 L53.15,25.99 Z`;
+const P4 = `M10.46,36.37 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.10,37.34 L33.84,38.31 L35.10,39.86 L35.69,41.41 L35.78,43.54 L35.40,45.00 L34.52,46.36 L33.55,47.13 L32.00,47.72 L12.31,47.81 L11.24,48.10 L10.27,48.69 L38.01,48.69 L39.28,47.91 L40.83,47.52 L51.79,47.52 L53.83,46.75 L54.99,45.49 L55.67,43.84 L55.67,41.31 L54.90,39.47 L53.25,37.92 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.21,36.37 Z`;
+const P5 = `M33.94,46.84 L32.78,47.52 L31.13,47.81 L11.82,47.91 L9.98,48.88 L8.72,50.53 L8.23,52.47 L8.52,54.80 L9.10,55.96 L10.27,57.13 L11.63,57.81 L12.60,58.00 L31.13,58.00 L32.10,57.81 L33.26,57.32 L34.72,56.06 L35.59,54.41 L36.27,50.82 L37.04,49.56 L38.50,48.30 L40.83,47.52 L51.79,47.52 L53.63,46.84 Z`;
+
+const VARIANTS = [
+  {
+    id: 'K',
+    name: 'D, rimless',
+    blurb: 'Your D pick cleaned up: lavender bottom plate, no stroke on the tile. Baseline for the glass experiments.',
+    defs: () => '',
+    tile: () => `
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="#12131a"/>
+      <g transform="translate(128 128) scale(12)">
+        <g fill="#eef0f5">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <path fill="#5e6ad2" d="${P5}"/>
+      </g>`,
+  },
+  {
+    id: 'L',
+    name: 'Frosted tile + D',
+    blurb: 'Liquid-glass tile: soft specular sheet over a cool dark base. Mark is clear glass-metal; bottom plate stays solid lavender.',
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.15" y1="0" x2="0.9" y2="1">
+        <stop offset="0%" stop-color="#3a3d4a"/>
+        <stop offset="42%" stop-color="#1a1c24"/>
+        <stop offset="100%" stop-color="#0c0d12"/>
+      </linearGradient>
+      <linearGradient id="${id}-spec" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.28"/>
+        <stop offset="28%" stop-color="#ffffff" stop-opacity="0.06"/>
+        <stop offset="55%" stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#7a82c8" stop-opacity="0.08"/>
+      </linearGradient>
+      <linearGradient id="${id}-glass" x1="0" y1="0" x2="0.2" y2="1">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="35%" stop-color="#f3f5fb"/>
+        <stop offset="70%" stop-color="#c8cde0"/>
+        <stop offset="100%" stop-color="#9aa1b8"/>
+      </linearGradient>
+      <radialGradient id="${id}-blob" cx="72%" cy="22%" r="55%">
+        <stop offset="0%" stop-color="#8b93d8" stop-opacity="0.35"/>
+        <stop offset="55%" stop-color="#5e6ad2" stop-opacity="0.08"/>
+        <stop offset="100%" stop-color="#5e6ad2" stop-opacity="0"/>
+      </radialGradient>`,
+    tile: (id) => `
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-tile)"/>
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-blob)"/>
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-spec)"/>
+      <g transform="translate(128 128) scale(12)">
+        <g fill="url(#${id}-glass)">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <path fill="#5e6ad2" d="${P5}"/>
+      </g>`,
+  },
+  {
+    id: 'M',
+    name: 'Glass plates + D',
+    blurb: 'Each upper plate is its own glass lamina (highlight on the top edge). Bottom plate is denser lavender glass, not flat paint.',
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.2" y1="0" x2="0.8" y2="1">
+        <stop offset="0%" stop-color="#22242e"/>
+        <stop offset="100%" stop-color="#0e0f14"/>
+      </linearGradient>
+      <linearGradient id="${id}-p" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+        <stop offset="18%" stop-color="#eef1f8"/>
+        <stop offset="100%" stop-color="#a8b0c8" stop-opacity="0.88"/>
+      </linearGradient>
+      <linearGradient id="${id}-lav" x1="0" y1="0" x2="0.15" y2="1">
+        <stop offset="0%" stop-color="#a8b0f0"/>
+        <stop offset="35%" stop-color="#6f78d8"/>
+        <stop offset="100%" stop-color="#4a54b8"/>
+      </linearGradient>
+      <linearGradient id="${id}-edge" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+        <stop offset="12%" stop-color="#ffffff" stop-opacity="0"/>
+      </linearGradient>`,
+    tile: (id) => `
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-tile)"/>
+      <g transform="translate(128 128) scale(12)">
+        <g fill="url(#${id}-p)">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <g fill="url(#${id}-edge)" opacity="0.9">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <path fill="url(#${id}-lav)" d="${P5}"/>
+        <path fill="url(#${id}-edge)" opacity="0.45" d="${P5}"/>
+      </g>`,
+  },
+  {
+    id: 'N',
+    name: 'Refracted D',
+    blurb: 'Full liquid-glass mark: translucent stack with a lavender caustic pooled in the bottom plate and a soft specular streak across the tile.',
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#2c2f3c"/>
+        <stop offset="50%" stop-color="#14161e"/>
+        <stop offset="100%" stop-color="#0a0b10"/>
+      </linearGradient>
+      <linearGradient id="${id}-streak" x1="0" y1="0" x2="1" y2="0.35">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="35%" stop-color="#ffffff" stop-opacity="0.16"/>
+        <stop offset="55%" stop-color="#ffffff" stop-opacity="0.04"/>
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="${id}-body" x1="0.1" y1="0" x2="0.3" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92"/>
+        <stop offset="40%" stop-color="#dfe3f2" stop-opacity="0.78"/>
+        <stop offset="78%" stop-color="#b7bdd8" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#8e96c0" stop-opacity="0.4"/>
+      </linearGradient>
+      <linearGradient id="${id}-lav" x1="0" y1="0" x2="0.4" y2="1">
+        <stop offset="0%" stop-color="#c5caf8"/>
+        <stop offset="40%" stop-color="#7a84e0"/>
+        <stop offset="100%" stop-color="#5e6ad2"/>
+      </linearGradient>
+      <radialGradient id="${id}-caustic" cx="38%" cy="78%" r="42%">
+        <stop offset="0%" stop-color="#9aa3f0" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#5e6ad2" stop-opacity="0"/>
+      </radialGradient>`,
+    tile: (id) => `
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-tile)"/>
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-caustic)"/>
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-streak)"/>
+      <g transform="translate(128 128) scale(12)">
+        <g fill="url(#${id}-body)">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <path fill="url(#${id}-lav)" d="${P5}"/>
+      </g>`,
+  },
+  {
+    id: 'O',
+    name: 'Clear glass + solid D',
+    blurb: 'Most “Apple liquid glass”: near-clear mark with edge catchlight, dark frosted tile, and a solid opaque lavender bottom plate for Dock punch.',
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.25" y1="0" x2="0.75" y2="1">
+        <stop offset="0%" stop-color="#353844"/>
+        <stop offset="38%" stop-color="#1c1e28"/>
+        <stop offset="100%" stop-color="#0b0c10"/>
+      </linearGradient>
+      <linearGradient id="${id}-sheen" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+        <stop offset="22%" stop-color="#ffffff" stop-opacity="0.05"/>
+        <stop offset="100%" stop-color="#5e6ad2" stop-opacity="0.06"/>
+      </linearGradient>
+      <linearGradient id="${id}-clear" x1="0" y1="0" x2="0.15" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.88"/>
+        <stop offset="20%" stop-color="#f7f8fc" stop-opacity="0.55"/>
+        <stop offset="55%" stop-color="#cfd4e8" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="#9aa3c4" stop-opacity="0.22"/>
+      </linearGradient>
+      <linearGradient id="${id}-rimlight" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
+        <stop offset="8%" stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="92%" stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0.25"/>
+      </linearGradient>`,
+    tile: (id) => `
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-tile)"/>
+      <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#${id}-sheen)"/>
+      <g transform="translate(128 128) scale(12)">
+        <g fill="url(#${id}-clear)">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <g fill="none" stroke="url(#${id}-rimlight)" stroke-width="0.35" stroke-linejoin="round">
+          <path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/>
+        </g>
+        <path fill="#5e6ad2" d="${P5}"/>
+        <path fill="#8b93e0" opacity="0.35" d="${P5}" transform="translate(0 -0.35)"/>
+      </g>`,
+  },
+];
+
+function iconSVG(v, size) {
+  const uid = `${v.id}-${size}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="${size}" height="${size}">
+    <defs>${v.defs(uid)}</defs>
+    ${v.tile(uid)}
+  </svg>`;
+}
+
+const board = document.getElementById('board');
+for (const v of VARIANTS) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = `
+    <div class="label"><strong>${v.id} · ${v.name}</strong><span>72 · 32 · 16</span></div>
+    <div class="stages">
+      <div class="desk"><div class="tile">${iconSVG(v, 72)}</div></div>
+      <div class="darkwall">
+        <div class="tile">${iconSVG(v, 72)}</div>
+        <div class="mini">
+          <div class="f32">${iconSVG(v, 20)}</div>
+          <div class="f16">${iconSVG(v, 10)}</div>
+        </div>
+      </div>
+      <div class="lightwall">
+        <div class="tile">${iconSVG(v, 72)}</div>
+        <div class="mini">
+          <div class="f32">${iconSVG(v, 20)}</div>
+          <div class="f16">${iconSVG(v, 10)}</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><em>${v.name}.</em> ${v.blurb}</figcaption>`;
+  board.appendChild(fig);
+}
+</script>
+</body>
+</html>

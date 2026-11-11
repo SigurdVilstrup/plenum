@@ -125,7 +125,14 @@ const el = {
 function applyTheme() {
   const t = state.prefs.theme || 'system';
   const dark = t === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : t === 'dark';
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const root = document.documentElement;
+  root.dataset.theme = dark ? 'dark' : 'light';
+  const accent = state.prefs.accent || 'lavender';
+  if (accent === 'lavender') delete root.dataset.accent;
+  else root.dataset.accent = accent;
+  const lightPalette = state.prefs.lightPalette || 'cool';
+  if (lightPalette === 'cool') delete root.dataset.lightPalette;
+  else root.dataset.lightPalette = lightPalette;
 }
 
 function applyPrefs() {
@@ -2885,9 +2892,29 @@ const SETTINGS_PAGES = {
   },
   appearance: () => {
     const p = state.prefs;
-    return `<h1>Appearance</h1><p class="lede">Theme, size, type, and committer avatars. Lives on this Mac only.</p>
+    const accent = p.accent || 'lavender';
+    const lightPalette = p.lightPalette || 'cool';
+    const accentOpts = [
+      ['lavender', '<i class="swatch lav" aria-hidden="true"></i>Lavender'],
+      ['slate', '<i class="swatch slate" aria-hidden="true"></i>Slate'],
+      ['teal', '<i class="swatch teal" aria-hidden="true"></i>Teal'],
+    ];
+    const accentRow = `<div class="option-row" role="group" aria-label="Accent" data-pref="accent">${accentOpts.map(([v, html]) =>
+      `<button class="option${v === accent ? ' on' : ''}" type="button" aria-pressed="${v === accent}" data-v="${v}">${html}</button>`).join('')}</div>`;
+    return `<h1>Appearance</h1><p class="lede">Theme, accent, size, and type. Lives on this Mac only.</p>
+      <div class="group-head">Theme</div>
       <div class="list">
-        ${settingsRow('sun', 'Theme', '', 'System tracks macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Theme' }), 'System follows light/dark from macOS. Light and Dark stay put.')}
+        ${settingsRow('sun', 'Mode', '', 'System tracks macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System follows light/dark from macOS. Light and Dark stay put.')}
+        ${settingsRow('sparkle', 'Accent', '', 'Primary actions and selected lane', accentRow, 'Lavender matches the Dock mark. Slate and Teal stay in the cool-dev lane.')}
+        ${settingsRow('sun', 'Light surfaces', '', 'Only when Mode is Light (or System in light)', optionGroup('lightPalette', [['cool', 'Cool'], ['neutral', 'Neutral']], lightPalette, { label: 'Light surfaces' }), 'Cool is the #29 default (blue-gray). Neutral restores the earlier warmer greys.')}
+      </div>
+      <div class="theme-preview" aria-hidden="true">
+        <div class="tp-surface"><span class="tp-chip">Canvas</span></div>
+        <div class="tp-panel"><span class="tp-chip">Panel</span><button class="btn primary" type="button" tabindex="-1">Action</button></div>
+        <div class="tp-hair"></div>
+      </div>
+      <div class="group-head">Display</div>
+      <div class="list">
         ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole Plenum window. 100% is the design size.')}
         ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and the window should change immediately.')}
         ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Requests a face from Gravatar using a hash of the commit email (no account). Off keeps letter marks only.')}
