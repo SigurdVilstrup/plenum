@@ -114,3 +114,65 @@ test('tools/call repo.doctor on a fixture', async () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+function doctorFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-mcp-'));
+  const git = (...a) => execFileSync('git', a, { cwd: root, stdio: 'pipe' });
+  git('init', '-b', 'main');
+  git('config', 'user.email', 't@e.com');
+  git('config', 'user.name', 'T');
+  git('config', 'commit.gpgsign', 'false');
+  fs.writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'fix', scripts: { dev: 'vite', test: 'node --test' } }) + '\n',
+  );
+  fs.writeFileSync(path.join(root, 'README'), 'x\n');
+  git('add', '.');
+  git('commit', '-m', 'init');
+  return root;
+}
+
+test('repo.doctor write is refused by default', async () => {
+  const root = doctorFixture();
+  try {
+    const res = await callMsg('repo.doctor', { path: root, write: true });
+    assert.equal(res.result.isError, true);
+    assert.match(res.result.content[0].text, /^Refused: writing lane setup is turned off/);
+    assert.equal(fs.existsSync(path.join(root, '.plenum', 'lane.yaml')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('repo.doctor write creates lane.yaml when allowed and none exists', async () => {
+  const root = doctorFixture();
+  try {
+    setAgentSettings({ writeSetup: 'allow' }, HOME);
+    const res = await callMsg('repo.doctor', { path: root, write: true });
+    assert.equal(res.result.isError, undefined);
+    const body = JSON.parse(res.result.content[0].text);
+    assert.ok(body.written.endsWith(path.join('.plenum', 'lane.yaml')));
+    assert.ok(path.isAbsolute(body.written));
+    assert.ok(fs.existsSync(body.written));
+  } finally {
+    resetSettings();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('repo.doctor write never replaces an existing lane.yaml', async () => {
+  const root = doctorFixture();
+  try {
+    setAgentSettings({ writeSetup: 'allow' }, HOME);
+    const file = path.join(root, '.plenum', 'lane.yaml');
+    fs.mkdirSync(path.dirname(file));
+    fs.writeFileSync(file, '# user wrote this\n');
+    const res = await callMsg('repo.doctor', { path: root, write: true });
+    assert.equal(res.result.isError, true);
+    assert.match(res.result.content[0].text, /^Refused: this repo already has lane setup\./);
+    assert.equal(fs.readFileSync(file, 'utf8'), '# user wrote this\n');
+  } finally {
+    resetSettings();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
