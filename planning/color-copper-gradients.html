@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plenum — Copper tile gradients</title>
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 13px/1.45 var(--font);
+    color: var(--foreground);
+    padding: 8px 0 28px;
+  }
+  h1 { margin: 0 0 4px; font-size: 16px; letter-spacing: -0.02em; }
+  .lede { margin: 0 0 16px; color: var(--muted-foreground); max-width: 46rem; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  figure {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    overflow: hidden;
+  }
+  .head {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  }
+  .head strong { font-size: 13px; }
+  .head .id { font: 500 11px/1 var(--mono); color: var(--muted-foreground); }
+  .body { padding: 12px; display: grid; gap: 10px; }
+  .blurb { margin: 0; font-size: 12px; color: var(--muted-foreground); min-height: 2.6em; }
+
+  .stages {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stage {
+    border-radius: 10px;
+    min-height: 112px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+  }
+  .desk { background: #c4a882; }
+  .wall { background: #2a2b30; }
+  .tile {
+    width: 72px; height: 72px; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 10px 22px rgba(0,0,0,.32);
+  }
+  .tile svg { display: block; width: 72px; height: 72px; }
+  .mini { display: flex; flex-direction: column; gap: 8px; }
+  .f32, .f16 {
+    border-radius: 7px; overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,.28);
+  }
+  .f32 { width: 32px; height: 32px; }
+  .f16 { width: 16px; height: 16px; border-radius: 3.5px; }
+  .f32 svg, .f16 svg { display: block; width: 100%; height: 100%; }
+  .cap {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    font-size: 10px; color: var(--muted-foreground); text-align: center; margin-top: -2px;
+  }
+  .hexes {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    font: 500 10px/1 var(--mono); color: var(--muted-foreground);
+  }
+  .hexes span {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 8px 4px 5px; background: var(--secondary);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  .note {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .note em { font-style: normal; color: var(--foreground); font-weight: 600; }
+</style>
+</head>
+<body>
+  <h1>Copper tile — gradient options</h1>
+  <p class="lede">
+    Mark stays flat white. Life comes from the tile only — soft metal gradients, not glass sheen.
+    H locked as copper; Claude rhyme accepted. Reply with a letter.
+  </p>
+  <div class="board" id="board"></div>
+  <p class="note"><em>Avoided:</em> specular glass sheets, lavender pools, multi-stop rainbow. These are 2–3 stop metal fades that still read at 16px.</p>
+
+<script>
+const P1 = `M12.50,6.00 L11.24,6.29 L9.98,6.97 L8.91,8.13 L8.23,10.27 L8.23,12.01 L8.91,14.05 L9.88,15.22 L11.63,16.09 L12.99,16.28 L30.74,16.19 L32.58,16.57 L33.55,17.16 L53.54,17.16 L51.50,16.38 L41.22,16.38 L38.99,15.60 L37.63,14.44 L36.75,12.99 L36.17,9.78 L35.40,8.13 L34.33,7.07 L32.49,6.19 L31.42,6.00 Z`;
+const P2 = `M10.07,15.31 L11.04,15.90 L12.99,16.28 L30.74,16.19 L32.00,16.38 L33.75,17.25 L34.72,18.22 L35.49,19.68 L35.78,21.04 L35.69,22.88 L35.20,24.24 L34.13,25.60 L32.68,26.47 L31.81,26.66 L12.99,26.66 L11.63,26.96 L10.17,27.83 L37.72,27.83 L38.99,26.96 L40.73,26.47 L51.60,26.47 L53.05,26.08 L54.22,25.31 L55.28,23.85 L55.67,22.69 L55.77,20.84 L55.09,18.71 L53.44,17.06 L51.50,16.38 L41.22,16.38 L39.76,15.99 L38.60,15.31 Z`;
+const P3 = `M33.55,25.99 L31.81,26.66 L12.99,26.66 L11.92,26.86 L9.98,27.93 L9.01,29.09 L8.23,31.32 L8.43,33.75 L9.01,35.01 L9.88,35.98 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.39,37.43 L33.65,38.21 L53.63,38.21 L52.57,37.63 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.31,36.46 L37.14,35.49 L36.27,34.23 L35.78,32.58 L35.88,30.74 L36.56,29.09 L37.63,27.83 L39.47,26.76 L40.73,26.47 L51.60,26.47 L53.15,25.99 Z`;
+const P4 = `M10.46,36.37 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.10,37.34 L33.84,38.31 L35.10,39.86 L35.69,41.41 L35.78,43.54 L35.40,45.00 L34.52,46.36 L33.55,47.13 L32.00,47.72 L12.31,47.81 L11.24,48.10 L10.27,48.69 L38.01,48.69 L39.28,47.91 L40.83,47.52 L51.79,47.52 L53.83,46.75 L54.99,45.49 L55.67,43.84 L55.67,41.31 L54.90,39.47 L53.25,37.92 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.21,36.37 Z`;
+const P5 = `M33.94,46.84 L32.78,47.52 L31.13,47.81 L11.82,47.91 L9.98,48.88 L8.72,50.53 L8.23,52.47 L8.52,54.80 L9.10,55.96 L10.27,57.13 L11.63,57.81 L12.60,58.00 L31.13,58.00 L32.10,57.81 L33.26,57.32 L34.72,56.06 L35.59,54.41 L36.27,50.82 L37.04,49.56 L38.50,48.30 L40.83,47.52 L51.79,47.52 L53.63,46.84 Z`;
+const MARK = `<path d="${P1}"/><path d="${P2}"/><path d="${P3}"/><path d="${P4}"/><path d="${P5}"/>`;
+
+const COPPER = "#b86b3a";
+const DEEP = "#7d4320";
+const HOT = "#d4894f";
+const INK = "#4a2814";
+const BRASS = "#c9a227";
+
+function icon(id, defs, size) {
+  const scale = (size / 1024) * 12;
+  const tx = (size / 1024) * 128;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+    <defs>${defs(id)}</defs>
+    <rect width="${size}" height="${size}" rx="${Math.round(size * 0.222)}" fill="url(#${id}-tile)"/>
+    ${/* optional overlay */ ""}
+    <rect width="${size}" height="${size}" rx="${Math.round(size * 0.222)}" fill="url(#${id}-overlay)" style="mix-blend-mode:normal"/>
+    <g transform="translate(${tx} ${tx}) scale(${scale})" fill="#ffffff">${MARK}</g>
+  </svg>`;
+}
+
+// overlay gradients that are fully transparent by default
+function noneOverlay(id) {
+  return `<linearGradient id="${id}-overlay" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>`;
+}
+
+const VARIANTS = [
+  {
+    id: "H0",
+    name: "Solid (baseline)",
+    blurb: "Current H — flat copper fill. Clear at 16px, a little dead at Dock size.",
+    dots: [COPPER],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${COPPER}"/>
+        <stop offset="100%" stop-color="${COPPER}"/>
+      </linearGradient>
+      ${noneOverlay(id)}`,
+  },
+  {
+    id: "H1",
+    name: "Diagonal metal",
+    blurb: "Two-stop NW→SE. Simplest lift — still clearly one copper, just not a sticker.",
+    dots: [HOT, DEEP],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.12" y1="0" x2="0.88" y2="1">
+        <stop offset="0%" stop-color="${HOT}"/>
+        <stop offset="100%" stop-color="${DEEP}"/>
+      </linearGradient>
+      ${noneOverlay(id)}`,
+  },
+  {
+    id: "H2",
+    name: "Vertical forge",
+    blurb: "Hot top, deep bottom. Reads as lit metal — good Dock punch, survives small sizes.",
+    dots: [HOT, COPPER, DEEP],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.5" y1="0" x2="0.5" y2="1">
+        <stop offset="0%" stop-color="${HOT}"/>
+        <stop offset="48%" stop-color="${COPPER}"/>
+        <stop offset="100%" stop-color="${DEEP}"/>
+      </linearGradient>
+      ${noneOverlay(id)}`,
+  },
+  {
+    id: "H3",
+    name: "Corner ember",
+    blurb: "Radial heat from upper-right. More dynamic without glass; still one hue family.",
+    dots: [HOT, COPPER, INK],
+    defs: (id) => `
+      <radialGradient id="${id}-tile" cx="78%" cy="18%" r="75%">
+        <stop offset="0%" stop-color="${HOT}"/>
+        <stop offset="42%" stop-color="${COPPER}"/>
+        <stop offset="100%" stop-color="${INK}"/>
+      </radialGradient>
+      ${noneOverlay(id)}`,
+  },
+  {
+    id: "H4",
+    name: "Patina edge",
+    blurb: "Copper body with a cooler deep corner — slight age, not a second brand color.",
+    dots: [HOT, COPPER, "#5c3a28"],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0" y1="0.1" x2="1" y2="0.95">
+        <stop offset="0%" stop-color="${HOT}"/>
+        <stop offset="55%" stop-color="${COPPER}"/>
+        <stop offset="100%" stop-color="#5c3a28"/>
+      </linearGradient>
+      ${noneOverlay(id)}`,
+  },
+  {
+    id: "H5",
+    name: "Brass kiss",
+    blurb: "Copper dominant with a thin brass lift at the top — metal mix, still not Claude clay.",
+    dots: [BRASS, COPPER, DEEP],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.2" y1="0" x2="0.7" y2="1">
+        <stop offset="0%" stop-color="${BRASS}"/>
+        <stop offset="28%" stop-color="${HOT}"/>
+        <stop offset="100%" stop-color="${DEEP}"/>
+      </linearGradient>
+      ${noneOverlay(id)}`,
+  },
+  {
+    id: "H6",
+    name: "Soft sheen (restrained)",
+    blurb: "Same diagonal metal as H1, plus a faint top highlight. Closest to ‘alive’ without going glass-AI.",
+    dots: [HOT, DEEP],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.15" y1="0" x2="0.85" y2="1">
+        <stop offset="0%" stop-color="${HOT}"/>
+        <stop offset="100%" stop-color="${DEEP}"/>
+      </linearGradient>
+      <linearGradient id="${id}-overlay" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+        <stop offset="28%" stop-color="#ffffff" stop-opacity="0.04"/>
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+      </linearGradient>`,
+  },
+  {
+    id: "H7",
+    name: "Ink pool",
+    blurb: "Most of the tile deep copper, hot only at the top edge. Dramatic; check 16px doesn’t go muddy.",
+    dots: [HOT, INK],
+    defs: (id) => `
+      <linearGradient id="${id}-tile" x1="0.5" y1="0" x2="0.5" y2="1">
+        <stop offset="0%" stop-color="${HOT}"/>
+        <stop offset="22%" stop-color="${COPPER}"/>
+        <stop offset="100%" stop-color="${INK}"/>
+      </linearGradient>
+      ${noneOverlay(id)}`,
+  },
+];
+
+const board = document.getElementById("board");
+for (const v of VARIANTS) {
+  const fig = document.createElement("figure");
+  const dots = v.dots.map((c) => `<span><i class="dot" style="background:${c}"></i>${c}</span>`).join("");
+  fig.innerHTML = `
+    <div class="head"><strong>${v.name}</strong><span class="id">${v.id}</span></div>
+    <div class="body">
+      <p class="blurb">${v.blurb}</p>
+      <div class="hexes">${dots}</div>
+      <div class="stages">
+        <div class="stage desk">
+          <div class="tile">${icon(v.id + "d", v.defs, 72)}</div>
+          <div class="mini">
+            <div class="f32">${icon(v.id + "d32", v.defs, 32)}</div>
+            <div class="f16">${icon(v.id + "d16", v.defs, 16)}</div>
+          </div>
+        </div>
+        <div class="stage wall">
+          <div class="tile">${icon(v.id + "w", v.defs, 72)}</div>
+          <div class="mini">
+            <div class="f32">${icon(v.id + "w32", v.defs, 32)}</div>
+            <div class="f16">${icon(v.id + "w16", v.defs, 16)}</div>
+          </div>
+        </div>
+      </div>
+      <div class="cap"><span>desk</span><span>dark wall</span></div>
+    </div>`;
+  board.appendChild(fig);
+}
+</script>
+</body>
+</html>
