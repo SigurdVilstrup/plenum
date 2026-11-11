@@ -74,7 +74,7 @@ export async function probeOrigin(cwd, { fetchImpl = globalThis.fetch, timeoutMs
       return {
         ...base,
         status: 'missing',
-        detail: `GitHub has no ${gh.owner}/${gh.repo}. origin is stale (renamed or deleted) — fix the remote URL.`,
+        detail: `GitHub has no ${gh.owner}/${gh.repo}. The remote URL is stale — rename or delete, then update origin.`,
       };
     }
     if (res.status >= 300 && res.status < 400) {

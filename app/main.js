@@ -1130,10 +1130,10 @@ function paintPanel() {
   const origin = b.origin;
   if (origin && (origin.status === 'missing' || origin.status === 'renamed' || origin.status === 'none')) {
     const label = origin.status === 'none'
-      ? 'No origin remote'
+      ? 'No origin remote set'
       : origin.status === 'renamed'
-        ? `origin renamed — ${esc(origin.display)}${origin.effectiveDisplay ? ` → ${esc(origin.effectiveDisplay)}` : ''}`
-        : `origin broken — ${esc(origin.display || 'unknown')}`;
+        ? `Origin moved — ${esc(origin.display)}${origin.effectiveDisplay ? ` → ${esc(origin.effectiveDisplay)}` : ''}`
+        : `Can’t find this on GitHub — ${esc(origin.display || 'unknown')}`;
     html += `<div class="section">
       <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
     </div>`;
