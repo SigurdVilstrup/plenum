@@ -1127,6 +1127,17 @@ function paintPanel() {
   const remoteMeta = refreshing
     ? `<i class="spinner btn-spin" aria-hidden="true"></i><span class="sr-only">Refreshing</span>`
     : `${remotes.length}`;
+  const origin = b.origin;
+  if (origin && (origin.status === 'missing' || origin.status === 'renamed' || origin.status === 'none')) {
+    const label = origin.status === 'none'
+      ? 'No origin remote'
+      : origin.status === 'renamed'
+        ? `origin renamed — ${esc(origin.display)}${origin.effectiveDisplay ? ` → ${esc(origin.effectiveDisplay)}` : ''}`
+        : `origin broken — ${esc(origin.display || 'unknown')}`;
+    html += `<div class="section">
+      <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
+    </div>`;
+  }
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
     <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips — ↓↑ only when drifted from upstream (origin/…). Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
@@ -1136,12 +1147,16 @@ function paintPanel() {
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips on origin. Check out or open as lane when you need one.">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips (no local branch of the same name). origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists — that is why this can read 0.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Remotes</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${remoteBody}</div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
+      remotes.length
+        ? remoteBody
+        : `<div class="empty-note">${origin?.display ? `Tracking tips live under Branches · origin is <span class="mono">${esc(origin.display)}</span>` : 'No remote-only tips'}</div>`
+    }</div>
   </div>`;
 
   const foot = `<div class="panel-foot">
@@ -1347,6 +1362,9 @@ function paintHeader() {
   let html = '';
   if (l.isPrimary) {
     const dirty = l.dirty > 0;
+    const br = (b.branches || []).find((x) => !x.remote && (x.name === l.branch || x.short === l.branch));
+    const upBehind = br?.upstreamBehind || 0;
+    const pullBlocked = dirty && upBehind > 0;
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
@@ -1357,6 +1375,9 @@ function paintHeader() {
           ? `<span class="fact bad">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
           : `<span class="fact">${iconHTML('shield-check', 'sm')}<strong>${l.onTeamBranch ? 'on' : 'not on'}</strong> ${esc(b.teamBranch)}</span>
              <span class="fact">${iconHTML('circle-dashed', 'sm')}<strong>clean</strong></span>`}
+        ${upBehind
+          ? `<span class="fact ${pullBlocked ? 'bad' : 'warn'}" title="${pullBlocked ? 'Commit or stash before pull' : `vs ${br.upstream || 'upstream'}`}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${upBehind}↓</strong>${pullBlocked ? ' · pull blocked' : ` ${esc(br.upstream || 'upstream')}`}</span>`
+          : ''}
         ${l.ahead ? `<span class="fact bad">${iconHTML('git-commit', 'sm')}<strong>${l.ahead}</strong> ahead of ${esc(b.teamRef)}</span>` : ''}
         ${authorshipPillHTML(l.authorship, l.tool, iconHTML)}
       </div>
@@ -1962,10 +1983,19 @@ function openBranchCtxMenu(x, y, name) {
   const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
   const { menu, add } = ctxMenuAt(x, y);
   add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
-  if (!br.hasLane) {
-    add(br.remote ? 'Fetch' : 'Pull from remote', () => updateBranchRow(br.name));
+  if (br.remote) {
+    add('Fetch', () => updateBranchRow(br.name));
+  } else {
+    add('Pull from remote', () => {
+      if (br.hasLane) {
+        const holder = laneByIndex(br.laneIndex);
+        if (holder) handleAction('pull', holder);
+        return;
+      }
+      updateBranchRow(br.name);
+    });
+    if (!br.hasLane) add('Push to remote', () => pushBranchRow(br.name));
   }
-  if (!br.remote && !br.hasLane) add('Push to remote', () => pushBranchRow(br.name));
   if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
   if (canRename) add('Rename…', () => openRenameBranchSheet(br));
   if (canDelete) add('Delete…', () => openDeleteBranchSheet(br), true);

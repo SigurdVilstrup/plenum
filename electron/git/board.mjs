@@ -8,6 +8,7 @@ import { laneStatus } from '../lane/status.mjs';
 import { getProc, getLastTest } from '../lane/supervisor.mjs';
 import { assignColumns } from './graph-columns.mjs';
 import { LEGACY_TEAM_BRANCH_KEY, TEAM_BRANCH_KEY, manifestPath } from '../paths.mjs';
+import { probeOrigin } from './remote-health.mjs';
 
 /** SHA-256 of trimmed lowercase email for Gravatar (empty if no email). */
 export function emailAvatarHash(email) {
@@ -639,6 +640,11 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
     branches = await listBranches(top, lanes, team, teamRef);
   } catch { /* empty */ }
 
+  let origin = { name: null, url: '', display: '', status: 'unknown', detail: '' };
+  try {
+    origin = await probeOrigin(top);
+  } catch { /* empty */ }
+
   const limit = Math.max(50, Math.min(5000, Number(historyLimit) || 120));
   let commits = [];
   let historyHasMore = false;
@@ -686,6 +692,7 @@ export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
     stashes,
     historyLimit: historyLimitUsed,
     historyHasMore,
+    origin,
     lanes,
     branches,
     commits,

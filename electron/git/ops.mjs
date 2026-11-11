@@ -206,15 +206,24 @@ export async function pullLane(root, laneIndex) {
   const lane = laneOrPrimary(board, laneIndex);
   const ref = lane.isPrimary ? board.teamBranch : lane.branch;
   if (!ref) throw new Error('Cannot pull a detached HEAD.');
+  if (lane.dirty > 0) {
+    throw new Error(
+      `Cannot pull: ${lane.dirty} uncommitted change${lane.dirty === 1 ? '' : 's'} would be overwritten. Commit or stash first.`,
+    );
+  }
   try {
     // Pass origin + ref explicitly. Bare `git pull --ff-only` depends on
     // upstream tracking and can no-op while origin/<team> is still ahead.
     await git(['pull', '--ff-only', 'origin', ref], lane.path);
   } catch (e) {
-    if (lane.isPrimary) {
-      throw new Error(`${e.message}\nPrimary only fast-forwards. Resolve divergence outside Plenum.`);
+    const msg = e?.message || String(e);
+    if (/would be overwritten|local changes/i.test(msg)) {
+      throw new Error('Cannot pull: uncommitted changes would be overwritten. Commit or stash first.');
     }
-    throw new Error(`${e.message}\nTry Rebase on main instead.`);
+    if (lane.isPrimary) {
+      throw new Error(`${msg}\nPrimary only fast-forwards. Resolve divergence outside Plenum.`);
+    }
+    throw new Error(`${msg}\nTry Rebase on main instead.`);
   }
   return loadBoard(root);
 }
