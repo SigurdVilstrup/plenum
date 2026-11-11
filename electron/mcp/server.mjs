@@ -145,7 +145,7 @@ export async function callTool(name, args = {}) {
       if (!result.canAccept) {
         throw new Error(`Can't write lane setup yet:\n${result.findings.join('\n')}`);
       }
-      await acceptManifest(root, result.proposedYaml);
+      await acceptManifest(root, result.proposedYaml, { createOnly: true });
       return textResult({ ...result, written: manifestPath(root) });
     }
     case 'lane.create': {
