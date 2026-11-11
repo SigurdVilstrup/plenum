@@ -5,6 +5,7 @@
 :root,
 [data-theme='dark'] {
   color-scheme: dark;
+  /* Dark · muted — cool charcoal, lavender signal */
   --canvas: #010102;
   --surface-1: #0f1011;
   --surface-2: #141516;
@@ -16,7 +17,7 @@
   --ink-subtle: #8a8f98;
   --ink-tertiary: #62666d;
   --primary: #5e6ad2;
-  --primary-hover: #828fff;
+  --primary-hover: #7a84e0;
   --on-primary: #ffffff;
   --success: #27a644;
   --warning: #f2c94c;
@@ -105,7 +106,7 @@ html[data-font='ibm-plex'] {
   --mono: 'Plenum Plex Mono', 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
-/* Light default is cool slate neutrals (#29) — sharper board, not cream. */
+/* Light · muted — cool paper, lavender signal. */
 [data-theme='light'] {
   color-scheme: light;
   --canvas: #f5f6f8;
@@ -139,43 +140,39 @@ html[data-font='ibm-plex'] {
   --shadow-window: 0 0 0 0.5px rgba(12, 13, 18, 0.12), 0 22px 60px rgba(12, 13, 18, 0.16);
 }
 
-/* Opt-out: previous warmer-neutral light surfaces. */
-[data-theme='light'][data-light-palette='neutral'] {
-  --canvas: #ffffff;
-  --surface-1: #f7f8f8;
-  --surface-2: #f1f2f3;
-  --surface-3: #e9eaec;
-  --hairline: #e3e4e8;
-  --hairline-strong: #cfd1d7;
-  --ink: #0a0a0b;
-  --ink-muted: #3c3f45;
-  --ink-subtle: #6b7079;
-  --ink-tertiary: #8f949d;
-  --lane-0: #a4a8b3;
-  --scrim: rgba(10, 10, 11, 0.4);
-  --shadow-window: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 22px 60px rgba(0, 0, 0, 0.18);
+/* Dark · vibrant — lifted cool greys + a touch more lavender in the air. */
+[data-theme='dark'][data-chroma='vibrant'] {
+  --canvas: #0b0c14;
+  --surface-1: #141625;
+  --surface-2: #1a1d30;
+  --surface-3: #21243a;
+  --hairline: #2a2e44;
+  --hairline-strong: #3a4060;
+  --ink: #eef0ff;
+  --ink-muted: #c8cce8;
+  --ink-subtle: #8b91b8;
+  --ink-tertiary: #636990;
+  --primary-hover: #7a84e0;
+  --primary-bg: rgba(94, 106, 210, 0.18);
+  --scrim: rgba(11, 12, 20, 0.72);
 }
 
-/* Accent overrides both themes (#29 Appearance → Theme). */
-html[data-accent='slate'] {
-  --primary: #5b6b8c;
-  --primary-hover: #8b9bb8;
-  --primary-bg: rgba(91, 107, 140, 0.14);
-  --lane-1: #5b6b8c;
-}
-html[data-theme='light'][data-accent='slate'] {
-  --primary-hover: #455572;
-  --primary-bg: rgba(91, 107, 140, 0.12);
-}
-html[data-accent='teal'] {
-  --primary: #2f8a7b;
-  --primary-hover: #4db5a4;
-  --primary-bg: rgba(47, 138, 123, 0.14);
-  --lane-1: #2f8a7b;
-}
-html[data-theme='light'][data-accent='teal'] {
-  --primary-hover: #247065;
-  --primary-bg: rgba(47, 138, 123, 0.12);
+/* Light · vibrant — cooler, more saturated paper (not cream). */
+[data-theme='light'][data-chroma='vibrant'] {
+  --canvas: #f0f1f8;
+  --surface-1: #e4e7f4;
+  --surface-2: #dce1f0;
+  --surface-3: #d0d6ea;
+  --hairline: #c4cadf;
+  --hairline-strong: #aeb6d0;
+  --ink: #10121a;
+  --ink-muted: #353943;
+  --ink-subtle: #5c6472;
+  --ink-tertiary: #858d9b;
+  --primary-hover: #4a55bd;
+  --primary-bg: rgba(94, 106, 210, 0.14);
+  --lane-0: #9aa1ae;
+  --scrim: rgba(16, 18, 26, 0.4);
 }
 
 * {
@@ -345,14 +342,16 @@ kbd {
   place-items: center;
   width: 16px;
   height: 16px;
-  color: var(--ink-subtle);
+  border-radius: 3.5px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
+.appmark img,
 .appmark svg {
   display: block;
   width: 16px;
   height: 16px;
-  fill: currentColor;
 }
 
 .titlebar .app-version {
@@ -1031,7 +1030,6 @@ a.iconbtn,
   font: inherit;
   padding: 8px 10px;
   cursor: pointer;
-  border-left: 2px solid transparent;
 }
 
 .file-history-row:hover {
@@ -1039,8 +1037,7 @@ a.iconbtn,
 }
 
 .file-history-row.on {
-  border-left-color: var(--accent, #3b82f6);
-  background: color-mix(in srgb, var(--accent, #3b82f6) 10%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-1));
 }
 
 .file-history-row .subj {
@@ -1310,6 +1307,34 @@ a.iconbtn,
   cursor: not-allowed;
 }
 
+.panel-foot .foot-link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+  font: inherit;
+  font-size: 12px;
+}
+
+.panel-foot .foot-link .icon {
+  color: var(--ink-tertiary);
+}
+
+.panel-foot .foot-link:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.panel-foot .foot-link:hover .icon {
+  color: var(--ink);
+}
+
 /* Mac sheets: drop from under the title bar, rounded at the bottom only. */
 .sheet-layer,
 .modal-layer {
@@ -1351,33 +1376,6 @@ a.navitem.back {
 .settings-body {
   max-width: none;
   width: 100%;
-}
-
-.repo-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 22px;
-}
-
-.repo-picker .option {
-  max-width: min(320px, 100%);
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.repo-picker .option .mono {
-  display: block;
-  margin-top: 1px;
-  font-size: 10px;
-  color: var(--ink-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 280px;
 }
 
 .list-row .row-actions {
@@ -1827,8 +1825,8 @@ a.navitem.back {
 }
 
 .row.active-commit {
+  /* Selection is wash + weight only — no left-edge flag. */
   background: color-mix(in srgb, var(--row-lane, var(--primary)) 12%, var(--surface-1));
-  box-shadow: inset 2px 0 0 var(--row-lane, var(--primary));
 }
 
 .row.active-commit .msg .text {
@@ -2165,6 +2163,40 @@ button.ref.primary:hover {
   gap: 2px;
 }
 
+.settings-nav-foot {
+  margin-top: auto;
+  padding: 8px 2px 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.settings-nav-foot .foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-nav-foot .foot-link .icon {
+  color: var(--ink-tertiary);
+}
+
+.settings-nav-foot .foot-link:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.settings-nav-foot .foot-link:hover .icon {
+  color: var(--ink);
+}
+
 a.navitem {
   text-decoration: none;
 }
@@ -2265,8 +2297,12 @@ a.navitem {
   border-top: 1px solid var(--hairline);
 }
 
-.list-row .icon {
+.list-row > .icon {
   color: var(--ink-subtle);
+}
+
+.list-row .btn .icon {
+  color: inherit;
 }
 
 .list-row .name {
@@ -2723,7 +2759,7 @@ a.navitem {
   white-space: normal;
 }
 
-/* Lane setup (the doctor): a Settings page under Repositories, two columns */
+/* Lane setup (the doctor): a Settings page under Repository, two columns */
 .crumbs {
   display: flex;
   align-items: center;

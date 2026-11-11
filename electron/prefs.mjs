@@ -8,8 +8,7 @@ export function defaultPrefs() {
   return {
     version: 1,
     theme: 'system',
-    accent: 'lavender',
-    lightPalette: 'cool',
+    chroma: 'muted',
     zoom: 1,
     fontPack: 'system',
     editor: 'cursor',
@@ -57,24 +56,28 @@ function clampTtl(ms) {
   return Math.min(TTL_MAX, Math.max(TTL_MIN, Math.round(n)));
 }
 
-export function getPrefs(userDataDir) {
-  const raw = read(userDataDir);
-  if (!raw || typeof raw !== 'object') return defaultPrefs();
-  return { ...defaultPrefs(), ...raw, warmTabTtlMs: clampTtl(raw.warmTabTtlMs ?? 120_000) };
-}
-
 const ENUMS = {
   theme: ['system', 'light', 'dark'],
-  accent: ['lavender', 'slate', 'teal'],
-  lightPalette: ['cool', 'neutral'],
+  chroma: ['muted', 'vibrant'],
   fontPack: ['system', 'inter-jetbrains', 'ibm-plex'],
-  editor: ['cursor', 'vscode', 'zed', 'custom'],
+  editor: ['cursor', 'vscode', 'zed', 'windsurf', 'custom'],
   terminal: ['terminal', 'iterm', 'custom'],
-  diffTool: ['internal', 'opendiff', 'vscode', 'cursor'],
-  mergeTool: ['internal', 'opendiff', 'vscode', 'cursor'],
+  diffTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
+  mergeTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
 };
 const ABS_PATHS = ['editorPath', 'terminalPath', 'cloneDefaultPath', 'diffToolPath', 'mergeToolPath'];
 const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar'];
+
+export function getPrefs(userDataDir) {
+  const raw = read(userDataDir);
+  if (!raw || typeof raw !== 'object') return defaultPrefs();
+  const merged = { ...defaultPrefs(), ...raw, warmTabTtlMs: clampTtl(raw.warmTabTtlMs ?? 120_000) };
+  // Drop retired Appearance keys (accent picker / cool-vs-neutral light).
+  delete merged.accent;
+  delete merged.lightPalette;
+  if (!ENUMS.chroma.includes(merged.chroma)) merged.chroma = 'muted';
+  return merged;
+}
 
 /** Keep only known keys with valid values; drop the rest silently. */
 function sanitize(partial) {

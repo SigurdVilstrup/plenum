@@ -1,11 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <!-- H2 vertical forge at 16px · white glyph -->
+  <!-- M3 at 16px · dark lavender → near-black · white glyph -->
   <defs>
-    <linearGradient id="t16" x1="0.5" y1="0" x2="0.5" y2="1">
-      <stop offset="0%" stop-color="#d4894f"/>
-      <stop offset="48%" stop-color="#b86b3a"/>
-      <stop offset="100%" stop-color="#7d4320"/>
-    </linearGradient>
+    <radialGradient id="t16" cx="78%" cy="16%" r="85%">
+      <stop offset="0%" stop-color="#454e8a"/>
+      <stop offset="35%" stop-color="#2e3560"/>
+      <stop offset="70%" stop-color="#161820"/>
+      <stop offset="100%" stop-color="#0b0c11"/>
+    </radialGradient>
   </defs>
   <rect width="16" height="16" rx="3.5" fill="url(#t16)"/>
   <g transform="translate(2 2) scale(0.1875)" fill="#ffffff">

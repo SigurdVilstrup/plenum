@@ -2,10 +2,10 @@
 version: beta
 name: Plenum
 description: >-
-  Team-safe overview of parallel git worktrees, each one runnable. Adapts Linear's product UI
-  language (near-black canvas, hairline panels, one lavender signal) to a
-  graph-first Mac window: lanes panel on the left, full-height commit graph,
-  command palette over everything. Dark and light.
+  Team-safe overview of parallel git worktrees, each one runnable. Near-black
+  canvas, hairline panels, one lavender signal on a graph-first Mac window: lanes
+  panel on the left, full-height commit graph, command palette over everything.
+  Dark/light × muted/vibrant.
 colors:
   dark:
     canvas: "#010102"
@@ -18,8 +18,8 @@ colors:
     ink-muted: "#d0d6e0"
     ink-subtle: "#8a8f98"
     ink-tertiary: "#62666d"
-    primary: "#5e6ad2" # avoid-ai-design-ignore: SD purple, Linear contract
-    primary-hover: "#828fff"
+    primary: "#5e6ad2" # avoid-ai-design-ignore: SD purple, brand lock
+    primary-hover: "#7a84e0" # softer than neon #828fff — matches M3 night lavender
     success: "#27a644"
     warning: "#f2c94c"
     danger: "#eb5757"
@@ -32,7 +32,7 @@ colors:
     lane-3: "#d0689a"
     lane-4: "#8c6bb1"
   light:
-    canvas: "#f5f6f8" # cool slate paper (#29)
+    canvas: "#f5f6f8"
     surface-1: "#eef0f4"
     surface-2: "#e6e9ef"
     surface-3: "#dce1e9"
@@ -113,23 +113,23 @@ components:
 
 ## Overview
 
-Plenum is a Mac app for scanning parallel git worktrees before merge. The visual contract is Linear's product UI (see [Linear DESIGN.md](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)): near-black canvas, charcoal panels, hairline borders, one lavender accent for real actions, focus, and the selected lane. Never decoration.
+Plenum is a Mac app for scanning parallel git worktrees before merge. Visual contract: near-black canvas, charcoal panels, hairline borders, one lavender accent for real actions, focus, and the selected lane. Never decoration. Four surface looks: dark/light × muted/vibrant (Appearance → Surfaces).
 
 The structural idea is GitKraken's: a narrow list on the left and a full-height graph that owns the window. Plenum's own facts (behind the team branch, protected primary, authorship, running) live on that structure as marks, pills, and two header strips. Nothing is a card.
 
 ## Colors
 
-Two themes, same roles. The app follows the OS; the choice lives in Settings > Appearance. Mocks accept `?theme=light|dark`.
+Four looks, same roles: Mode (system/light/dark) × Surfaces (muted/vibrant). No accent picker — lavender is locked. Mocks accept `?theme=light|dark` and `data-chroma=vibrant`.
 
-- Canvas: the window ground. Surfaces 1 to 3 step up for panel, hover, selection.
+- Canvas: the window ground. Surfaces 1 to 3 step up for panel, hover, selection. Vibrant lifts chroma in the cool range; muted stays flatter charcoal / cool paper.
 - Hairline / hairline-strong: all separation. No shadows inside the window.
 - Ink, muted, subtle, tertiary: four reading levels. Tertiary is for SHAs, times, and column labels.
-- Primary: primary buttons, focus rings, the selected lane's column, the `main` ref pill border, and palette match highlights. Not backgrounds.
+- Primary (lavender `#5e6ad2`): primary buttons, focus rings, the selected lane's graph mark, the `main` ref pill border, and palette match highlights. Selection is a wash + type weight — no left-edge flag.
 - Success / warning / danger: readiness, freshness, and running only. Clean, working, behind. Running is success (the ring, the Running row dot, the graph pill dot). Migration drift against the shared database is warning, same role as "working": something is ahead of where the team is.
 - Human / assisted / agent: tip nodes, author icons, and the pill on AI-involved tips. Human is the default and gets no pill.
-- Lane 0 to 4: edge colors in the graph. Lane 0 is main and stays neutral. Lane 1 is lavender because the selected lane in every mock is lane 1; in the app the selected lane takes primary and the others cycle through 2 to 4.
+- Lane 0 to 4: edge colors in the graph. Lane 0 is main and stays neutral. The selected lane takes primary; others cycle through 2 to 4.
 
-Light theme colors are darker versions of the same hues, picked to keep AA on white. Primary stays the same in both.
+Primary stays lavender in all four looks.
 
 ## Typography
 
@@ -182,7 +182,7 @@ Tabs live in the title bar and attach to the content below: the active tab share
 
 ## Settings and sheets
 
-Settings is a page in the main window (`⌘,`), not a second window. The title bar, tab strip and palette stay; the board is replaced by a 220px sidebar whose first item is Board (`esc`), then General, Appearance, Integrations, Repositories, Agents. Appearance holds Theme (mode, accent, light surfaces) plus zoom/font/avatars; the app follows the OS by default and there is no theme toggle in the main window. Repositories is per git repository: team branch, lanes folder, lane setup status with Edit file or Lane setup…, and services. Lane setup (the doctor) is a page under Repositories with a breadcrumb, two columns (findings, proposed manifest) and a footer with Copy and Write; Esc returns to Repositories. Agents holds the local MCP endpoint and CLI, connected clients with their last call, and the lane verbs agents may use (start and stop, create, remove, write the manifest), each a switch or an Ask me / Allow / Never select. Git verbs are never offered to agents. Nothing in the manifest is editable here except by opening the file; Settings shows it.
+Settings is a page in the main window (`⌘,`), not a second window. The title bar, tab strip and palette stay; the board is replaced by a 220px sidebar whose first item is Board (`esc`), then General, Appearance, Integrations, Repositories, Agents. Appearance holds Theme (mode, surfaces muted/vibrant) plus zoom/font/avatars; the app follows the OS by default and there is no theme toggle in the main window. Repositories is per git repository: team branch, lanes folder, lane setup status with Edit file or Lane setup…, and services. Lane setup (the doctor) is a page under Repositories with a breadcrumb, two columns (findings, proposed manifest) and a footer with Copy and Write; Esc returns to Repositories. Agents holds the local MCP endpoint and CLI, connected clients with their last call, and the lane verbs agents may use (start and stop, create, remove, write the manifest), each a switch or an Ask me / Allow / Never select. Git verbs are never offered to agents. Nothing in the manifest is editable here except by opening the file; Settings shows it.
 
 Dialogs are Mac sheets: they hang from the bottom of the title bar, square at the top and rounded at the bottom, over a light scrim. New lane, Remove lane and Run (when there is drift) are 460px sheets. Lane setup, the doctor, is the one wide sheet at 760px: findings on the left, the proposed manifest in a mono block on the right, the shared-data note across the bottom, and two buttons.
 
@@ -216,20 +216,22 @@ Quiet, and mostly once. The point is to show state change, not to decorate.
 
 ## Brand
 
-App icon (#29 variant S): rimless glass squircle (cool dark tile + soft sheen, no light stroke). Layered mark in cool metal with a hot lavender bottom plate. Masters in `assets/app-icon.svg` / `assets/app-icon-16.svg`; rebuild Dock/DMG with `npm run icons`. Appearance → Theme can retint UI primary (lavender / slate / teal) without changing the Dock asset.
+App icon (M3): dark-lavender → near-black corner-pool tile, solid white glyph. No glass, no bottom-plate accent. Masters in `planning/assets/app-icon.svg` / `app-icon-16.svg`; rebuild Dock/DMG with `npm run icons`. Standalone mark uses a continuous lavender forge (`branding/plenum-mark.svg`).
 
 ## Do
 
 - Let the graph own the window. Everything else is a strip or a panel.
 - Three facts per lane row. More goes in the header or the palette.
 - Show behind-origin/main as the loudest fact after the lane name.
-- Use lavender only for primary actions, focus, the selected lane, and palette matches.
-- Keep both themes identical in structure; only tokens change.
+- Use lavender only for primary actions, focus, the selected lane, and palette matches. Hover stays in the dark-lavender family (`#7a84e0`), not neon.
+- Title bar and empty state use the M3 Dock tile. Loading uses the bare glyph only (no tile).
+- Keep both themes identical in structure; only tokens change. Vibrant dark is the brand-night surface set.
 - Show shared data as a fact on the lane. Gate Run only on drift, and say what each choice costs.
 - Put ports next to the lane they belong to. `:5101` means lane 1 everywhere it appears.
 
 ## Don't
 
+- Left-edge flags: no inset rails, border-left markers, or gutter strips to mark selection, WIP, danger, or active rows. Selection and state are wash + type weight (and existing dots/pills) only.
 - Cards under the graph. Lane lists as grids of cells.
 - A third type family, acid accents, glass blur, glow, gradients.
 - Hand-drawn glyphs or a second icon set mixed with Phosphor.

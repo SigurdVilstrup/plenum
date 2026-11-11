@@ -78,7 +78,7 @@ const state = {
   setup: null,
   identityScope: 'global',
   warmTtlMs: 120000,
-  settings: { open: false, page: 'general', setupRoot: null, repoPath: null },
+  settings: { open: false, page: 'general', setupRoot: null, setupTabId: null },
   appInfo: { version: '', commit: '', committedAt: '' },
   historyLimit: 120,
   editors: [],
@@ -129,12 +129,11 @@ function applyTheme() {
   const dark = t === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : t === 'dark';
   const root = document.documentElement;
   root.dataset.theme = dark ? 'dark' : 'light';
-  const accent = state.prefs.accent || 'lavender';
-  if (accent === 'lavender') delete root.dataset.accent;
-  else root.dataset.accent = accent;
-  const lightPalette = state.prefs.lightPalette || 'cool';
-  if (lightPalette === 'cool') delete root.dataset.lightPalette;
-  else root.dataset.lightPalette = lightPalette;
+  delete root.dataset.accent;
+  delete root.dataset.lightPalette;
+  const chroma = state.prefs.chroma || 'muted';
+  if (chroma === 'muted') delete root.dataset.chroma;
+  else root.dataset.chroma = chroma;
 }
 
 function applyPrefs() {
@@ -785,7 +784,10 @@ function openCtxMenu(x, y, tab, anchor) {
   close.addEventListener('click', async () => {
     menu.remove();
     const wasActive = tab.id === state.store.activeId;
-    if (wasActive) snapshotWarm(tab.id);
+    if (wasActive) {
+      snapshotWarm(tab.id);
+      state.switchSeq += 1;
+    }
     dropWarm(tab.id);
     state.opsByTab.delete(tab.id);
     state.refreshingByTab.delete(tab.id);
@@ -810,6 +812,7 @@ function openCtxMenu(x, y, tab, anchor) {
       state.board = null;
       paint();
     }
+    if (state.settings.open) syncSettingsAfterTabSwitch();
   });
   menu.append(rename, close);
   document.body.appendChild(menu);
@@ -1163,8 +1166,8 @@ function paintPanel() {
 
   const foot = `<div class="panel-foot">
     <button class="iconbtn" type="button" data-settings title="Settings ⌘," aria-label="Settings">${iconHTML('gear-six')}</button>
-    <button class="iconbtn" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}</button>
     <button class="iconbtn" type="button" disabled title="Account — coming soon" aria-label="Account (coming soon)">${iconHTML('user')}</button>
+    <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
   </div>`;
 
   el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${foot}`;
@@ -1319,8 +1322,8 @@ function gitActionsHTML(l) {
   return a.join('');
 }
 
-const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', custom: 'arrow-square-out' };
-const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed' }[state.prefs.editor] || 'editor');
+const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', windsurf: 'windsurf', custom: 'arrow-square-out' };
+const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed', windsurf: 'Windsurf' }[state.prefs.editor] || 'editor');
 const editorIcon = () => EDITOR_ICON[state.prefs.editor] || 'cursor';
 
 function editorBtnHTML() {
@@ -1620,7 +1623,7 @@ function openQuickStartSheet() {
     ['cloud-arrow-down', 'Behind', 'Commits on the team branch that this lane doesn’t have yet.'],
     ['sparkle', 'Authorship', 'Who wrote the newest tip — from author + agent trailers. Humans don’t get a pill.'],
     ['play', 'Runnable lanes', 'Phase two: start a lane on its own ports via .plenum/lane.yaml. Without that file it still shows up on the board.'],
-    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the pencil in the panel foot. Optional UI target. Saved on this Mac only.'],
+    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or Feedback in the panel foot / Settings sidebar. Optional UI target. Saved on this Mac only.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
@@ -2851,7 +2854,7 @@ const SETTINGS_NAV = [
   ['general', 'list', 'General'],
   ['appearance', 'sun', 'Appearance'],
   ['accounts', 'key', 'Accounts'],
-  ['repositories', 'folder-simple', 'Repositories'],
+  ['repositories', 'folder-simple', 'Repository'],
   ['agents', 'robot', 'Agents'],
 ];
 
@@ -2879,6 +2882,7 @@ const SETTINGS_PAGES = {
       { id: 'cursor', label: 'Cursor', available: true },
       { id: 'vscode', label: 'VS Code', available: true },
       { id: 'zed', label: 'Zed', available: true },
+      { id: 'windsurf', label: 'Windsurf', available: true },
       { id: 'custom', label: 'Other app…', available: true },
     ]).filter((e) => e.available || e.id === p.editor)
       .map((e) => [e.id, e.label]);
@@ -2889,6 +2893,7 @@ const SETTINGS_PAGES = {
       { id: 'opendiff', label: 'FileMerge', available: true },
       { id: 'vscode', label: 'VS Code', available: true },
       { id: 'cursor', label: 'Cursor', available: true },
+      { id: 'windsurf', label: 'Windsurf', available: true },
     ];
     const diffOpts = tools.filter((t) => t.available || t.id === p.diffTool).map((t) => [t.id, t.label]);
     const mergeOpts = tools.filter((t) => t.available || t.id === p.mergeTool).map((t) => [t.id, t.label]);
@@ -2920,7 +2925,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">Folders</div>
       <div class="list">
         ${settingsRow('folder-simple', 'Clone path', 'Open Repository starts here', '', custom('cloneDefaultPath', '~/Dev'), 'Folder the Open Repository picker jumps to first. ~/… or an absolute path.')}
-        ${settingsRow('tree-structure', 'Lanes folder', 'Default for new repos', 'Override per repo under Repositories', custom('defaultLanesFolder', '.worktrees'), 'Where Create lane puts worktrees when a repo has no override. Relative paths sit inside the checkout.')}
+        ${settingsRow('tree-structure', 'Lanes folder', 'Default for new repos', 'Override per repo under Repository', custom('defaultLanesFolder', '.worktrees'), 'Where Create lane puts worktrees when a repo has no override. Relative paths sit inside the checkout.')}
       </div>
       <div class="group-head">Tabs</div>
       <div class="list">
@@ -2932,21 +2937,12 @@ const SETTINGS_PAGES = {
   },
   appearance: () => {
     const p = state.prefs;
-    const accent = p.accent || 'lavender';
-    const lightPalette = p.lightPalette || 'cool';
-    const accentOpts = [
-      ['lavender', '<i class="swatch lav" aria-hidden="true"></i>Lavender'],
-      ['slate', '<i class="swatch slate" aria-hidden="true"></i>Slate'],
-      ['teal', '<i class="swatch teal" aria-hidden="true"></i>Teal'],
-    ];
-    const accentRow = `<div class="option-row" role="group" aria-label="Accent" data-pref="accent">${accentOpts.map(([v, html]) =>
-      `<button class="option${v === accent ? ' on' : ''}" type="button" aria-pressed="${v === accent}" data-v="${v}">${html}</button>`).join('')}</div>`;
-    return `<h1>Appearance</h1><p class="lede">Theme, accent, size, type. Stays on this Mac.</p>
+    const chroma = p.chroma || 'muted';
+    return `<h1>Appearance</h1><p class="lede">Theme, surfaces, size, type. Stays on this Mac.</p>
       <div class="group-head">Theme</div>
       <div class="list">
         ${settingsRow('sun', 'Mode', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System tracks light/dark from macOS. Light and Dark stay put.')}
-        ${settingsRow('sparkle', 'Accent', '', 'Buttons and the selected lane', accentRow, 'Lavender matches the Dock mark. Slate and Teal stay in the cool-dev lane.')}
-        ${settingsRow('sun', 'Light surfaces', '', 'Only in Light (or System while light)', optionGroup('lightPalette', [['cool', 'Cool'], ['neutral', 'Neutral']], lightPalette, { label: 'Light surfaces' }), 'Cool is the default blue-gray. Neutral brings back the warmer greys.')}
+        ${settingsRow('sparkle', 'Surfaces', '', 'Muted or vibrant chrome', optionGroup('chroma', [['muted', 'Muted'], ['vibrant', 'Vibrant']], chroma, { label: 'Surfaces' }), 'Four looks total with Mode: dark/light × muted/vibrant. Lavender stays the brand; this only shifts how saturated the chrome is.')}
       </div>
       <div class="theme-preview" aria-hidden="true">
         <div class="tp-surface"><span class="tp-chip">Canvas</span></div>
@@ -2975,10 +2971,14 @@ const SETTINGS_PAGES = {
       || `<div class="list-row" title="Add a host below so https push/pull can use a token without asking every time.">${iconHTML('key')}<div class="name">None yet</div><div class="detail">https remotes keep asking until you save one.</div><span></span><span></span></div>`;
     const field = (name, ph, type = 'text') => `<input class="input" name="${name}" type="${type}" placeholder="${ph}" aria-label="${ph}" autocomplete="off" required />`;
     const ssh = !a ? '' : a.ssh.state === 'keys' ? `${a.ssh.count} key${a.ssh.count === 1 ? '' : 's'} in ssh-agent` : a.ssh.state === 'none' ? 'ssh-agent has no keys' : 'No ssh-agent running';
+    const tab = activeTab();
+    const scopeDetail = state.board
+      ? (tab ? esc(tab.title) : '')
+      : 'Open a repo to set a local identity';
     return `<h1>Accounts</h1><p class="lede">Commit author, and how https remotes log in. Tokens go to git’s helper${where ? ` (${where})` : ''}. Plenum only remembers host + username.</p>
       <div class="group-head">Git identity<small>Writes user.name / user.email in git config — not app prefs.</small></div>
       <div class="list">
-        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repo to set a local identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'Global → ~/.gitconfig. This repository → only the open repo’s local config.')}
+        ${settingsRow('user', 'Applies to', '', scopeDetail, optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'Current repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'All repositories → ~/.gitconfig. Current repository → only the open tab’s local config.')}
         ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on new commits.')}
         ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`, 'Author email. Same one remotes and hosting expect.')}
       </div>
@@ -2994,14 +2994,12 @@ const SETTINGS_PAGES = {
   },
   repositories: () => {
     const tabs = state.store.tabs;
-    const head = `<h1>Repositories</h1><p class="lede">Per open tab: team branch, lanes folder, and whether Run works.</p>`;
-    if (!tabs.length) return `${head}<div class="list">${settingsRow('folder-simple', 'No repositories open', '', 'Open one from the empty screen or ⌘P.', '', 'These settings are per open tab. Close a tab and it drops off this list.')}</div>`;
-    const activePath = state.settings.repoPath
-      && tabs.some((t) => t.path === state.settings.repoPath)
-      ? state.settings.repoPath
-      : (tabs.find((t) => t.id === state.store.activeId)?.path || tabs[0].path);
-    state.settings.repoPath = activePath;
-    const t = tabs.find((x) => x.path === activePath) || tabs[0];
+    if (!tabs.length) {
+      return `<h1>Repository</h1><p class="lede">Team branch, lanes folder, and Run for the open tab.</p>
+      <div class="list">${settingsRow('folder-simple', 'No repository open', '', 'Open one from the empty screen or ⌘P.', '', 'These settings follow the open tab.')}</div>`;
+    }
+    const head = `<h1>Repository</h1><p class="lede">Team branch, lanes folder, and Run for the tab you’re on. Switch tabs to configure another checkout.</p>`;
+    const t = tabs.find((x) => x.id === state.store.activeId) || tabs[0];
     const b = state.repoBoards.get(t.path);
     const root = b?.root || t.path;
     const folder = state.prefs.repoOverrides?.[root]?.lanesFolder || '';
@@ -3012,16 +3010,10 @@ const SETTINGS_PAGES = {
       ? `run <span class="mono">${esc(m.run)}</span>${m.test ? ` · test <span class="mono">${esc(m.test)}</span>` : ''} · ports <span class="mono">+${esc(m.offset)}</span>`
       : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet — lanes still show, they just can’t start.');
     const svc = (m?.services || []).map((s) => `${esc(s.name)} (${esc(s.mode)})`).join(', ');
-    const picker = `<div class="repo-picker" role="tablist" aria-label="Open repositories">${tabs.map((tab) => {
-      const on = tab.path === activePath;
-      const bb = state.repoBoards.get(tab.path);
-      const tip = bb?.hasManifest ? 'Has lane.yaml' : bb ? 'No lane.yaml yet' : 'Loading board…';
-      return `<button class="option${on ? ' on' : ''}" type="button" role="tab" aria-selected="${on}" data-repo-path="${esc(tab.path)}" title="${esc(tip)}"><span>${esc(tab.title)}</span><span class="mono">${esc(bb?.displayRoot || tab.path)}</span></button>`;
-    }).join('')}</div>`;
     const edit = b?.hasManifest
       ? `<button class="btn" type="button" data-edit-manifest="${esc(root)}" title="Open .plenum/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button>`
       : '';
-    return `${head}${picker}
+    return `${head}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
         ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
@@ -3038,7 +3030,7 @@ const SETTINGS_PAGES = {
       : s.findings.length
         ? s.findings.map((f) => `<div class="finding">${iconHTML('terminal-window', 'sm')}<div>${esc(f)}</div></div>`).join('')
         : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious turned up.</div></div>`;
-    return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repositories</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
+    return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repository</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
       <h1>Lane setup</h1>
       <p class="lede">Why a second checkout can’t start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing hits disk until Write.</p>
       <div class="cols">
@@ -3080,7 +3072,15 @@ const SETTINGS_PAGES = {
 
 function openLaneSetup(root = state.board?.root) {
   state.settings.setupRoot = root;
+  state.settings.setupTabId = state.store.activeId;
   openSettings('setup');
+}
+
+/** Seed Repository settings from the live board so controls never stay on the previous tab. */
+function seedActiveRepoBoard() {
+  const t = activeTab();
+  if (!t || !state.board) return;
+  state.repoBoards.set(t.path, state.board);
 }
 
 async function loadSetup(root) {
@@ -3114,14 +3114,23 @@ function bindSetup(root) {
 }
 
 async function loadRepos() {
-  await Promise.all(state.store.tabs.map(async (t) => {
-    try {
-      const b = await api.invoke('board.get', t.path);
-      b.displayRoot = await prettyPath(b.root);
-      state.repoBoards.set(t.path, b);
-    } catch { /* leave as Checking… */ }
-  }));
-  if (state.settings.open && state.settings.page === 'repositories') renderSettings();
+  const t = activeTab();
+  if (!t) {
+    if (state.settings.open && state.settings.page === 'repositories') renderSettings();
+    return;
+  }
+  const seq = state.switchSeq;
+  const path = t.path;
+  try {
+    const b = await api.invoke('board.get', path);
+    if (seq !== state.switchSeq || activeTab()?.path !== path) return;
+    b.displayRoot = await prettyPath(b.root);
+    if (seq !== state.switchSeq || activeTab()?.path !== path) return;
+    state.repoBoards.set(path, b);
+  } catch { /* leave seeded / Loading… */ }
+  if (state.settings.open && state.settings.page === 'repositories' && activeTab()?.path === path) {
+    renderSettings();
+  }
 }
 
 /** Select of local short names + Auto (re-detect) for #43. */
@@ -3145,10 +3154,6 @@ function teamBranchControlHTML(board, root, title) {
 }
 
 function bindRepos(root) {
-  root.querySelectorAll('[data-repo-path]').forEach((b) => b.addEventListener('click', () => {
-    state.settings.repoPath = b.dataset.repoPath;
-    renderSettings();
-  }));
   root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => {
     openLaneSetup(b.dataset.setupRoot);
   }));
@@ -3198,8 +3203,16 @@ function bindAccounts(root) {
 }
 
 async function loadIdentity() {
-  try { state.identity = await invoke('git.identity.get'); } catch { return; }
-  if (state.settings.open && state.settings.page === 'accounts') renderSettings();
+  const seq = state.switchSeq;
+  const path = activeTab()?.path || null;
+  try {
+    const identity = await invoke('git.identity.get');
+    if (seq !== state.switchSeq) return;
+    if ((activeTab()?.path || null) !== path) return;
+    if (!(state.settings.open && state.settings.page === 'accounts')) return;
+    state.identity = identity;
+    renderSettings();
+  } catch { /* toasted / leave prior */ }
 }
 
 function bindIdentity(root) {
@@ -3234,6 +3247,7 @@ function bindPrefs(root) {
 function openSettings(page = state.settings.page) {
   state.settings.open = true;
   state.settings.page = page;
+  if (page === 'repositories') seedActiveRepoBoard();
   paint();
   renderSettings();
   if (page === 'accounts') { loadIdentity(); loadAccounts(); }
@@ -3248,11 +3262,14 @@ function closeSettings() {
 
 function renderSettings() {
   const { page } = state.settings;
-  const lit = page === 'setup' ? 'repositories' : page; // Lane setup lives under Repositories
+  const lit = page === 'setup' ? 'repositories' : page; // Lane setup lives under Repository
   const nav = SETTINGS_NAV.map(([id, ic, label]) =>
     `<button class="navitem${id === lit ? ' active' : ''}" type="button" data-page="${id}"${id === lit ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
   el.settingsNav.innerHTML = `<button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
-    <div class="heading">Settings</div>${nav}`;
+    <div class="heading">Settings</div>${nav}
+    <div class="settings-nav-foot">
+      <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
+    </div>`;
   el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
@@ -3260,8 +3277,41 @@ function renderSettings() {
   if (page === 'setup') bindSetup(el.settingsBody);
   bindPrefs(el.settingsBody);
   el.settingsNav.querySelector('[data-board]').addEventListener('click', closeSettings);
+  el.settingsNav.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
     b.addEventListener('click', () => openSettings(b.dataset.page)));
+}
+
+/**
+ * After a tab switch while Settings is open, keep the page in sync with the active tab.
+ * Call optimistically as soon as activeId (and warm board) update; pass afterSelect:true
+ * once main’s active path is updated so identity/repo fetches hit the right checkout.
+ */
+function syncSettingsAfterTabSwitch({ afterSelect = true } = {}) {
+  if (!state.settings.open) return;
+  const { page } = state.settings;
+  if (page === 'setup') {
+    const setupTabId = state.settings.setupTabId;
+    if (!activeTab() || (setupTabId && state.store.activeId !== setupTabId)) {
+      state.settings.setupRoot = null;
+      state.settings.setupTabId = null;
+      openSettings('repositories');
+      toast('Lane setup closed — switched repository');
+      return;
+    }
+  }
+  if (page === 'accounts') {
+    renderSettings();
+    if (afterSelect) { loadIdentity(); loadAccounts(); }
+    return;
+  }
+  if (page === 'repositories') {
+    seedActiveRepoBoard();
+    renderSettings();
+    if (afterSelect) loadRepos();
+    return;
+  }
+  if (page === 'setup') renderSettings();
 }
 
 /* Palette */
@@ -3409,7 +3459,7 @@ async function openRepo() {
 async function selectTab(id) {
   if (id === state.store.activeId) { if (state.settings.open) closeSettings(); return; }
   const prevId = state.store.activeId;
-  state.settings.open = false;
+  const keepSettings = state.settings.open;
   // Cancel any prior cold-load chrome so a late timer cannot cover the new tab.
   setLoading(false);
   snapshotWarm(prevId);
@@ -3432,6 +3482,8 @@ async function selectTab(id) {
     setLoading(true, 'Opening repository…', tab?.path || '', { immediate: true });
     paint();
   }
+  // Optimistic: Settings body follows the tab strip immediately (don’t wait on cold board.get).
+  if (keepSettings) syncSettingsAfterTabSwitch({ afterSelect: false });
   try {
     const res = await invoke('tabs.select', id);
     if (seq !== state.switchSeq || state.store.activeId !== id) return;
@@ -3475,6 +3527,8 @@ async function selectTab(id) {
       paint();
     }
   }
+  // After main active path is updated: identity/repo fetches + seed from the loaded board.
+  if (seq === state.switchSeq && keepSettings) syncSettingsAfterTabSwitch({ afterSelect: true });
 }
 
 async function refresh() {

@@ -300,8 +300,17 @@ input, textarea, [contenteditable="true"] {
   width: 56px;
   height: 56px;
   margin: 0 auto 16px;
+}
+
+.loading-logo {
   color: var(--ink-subtle);
   fill: currentColor;
+}
+
+.empty-logo {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-pop);
 }
 
 .spinner {
@@ -958,15 +967,13 @@ button.env-link {
   background: var(--surface-3);
 }
 
-/* Working tree — not a commit; make the expected action obvious */
+/* Working tree — not a commit; make the expected action obvious (wash only — no left-edge flag). */
 .window.app .row.wip {
   color: var(--ink-muted);
   background: color-mix(in srgb, var(--warning) 5%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--warning) 55%, var(--hairline));
 }
 .window.app .row.wip.danger {
   background: color-mix(in srgb, var(--danger) 5%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--danger) 55%, var(--hairline));
 }
 .window.app .row.wip:hover:not(.active-commit),
 .window.app .row.wip.selected-lane:hover:not(.active-commit) {

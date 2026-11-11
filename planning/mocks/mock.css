@@ -16,7 +16,7 @@
   --ink-subtle: #8a8f98;
   --ink-tertiary: #62666d;
   --primary: #5e6ad2;
-  --primary-hover: #828fff;
+  --primary-hover: #7a84e0;
   --on-primary: #ffffff;
   --success: #27a644;
   --warning: #f2c94c;
@@ -240,12 +240,18 @@ kbd {
   display: flex;
   align-items: center;
   margin-right: 10px;
-  color: var(--ink-subtle);
+  width: 16px;
+  height: 16px;
+  border-radius: 3.5px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
+.appmark img,
 .appmark svg {
-  width: 18px;
-  height: 18px;
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .tabstrip {

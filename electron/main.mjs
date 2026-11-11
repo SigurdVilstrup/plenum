@@ -245,7 +245,7 @@ ipcMain.handle('repo.refresh', async (_e, opts) => {
   if (!p) return null;
   return loadBoard(p, opts || {});
 });
-/** Active tab, or another open tab's root (Settings > Repositories). Never an arbitrary path. */
+/** Active tab, or another open tab's root (Settings > Repository / Lane setup). Never an arbitrary path. */
 function tabRoot(root) {
   if (!root) return activePath();
   const abs = path.resolve(String(root));
@@ -315,6 +315,18 @@ const EDITORS = {
     apps: [path.join(home, 'Applications/Zed.app'), '/Applications/Zed.app'],
     open: ['-a', 'Zed'],
   },
+  windsurf: {
+    label: 'Windsurf',
+    cli: [
+      '/usr/local/bin/windsurf',
+      '/opt/homebrew/bin/windsurf',
+      path.join(home, '.local/bin/windsurf'),
+      '/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf',
+      path.join(home, 'Applications/Windsurf.app/Contents/Resources/app/bin/windsurf'),
+    ],
+    apps: [path.join(home, 'Applications/Windsurf.app'), '/Applications/Windsurf.app'],
+    open: ['-b', 'com.exafunction.windsurf'],
+  },
 };
 
 function editorAvailable(e) {
@@ -352,6 +364,7 @@ function listDiffMergeTools() {
     { id: 'opendiff', label: 'FileMerge', available: fileMergeAvailable() },
     { id: 'vscode', label: 'VS Code', available: editorAvailable(EDITORS.vscode) },
     { id: 'cursor', label: 'Cursor', available: editorAvailable(EDITORS.cursor) },
+    { id: 'windsurf', label: 'Windsurf', available: editorAvailable(EDITORS.windsurf) },
   ];
 }
 
