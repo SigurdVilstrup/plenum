@@ -74,7 +74,7 @@ test('up starts a long-lived command and down stops it', async () => {
 test('refuses primary checkout', async () => {
   const { root, wt } = await fixture();
   try {
-    await assert.rejects(() => supervisor.up(root, 0), /protected/);
+    await assert.rejects(() => supervisor.up(root, 0), /protected/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
@@ -137,7 +137,7 @@ test('test stores lastTest not ok on non-zero exit', async () => {
 test('test refuses primary checkout', async () => {
   const { root, wt } = await fixture();
   try {
-    await assert.rejects(() => supervisor.test(root, 0), /protected/);
+    await assert.rejects(() => supervisor.test(root, 0), /protected/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
