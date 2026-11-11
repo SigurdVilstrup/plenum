@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// The launcher sets this so Electron runs us as node; lane commands must not inherit it.
+delete process.env.ELECTRON_RUN_AS_NODE;
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { doctor } from '../electron/lane/doctor.mjs';
