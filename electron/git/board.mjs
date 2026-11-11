@@ -27,6 +27,8 @@ const AGENT_TOOLS = [
   ['anthropic', 'Anthropic'],
   ['gemini', 'Gemini'],
   ['muse', 'Muse'],
+  ['windsurf', 'Windsurf'],
+  ['cascade', 'Windsurf'],
   ['devin', 'Devin'],
   ['aider', 'Aider'],
   ['gpt', 'GPT'],

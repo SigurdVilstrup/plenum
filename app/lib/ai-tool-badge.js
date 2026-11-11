@@ -1,7 +1,7 @@
 /** Product marks for known AI tools (authorship badge + pill). */
 
 /** Day-one tools with a brand mark, display order. */
-export const AI_BADGE_TOOLS = ['Cursor', 'Claude', 'Codex', 'Copilot', 'Gemini', 'Muse'];
+export const AI_BADGE_TOOLS = ['Cursor', 'Claude', 'Codex', 'Copilot', 'Gemini', 'Muse', 'Windsurf', 'Devin', 'Aider'];
 
 /** Static new URL() so Vite emits every asset (dynamic paths are dropped). */
 const TOOL_URLS = {
@@ -11,6 +11,9 @@ const TOOL_URLS = {
   Copilot: { href: new URL('../ai-badges/copilot.svg', import.meta.url).href, tone: 'dark' },
   Gemini: { href: new URL('../ai-badges/gemini.png', import.meta.url).href, tone: 'light' },
   Muse: { href: new URL('../ai-badges/muse.png', import.meta.url).href, tone: 'light' },
+  Windsurf: { href: new URL('../ai-badges/windsurf.svg', import.meta.url).href, tone: 'light' },
+  Devin: { href: new URL('../ai-badges/devin.png', import.meta.url).href, tone: 'light' },
+  Aider: { href: new URL('../ai-badges/aider.png', import.meta.url).href, tone: 'light' },
 };
 
 /** @param {string|null|undefined} tool */

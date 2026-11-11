@@ -28,6 +28,16 @@ test('classify Codex before openai.com email domain', () => {
   assert.equal(a.tool, 'Codex');
 });
 
+test('classify Windsurf and Cascade trailers', () => {
+  assert.equal(classifyAuthorship('Sigurd', 's@x.com', 'Co-authored-by: Windsurf <noreply@codeium.com>').tool, 'Windsurf');
+  assert.equal(classifyAuthorship('Sigurd', 's@x.com', 'Assisted-by: Cascade').tool, 'Windsurf');
+});
+
+test('classify Devin and Aider trailers', () => {
+  assert.equal(classifyAuthorship('Sigurd', 's@x.com', 'Co-authored-by: Devin <devin@cognition.ai>').tool, 'Devin');
+  assert.equal(classifyAuthorship('Sigurd', 's@x.com', 'Generated-with: Aider').tool, 'Aider');
+});
+
 test('emailAvatarHash normalizes and hashes', () => {
   assert.equal(emailAvatarHash(''), '');
   assert.equal(emailAvatarHash('  Ada@Example.COM '), emailAvatarHash('ada@example.com'));

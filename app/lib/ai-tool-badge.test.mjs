@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { AI_BADGE_TOOLS, aiToolBadge, aiToolBadgeHTML, aiToolPillIconHTML, authorshipBadgeLegendHTML } from './ai-tool-badge.js';
 
 test('maps day-one tools', () => {
-  for (const t of ['Cursor', 'Claude', 'Codex', 'Copilot', 'Gemini', 'Muse']) {
+  for (const t of ['Cursor', 'Claude', 'Codex', 'Copilot', 'Gemini', 'Muse', 'Windsurf', 'Devin', 'Aider']) {
     assert.ok(aiToolBadge(t), t);
   }
   assert.equal(aiToolBadge('OpenAI'), null);
@@ -14,7 +14,7 @@ test('badge HTML for Cursor', () => {
   const html = aiToolBadgeHTML('Cursor');
   assert.match(html, /class="ai-badge"/);
   assert.match(html, /cursor/);
-  assert.equal(aiToolBadgeHTML('Devin'), '');
+  assert.equal(aiToolBadgeHTML('UnknownTool'), '');
 });
 
 test('Copilot uses dark chip', () => {
@@ -26,6 +26,12 @@ test('pill icon for Muse', () => {
   const html = aiToolPillIconHTML('Muse');
   assert.match(html, /ai-pill-icon/);
   assert.match(html, /muse/);
+});
+
+test('Devin and Windsurf badges render', () => {
+  assert.match(aiToolBadgeHTML('Devin'), /devin/);
+  assert.match(aiToolBadgeHTML('Windsurf'), /windsurf/);
+  assert.match(aiToolPillIconHTML('Aider'), /aider/);
 });
 
 test('settings legend lists day-one tools plus human', () => {

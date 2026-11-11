@@ -24,9 +24,16 @@ test('mixed with tool', () => {
   assert.match(html, /title="Mixed authorship \(Cursor\)"/);
 });
 
-test('unknown tool falls back to kind icon', () => {
+test('Devin uses brand mark', () => {
   const html = authorshipPillHTML('assisted', 'Devin', icon);
   assert.match(html, /Devin/);
+  assert.match(html, /ai-pill-icon/);
+  assert.doesNotMatch(html, /\[sparkle\]/);
+});
+
+test('unknown tool falls back to kind icon', () => {
+  const html = authorshipPillHTML('assisted', 'MysteryBot', icon);
+  assert.match(html, /MysteryBot/);
   assert.match(html, /\[sparkle\]/);
 });
 
