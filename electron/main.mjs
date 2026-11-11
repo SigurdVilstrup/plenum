@@ -193,7 +193,7 @@ ipcMain.handle('os.editors', () => listEditors());
 // Sheet must be closed by renderer before invoke so capture excludes dialog chrome.
 ipcMain.handle('feedback.save', async (_e, payload) => {
   const comment = String(payload?.comment || '').trim();
-  if (!comment) throw new Error('Comment required.');
+  if (!comment) throw new Error('Add a comment.');
   const target = payload?.target ?? null;
   let rect = null;
   if (target?.rect) {
@@ -337,7 +337,7 @@ function launch(cmd, args) {
 
 /** Custom tool from Settings: a .app bundle or an executable that takes the folder as its argument. */
 function openCustom(tool, abs) {
-  if (!tool || !path.isAbsolute(tool) || !fs.existsSync(tool)) throw new Error('Set a valid path in Settings > General.');
+  if (!tool || !path.isAbsolute(tool) || !fs.existsSync(tool)) throw new Error('Set a valid path under Settings → General.');
   if (tool.endsWith('.app')) launch('open', ['-a', tool, abs]);
   else launch(tool, [abs]);
 }
@@ -393,7 +393,7 @@ ipcMain.handle('accounts.setHttps', async (_e, { kind, host, username, token }) 
   const h = creds.sanitizeHost(kind === 'github' ? 'github.com' : host);
   const user = String(username ?? '').trim();
   if (!(await creds.credentialHelper()).length) {
-    throw new Error('No git credential helper configured. Run: git config --global credential.helper osxkeychain');
+    throw new Error('No git credential helper set. Run: git config --global credential.helper osxkeychain');
   }
   await creds.approve({ host: h, username: user, password: token });
   const list = creds.upsertHost(getPrefs(prefsDir()).credentialHosts, { host: h, username: user, kind });

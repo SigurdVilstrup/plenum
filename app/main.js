@@ -1058,7 +1058,7 @@ function paintPanel() {
     ? `${iconHTML('warning-circle')}`
     : `${iconHTML('shield-check')}`;
   let html = `<div class="section">
-    <div class="section-head" title="The checkout on the team branch. Plenum watches it and never works in it.">Protected</div>
+    <div class="section-head" title="Checkout on the team branch. Plenum watches it and won’t work in it.">Protected</div>
     <button class="lane-row ${selected === 0 ? 'selected' : ''}" type="button" data-lane="0">
       <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
       <span class="name">${esc(primary.name)}</span>
@@ -1072,9 +1072,9 @@ function paintPanel() {
     const run = l.running ? ' running' : '';
     const runTitle = l.running ? ' Running.' : '';
     let mark;
-    if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working: uncommitted changes.${runTitle}"><i></i></span>`;
-    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove: merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
-    else mark = `<span class="mark unmerged${flash}${run}" title="Not merged.${runTitle}"><i></i></span>`;
+    if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working — uncommitted changes.${runTitle}"><i></i></span>`;
+    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove — merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
+    else mark = `<span class="mark unmerged${flash}${run}" title="Not merged yet.${runTitle}"><i></i></span>`;
     const meta = l.readiness === 'safe'
       ? `<span class="meta ok">merged</span>`
       : l.behind > 0
@@ -1088,7 +1088,7 @@ function paintPanel() {
 
   html += `<div class="section">
     <div class="section-head">
-      <span title="A lane is a git worktree on its own branch.">Lanes <span class="count">${lanes.length}</span></span>
+      <span title="A worktree on its own branch.">Lanes <span class="count">${lanes.length}</span></span>
       <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
     </div>
     ${rows}
@@ -1106,7 +1106,7 @@ function paintPanel() {
       </button>`;
     }).join('');
     html += `<div class="section">
-      <div class="section-head"><span title="Lanes with their own copy of the stack running. Ports are offset per lane; data is shared unless the manifest says otherwise.">Running <span class="count">${running.length}</span></span></div>
+      <div class="section-head"><span title="Lanes running their own stack. Ports offset per lane; data shared unless the manifest says otherwise.">Running <span class="count">${running.length}</span></span></div>
       ${runningRows}
     </div>`;
   }
@@ -1139,7 +1139,7 @@ function paintPanel() {
     </div>`;
   }
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips — ↓↑ only when drifted from upstream (origin/…). Vs protected tip stays on the lane header.">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips. ↓↑ only when drifted from upstream (origin/…). Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Branches</span>
       <span class="meta">${branchMeta}</span>
@@ -1147,7 +1147,7 @@ function paintPanel() {
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips (no local branch of the same name). origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists — that is why this can read 0.">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips — no local branch of the same name. origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists, so this can read 0.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="name" style="color: var(--ink-subtle)">Remotes</span>
       <span class="meta">${remoteMeta}</span>
@@ -1155,7 +1155,7 @@ function paintPanel() {
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
       remotes.length
         ? remoteBody
-        : `<div class="empty-note">${origin?.display ? `Tracking tips live under Branches · origin is <span class="mono">${esc(origin.display)}</span>` : 'No remote-only tips'}</div>`
+        : `<div class="empty-note">${origin?.display ? `Tracking tips sit under Branches · origin is <span class="mono">${esc(origin.display)}</span>` : 'No remote-only tips'}</div>`
     }</div>
   </div>`;
 
@@ -1295,7 +1295,7 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false)
 function gitActionsHTML(l) {
   const a = [];
   const stashes = state.board?.stashCount || 0;
-  if (state.conflictRoot) a.push(`<button class="btn" type="button" data-act="conflicts" title="Resume conflict walk">${iconHTML('warning-circle', 'sm')}Resolve conflicts</button>`);
+  if (state.conflictRoot) a.push(`<button class="btn" type="button" data-act="conflicts" title="Pick up the conflict walk">${iconHTML('warning-circle', 'sm')}Resolve conflicts</button>`);
   if (l.isPrimary) {
     if (l.dirty) a.push(`<button class="btn" type="button" data-act="commit" title="Commit on ${esc(l.name)}">${iconHTML('git-commit', 'sm')}Commit</button>`);
     if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
@@ -1309,10 +1309,10 @@ function gitActionsHTML(l) {
   if (l.dirty) a.push(`<button class="btn" type="button" data-act="stash" title="Stash uncommitted changes">${iconHTML('stack', 'sm')}Stash</button>`);
   if (stashes) a.push(`<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop latest stash${stashes > 1 ? ` · ${stashes}` : ''}</button>`);
   if (l.readiness === 'safe' && !state.conflictRoot) return a.join('');
-  if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase this lane onto a chosen tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
+  if (l.behind) a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase onto a tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
   else if (l.ahead && !l.dirty) a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
-  if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push (force-with-lease after rebase)">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
-  a.push(`<button class="btn" type="button" data-act="pull" title="Pull ff-only">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
+  if (l.unpushed) a.push(`<button class="btn" type="button" data-act="push" title="Push — force-with-lease after rebase">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`);
+  a.push(`<button class="btn" type="button" data-act="pull" title="Pull (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
   return a.join('');
 }
 
@@ -1346,9 +1346,9 @@ function runActionsHTML(l) {
     return `<button class="chip url" type="button" data-act="openUrl" data-url="${esc(url)}" title="${esc(url)}">${iconHTML('globe-simple', 'sm')}${esc(name)} <span class="mono">:${esc(port)}</span></button>`;
   }).join('');
   const badge = l.dataMode === 'shared'
-    ? `<span class="badge data" title="Databases shared across lanes. Switch a service to snapshot in .plenum/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
+    ? `<span class="badge data" title="Databases shared across lanes. Set a service to snapshot in .plenum/lane.yaml for an isolated copy.">${iconHTML('database', 'sm')}shared data</span>`
     : l.dataMode === 'snapshot'
-      ? `<span class="badge data" title="This lane seeds its own copy via services.*.snapshot (or data.snapshot) before Run.">${iconHTML('database', 'sm')}snapshot data</span>`
+      ? `<span class="badge data" title="Seeds its own copy via services.*.snapshot (or data.snapshot) before Run.">${iconHTML('database', 'sm')}snapshot data</span>`
       : '';
   const tests = l.lastTest
     ? `<span class="env-note">${iconHTML(l.lastTest.ok ? 'check-circle' : 'warning-circle', 'sm')}tests ${l.lastTest.ok ? 'passed' : 'failed'}</span>`
@@ -1445,7 +1445,7 @@ async function handleAction(act, lane, url) {
     if (act === 'doctor') return openLaneSetup();
     if (act === 'conflicts') return openConflictSheet(lane);
     if (act === 'stash') {
-      return runGit('lane.stash', lane.index, `Stashed uncommitted changes on ${lane.name}`, 'stash');
+      return runGit('lane.stash', lane.index, `Stashed changes on ${lane.name}`, 'stash');
     }
     if (act === 'stashPop') {
       return openStashPopSheet(lane);
@@ -1537,16 +1537,16 @@ function openDriftSheet(lane, pending) {
     <form class="modal" role="dialog" aria-labelledby="up-title">
       <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Shared database</div>
       <h1 id="up-title">Run ${esc(lane.name)}</h1>
-      <p>This lane has ${n} migration${n === 1 ? '' : 's'} the shared database has not run. Every lane uses that database${others.length ? `, including ${others.map(esc).join(' and ')}` : ''}.</p>
+      <p>${n} migration${n === 1 ? '' : 's'} missing from the shared database. Every lane uses it${others.length ? `, including ${others.map(esc).join(' and ')}` : ''}.</p>
       ${list}
       <div class="list">
         <label class="list-row compact choice">
           <input type="radio" name="up" value="force" checked />
-          <div class="name">Start without them<small>The app starts; the code in this lane may not match the schema.</small></div>
+          <div class="name">Start without them<small>App boots; this lane’s code may not match the schema.</small></div>
         </label>
         <label class="list-row compact choice">
           <input type="radio" name="up" value="snapshot" />
-          <div class="name">Switch service to snapshot<small>Open Lane setup to set <span class="mono">mode: snapshot</span> plus a <span class="mono">snapshot:</span> command in <span class="mono">.plenum/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
+          <div class="name">Switch service to snapshot<small>Open Lane setup — set <span class="mono">mode: snapshot</span> and a <span class="mono">snapshot:</span> command in <span class="mono">.plenum/lane.yaml</span>. Next Run seeds that copy on the offset ports.</small></div>
         </label>
       </div>
       <div class="row-end">
@@ -1610,17 +1610,17 @@ el.sheetLayer.addEventListener('click', (e) => {
 
 function openQuickStartSheet() {
   const rows = [
-    ['git-branch', 'Plenum, not a normal client', 'Git underneath, plain repo. The board shows every worktree against the team at once, with the verbs per lane.'],
-    ['tree-structure', 'Lane', 'A git worktree on its own branch. Several features in progress, side by side.'],
-    ['shield-check', 'Protected main', 'The checkout on the team branch. Plenum watches it and never works in it.'],
-    ['cloud-arrow-down', 'Behind', 'Commits the team branch has that this lane does not.'],
-    ['sparkle', 'Authorship', 'Who wrote the newest commit, read from the author and agent trailers. Human gets no pill.'],
-    ['play', 'Runnable lanes', 'Phase two: a lane starts on its own ports from .plenum/lane.yaml. Without that file it still shows on the board.'],
-    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the row under Settings. Point at UI optional; saved on this Mac.'],
+    ['git-branch', 'Plenum, not a normal client', 'Still git. Same repo. The board just shows every worktree against the team branch, with the usual verbs per lane.'],
+    ['tree-structure', 'Lane', 'A worktree on its own branch. Several features going at once, side by side.'],
+    ['shield-check', 'Protected main', 'The checkout on the team branch. Plenum watches it and won’t work in it.'],
+    ['cloud-arrow-down', 'Behind', 'Commits on the team branch that this lane doesn’t have yet.'],
+    ['sparkle', 'Authorship', 'Who wrote the newest tip — from author + agent trailers. Humans don’t get a pill.'],
+    ['play', 'Runnable lanes', 'Phase two: start a lane on its own ports via .plenum/lane.yaml. Without that file it still shows up on the board.'],
+    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the row under Settings. Optional UI target. Saved on this Mac only.'],
   ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="qs-title">
-      <h1 id="qs-title">Quick start: what are lanes?</h1>
+      <h1 id="qs-title">Quick start — what are lanes?</h1>
       <div class="list">${rows}</div>
       <div class="row-end"><button class="btn primary" type="button" data-close>Done</button></div>
     </form>`);
@@ -1633,7 +1633,7 @@ function openWarmSheet() {
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="warm-title">
       <h1 id="warm-title">Tab warm time</h1>
-      <p>How long a tab you left keeps refreshing in the background. Coming back inside that time shows the board at once.</p>
+      <p>How long a tab you left keeps refreshing in the background. Come back inside that window and the board paints immediately.</p>
       <div class="list">
         ${WARM_PRESETS.map(([ms, t]) => `<label class="list-row compact choice"><input type="radio" name="ttl" value="${ms}"${ms === cur ? ' checked' : ''} /><div class="name">${t}</div></label>`).join('')}
       </div>
@@ -1726,21 +1726,21 @@ function openFeedbackSheet(seed = {}) {
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
       <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
-      <h1 id="feedback-title">What’s not working?</h1>
+      <h1 id="feedback-title">What’s broken?</h1>
       <label class="field">Comment<textarea name="comment" rows="4" required autofocus placeholder="What went wrong or felt off?">${esc(comment)}</textarea></label>
       <div class="field">
         <span>Target</span>
         <div class="feedback-target-row">
           ${chip}
-          <button class="btn" type="button" data-pick>Point at something</button>
+          <button class="btn" type="button" data-pick>Point at UI</button>
           ${target ? '<button class="btn" type="button" data-clear-target>Clear</button>' : ''}
         </div>
       </div>
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>A full-window screenshot of what is visible right now will be saved on this Mac. Nothing is uploaded.</span></p>
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Saves a full-window screenshot on this Mac. Nothing leaves the machine.</span></p>
       <div class="row-end">
         <span class="hint-text">⌘↩</span>
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Send feedback</button>
+        <button class="btn primary" type="submit">Save feedback</button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
@@ -1758,9 +1758,9 @@ function openFeedbackSheet(seed = {}) {
     try {
       const { dir } = await invoke('feedback.save', { comment: text, target });
       const pretty = await prettyPath(dir).catch(() => dir);
-      toast(`Feedback saved locally · ${pretty}`, 'ok');
+      toast(`Saved on this Mac · ${pretty}`, 'ok');
     } catch (e) {
-      toast(e.message || 'Could not save feedback', 'bad');
+      toast(e.message || 'Couldn’t save feedback', 'bad');
       openFeedbackSheet(draft);
     }
   };
@@ -1795,8 +1795,8 @@ async function openStashPopSheet(lane) {
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="stash-pop-title">
       <div class="eyebrow">${iconHTML('stack', 'sm')}Pop stash</div>
-      <h1 id="stash-pop-title">Choose a stash for ${esc(lane.name)}</h1>
-      <p>Plenum pops the selected entry onto this lane. Latest is selected by default.</p>
+      <h1 id="stash-pop-title">Pop a stash onto ${esc(lane.name)}</h1>
+      <p>Latest is selected. Pick another if you need an older one.</p>
       <div class="list" data-stash-list>
         ${list.map((s, i) => `
           <label class="list-row compact choice">
@@ -1819,7 +1819,7 @@ async function openStashPopSheet(lane) {
       const data = await invoke('lane.stashShow', ...pin(ref));
       filesEl.innerHTML = renderFiles(data.files || []);
     } catch (e) {
-      filesEl.innerHTML = `<p class="lede">${esc(e.message || 'Could not load stash')}</p>`;
+      filesEl.innerHTML = `<p class="lede">${esc(e.message || 'Couldn’t load stash')}</p>`;
     }
   };
   loadPreview(selected);
@@ -1904,7 +1904,7 @@ async function checkoutBranchRow(name) {
       lane = alt;
       state.selectedLane = alt.index;
     } else {
-      toast('Opening as a lane — primary stays protected', 'ok');
+      toast('Opening as a lane — primary stays put', 'ok');
       return openLaneFromBranch(br.name);
     }
   }
@@ -2036,7 +2036,7 @@ function openDeleteBranchSheet(br) {
     <form class="modal" role="dialog" aria-labelledby="del-br-title">
       <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Delete branch</div>
       <h1 id="del-br-title">${esc(br.name)}</h1>
-      <p>Removes the ${br.remote ? 'remote' : 'local'} ref. Checked-out branches and the team branch stay blocked.</p>
+      <p>Deletes the ${br.remote ? 'remote' : 'local'} ref. Won’t touch a checked-out tip or the team branch.</p>
       ${!br.remote ? `<label class="check"><input type="checkbox" name="force" /> Force delete even if not merged</label>` : ''}
       ${!br.remote && br.hasRemote ? `<label class="check"><input type="checkbox" name="remote" /> Also delete origin/${esc(br.short || br.name)}</label>` : ''}
       <div class="row-end">
@@ -2072,7 +2072,7 @@ function openRebaseOntoSheet(lane) {
     <form class="modal" role="dialog" aria-labelledby="rebase-onto-title">
       <div class="eyebrow">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</div>
       <h1 id="rebase-onto-title">${esc(lane.name)}</h1>
-      <p>Default is the team tip. Pick any local or remote tip as the new base.</p>
+      <p>Defaults to the team tip. Any local or remote tip works as the new base.</p>
       <label class="field">Onto<select name="onto" class="input">${opts}</select></label>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
@@ -2109,13 +2109,13 @@ function openCreateLane() {
     <form class="modal" role="dialog" aria-labelledby="new-lane-title">
       <div class="eyebrow">${iconHTML('tree-structure', 'sm')}New lane</div>
       <h1 id="new-lane-title">From latest ${esc(state.board.teamBranch)}</h1>
-      <p>A linked worktree on its own branch. Primary <span class="mono">${esc(state.board.teamBranch)}</span> is not touched.</p>
+      <p>Makes a linked worktree on its own branch. Leaves primary <span class="mono">${esc(state.board.teamBranch)}</span> alone.</p>
       <label class="field">Feature name<input name="name" placeholder="invoice-pdf" required autofocus /></label>
       <label class="field">Branch<input name="branch" placeholder="feat/invoice-pdf" /></label>
       <label class="field">Base<select name="base" disabled><option>${esc(team)}</option></select></label>
       <div class="check">
         ${iconHTML('shield-check')}
-        <div><strong>Team step.</strong> Base is current <span class="mono">${esc(team)}</span>. If main moves later, this lane shows as behind on the board.</div>
+        <div><strong>Team step.</strong> Base is current <span class="mono">${esc(team)}</span>. When that tip moves, this lane shows as behind.</div>
       </div>
       <p class="lede" style="margin:0">Already have a branch? Click it to check out, or right-click → <strong>Open as lane</strong>.</p>
       <div class="row-end">
@@ -2184,8 +2184,8 @@ function openRemoveSheet(lane) {
       <div class="eyebrow${safe ? '' : ' warn'}">${iconHTML(safe ? 'check-circle' : 'warning-circle', 'sm')}${safe ? 'Safe to remove' : 'Not safe — remove anyway'}</div>
       <h1 id="remove-title">Remove lane ${esc(lane.name)}</h1>
       <p>${safe
-        ? `The branch is merged into ${esc(state.board.teamBranch)} and the tree is clean. This removes the folder only.`
-        : `This lane is not safe to remove yet. You can still delete the worktree folder; the branch ref stays.`}</p>
+        ? `Merged into ${esc(state.board.teamBranch)} and clean. This only deletes the folder.`
+        : `Not safe yet. You can still delete the worktree folder — the branch ref stays.`}</p>
       <div class="list">
         <div class="list-row compact">
           ${iconHTML('folder-simple')}
@@ -2200,8 +2200,8 @@ function openRemoveSheet(lane) {
         ${riskList}
       </div>
       ${safe
-        ? `<div class="check">${iconHTML('shield-check')}<div>One lane at a time. Prefer merge + clean before remove when you can.</div></div>`
-        : `<label class="check"><input type="checkbox" name="confirm" /> I understand — remove the folder anyway</label>`}
+        ? `<div class="check">${iconHTML('shield-check')}<div>One lane at a time. Merge + clean first when you can.</div></div>`
+        : `<label class="check"><input type="checkbox" name="confirm" /> I get it — remove the folder anyway</label>`}
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn danger" type="submit"${safe ? '' : ' disabled'}>${iconHTML('x', 'sm')}${safe ? 'Remove folder' : 'Remove anyway'}</button>
@@ -2720,8 +2720,8 @@ function openCommitSheet(lane) {
     <form class="modal" role="dialog" aria-labelledby="commit-title">
       <div class="eyebrow">${iconHTML('git-commit', 'sm')}Commit</div>
       <h1 id="commit-title">Commit on ${esc(lane.name)}</h1>
-      <p>${lane.dirty} uncommitted file${lane.dirty === 1 ? '' : 's'} will be staged and committed${lane.isPrimary ? '' : ' in this lane'}.</p>
-      <label class="field">Message<textarea name="message" rows="3" required autofocus placeholder="Describe the change"></textarea></label>
+      <p>${lane.dirty} uncommitted file${lane.dirty === 1 ? '' : 's'} get staged and committed${lane.isPrimary ? '' : ' in this lane'}.</p>
+      <label class="field">Message<textarea name="message" rows="3" required autofocus placeholder="What changed?"></textarea></label>
       <div class="row-end">
         <span class="hint-text">⌘⏎</span>
         <button class="btn" type="button" data-close>Cancel</button>
@@ -2745,10 +2745,10 @@ function openMergeSheet(lane) {
     <form class="modal" role="dialog" aria-labelledby="merge-title">
       <div class="eyebrow">${iconHTML('git-merge', 'sm')}Merge into ${esc(state.board.teamBranch)}</div>
       <h1 id="merge-title">Merge ${esc(lane.name)}</h1>
-      <p>Primary must be clean and on ${esc(state.board.teamBranch)}. Choose how to land the commits.</p>
+      <p>Primary has to be clean and on ${esc(state.board.teamBranch)}. Pick how the commits land.</p>
       <div class="list">
-        <label class="list-row compact choice"><input type="radio" name="mode" value="ff" checked /><div class="name">Fast-forward<small>Only if history is linear.</small></div></label>
-        <label class="list-row compact choice"><input type="radio" name="mode" value="merge" /><div class="name">Merge commit<small>Always creates a merge commit.</small></div></label>
+        <label class="list-row compact choice"><input type="radio" name="mode" value="ff" checked /><div class="name">Fast-forward<small>Only when history is linear.</small></div></label>
+        <label class="list-row compact choice"><input type="radio" name="mode" value="merge" /><div class="name">Merge commit<small>Always writes a merge commit.</small></div></label>
       </div>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
@@ -2787,7 +2787,7 @@ async function openConflictSheet(lane, snapshot) {
     <form class="modal" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
       <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}${esc(op)}</div>
       <h1 id="conflict-title">Resolve conflicts</h1>
-      <p>Open each file in Cursor, fix it, then stage. Continue when every file is staged.</p>
+      <p>Open each file, fix it, stage it. Continue when they’re all staged.</p>
       <div class="list conflict-list">
         ${files.length ? files.map((f) => `
           <div class="list-row compact" data-file="${esc(f)}">
@@ -2882,7 +2882,7 @@ const SETTINGS_PAGES = {
     const editorIcon = EDITOR_ICON[p.editor] || 'cursor';
 
     const external = [['internal', 'Internal (coming soon)']];
-    return `<h1>General</h1><p class="lede">How Plenum opens tools and folders on this Mac.</p>
+    return `<h1>General</h1><p class="lede">Where Plenum opens editors, terminals, and folders on this Mac.</p>
       <div class="group-head">About</div>
       <div class="list">
         ${settingsRow(
@@ -2891,32 +2891,32 @@ const SETTINGS_PAGES = {
           '',
           versionDetailHTML(),
           '',
-          'From package.json. Bump with npm run version:patch (or minor/major) before pack.',
+          'From package.json. Bump with npm run version:patch (or minor/major) before you pack.',
         )}
       </div>
       <div class="group-head">Open with</div>
       <div class="list">
-        ${settingsRow(editorIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'App used for Open in editor and after you create a lane. Missing installs are hidden.')}
+        ${settingsRow(editorIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden.')}
         ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Plenum launches when Editor is Other app.') : ''}
-        ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create lane also opens that worktree in your editor.')}
-        ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal app opens a lane folder from the palette.')}
+        ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create also opens that worktree in your editor.')}
+        ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
         ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Plenum launches when Terminal is Other app.') : ''}
       </div>
-      <div class="group-head">Diff and merge<small>Built-in view is not ready. These picks wait for it.</small></div>
+      <div class="group-head">Diff and merge<small>Built-in view isn’t ready yet. These picks wait for it.</small></div>
       <div class="list">
-        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'), 'Where file diffs will open once Plenum has a diff view. External tools come later.')}
+        ${settingsRow('files', 'Diff tool', '', '', selectHTML('diffTool', external, p.diffTool, 'Diff tool'), 'Where diffs will open once Plenum has a diff view. External tools come later.')}
         ${settingsRow('git-merge', 'Merge tool', '', '', selectHTML('mergeTool', external, p.mergeTool, 'Merge tool'), 'Where conflict merges will open once Plenum has a merge view. External tools come later.')}
       </div>
       <div class="group-head">Folders</div>
       <div class="list">
-        ${settingsRow('folder-simple', 'Clone path', 'Open Repository starts here', '', custom('cloneDefaultPath', '~/Dev'), 'Folder the Open Repository picker jumps to first. Use ~/… or an absolute path.')}
+        ${settingsRow('folder-simple', 'Clone path', 'Open Repository starts here', '', custom('cloneDefaultPath', '~/Dev'), 'Folder the Open Repository picker jumps to first. ~/… or an absolute path.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Default for new repos', 'Override per repo under Repositories', custom('defaultLanesFolder', '.worktrees'), 'Where Create lane puts worktrees when a repo has no override. Relative paths sit inside the checkout.')}
       </div>
       <div class="group-head">Tabs</div>
       <div class="list">
-        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list when Plenum starts, so you begin empty.')}
-        ${settingsRow('globe-simple', 'Repo favicons', '', 'Auto-detect, or rename a tab → Choose image from repo', switchHTML('tabFavicons', p.tabFavicons !== false, 'Repo favicons'), 'Looks for favicon.ico / .svg / .png automatically. Rename a tab to pick a preset or any PNG / JPEG / SVG from the checkout. Off always uses the preset icons.')}
-        ${settingsRow('clock', 'Tab warm time', '', 'How long a left tab stays hot', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }), 'Within this window, switching back to a tab paints the last board instantly while git refreshes in the background. After it freezes you still get one instant paint, then a full reload.')}
+        ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list on launch so you start empty.')}
+        ${settingsRow('globe-simple', 'Repo favicons', '', 'Auto-detect, or rename a tab → Choose image from repo', switchHTML('tabFavicons', p.tabFavicons !== false, 'Repo favicons'), 'Looks for favicon.ico / .svg / .png. Rename a tab to pick a preset or any PNG / JPEG / SVG from the checkout. Off always uses the presets.')}
+        ${settingsRow('clock', 'Tab warm time', '', 'How long a left tab stays hot', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }), 'Inside this window, switching back paints the last board instantly while git refreshes. After it freezes you still get one instant paint, then a full reload.')}
       </div>
 `;
   },
@@ -2931,12 +2931,12 @@ const SETTINGS_PAGES = {
     ];
     const accentRow = `<div class="option-row" role="group" aria-label="Accent" data-pref="accent">${accentOpts.map(([v, html]) =>
       `<button class="option${v === accent ? ' on' : ''}" type="button" aria-pressed="${v === accent}" data-v="${v}">${html}</button>`).join('')}</div>`;
-    return `<h1>Appearance</h1><p class="lede">Theme, accent, size, and type. Lives on this Mac only.</p>
+    return `<h1>Appearance</h1><p class="lede">Theme, accent, size, type. Stays on this Mac.</p>
       <div class="group-head">Theme</div>
       <div class="list">
-        ${settingsRow('sun', 'Mode', '', 'System tracks macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System follows light/dark from macOS. Light and Dark stay put.')}
-        ${settingsRow('sparkle', 'Accent', '', 'Primary actions and selected lane', accentRow, 'Lavender matches the Dock mark. Slate and Teal stay in the cool-dev lane.')}
-        ${settingsRow('sun', 'Light surfaces', '', 'Only when Mode is Light (or System in light)', optionGroup('lightPalette', [['cool', 'Cool'], ['neutral', 'Neutral']], lightPalette, { label: 'Light surfaces' }), 'Cool is the #29 default (blue-gray). Neutral restores the earlier warmer greys.')}
+        ${settingsRow('sun', 'Mode', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System tracks light/dark from macOS. Light and Dark stay put.')}
+        ${settingsRow('sparkle', 'Accent', '', 'Buttons and the selected lane', accentRow, 'Lavender matches the Dock mark. Slate and Teal stay in the cool-dev lane.')}
+        ${settingsRow('sun', 'Light surfaces', '', 'Only in Light (or System while light)', optionGroup('lightPalette', [['cool', 'Cool'], ['neutral', 'Neutral']], lightPalette, { label: 'Light surfaces' }), 'Cool is the default blue-gray. Neutral brings back the warmer greys.')}
       </div>
       <div class="theme-preview" aria-hidden="true">
         <div class="tp-surface"><span class="tp-chip">Canvas</span></div>
@@ -2945,9 +2945,9 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Display</div>
       <div class="list">
-        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole Plenum window. 100% is the design size.')}
-        ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and the window should change immediately.')}
-        ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Requests a face from Gravatar using a hash of the commit email (no account). Off keeps letter marks only.')}
+        ${settingsRow('magnifying-glass', 'Zoom', '', '', optionGroup('zoom', [[0.8, '80%'], [0.9, '90%'], [1, '100%'], [1.1, '110%'], [1.25, '125%']], p.zoom, { num: true, label: 'Zoom' }), 'Scales the whole window. 100% is the design size.')}
+        ${settingsRow('list', 'Font', '', 'Bundled packs; System is SF / UI fonts', optionGroup('fontPack', [['system', 'System'], ['inter-jetbrains', 'Inter + JetBrains Mono'], ['ibm-plex', 'IBM Plex']], p.fontPack, { label: 'Font' }), 'UI text and mono (SHAs, paths). Inter / Plex ship inside Plenum. Switch and it should change right away.')}
+        ${settingsRow('user', 'Gravatar avatars', '', 'From commit email', switchHTML('gravatar', p.gravatar !== false, 'Gravatar avatars'), 'Face from a hash of the commit email — no account. Off keeps letter marks only.')}
       </div>`;
   },
   accounts: () => {
@@ -2958,31 +2958,31 @@ const SETTINGS_PAGES = {
     const fallback = local ? id.global : { name: '', email: '' };
     const helper = a?.helper?.length ? a.helper.join(', ') : '';
     const where = /osxkeychain/.test(helper) ? 'Keychain' : helper ? `credential helper (${esc(helper)})` : '';
-    const saved = (a?.hosts || []).map((h) => `<div class="list-row" title="Host and username Plenum remembers. The token itself stays in ${where || 'your git credential helper'}.">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
-      || `<div class="list-row" title="Add a host below so https push/pull can use a token without prompting every time.">${iconHTML('key')}<div class="name">None yet</div><div class="detail">https remotes will keep asking until you save one.</div><span></span><span></span></div>`;
+    const saved = (a?.hosts || []).map((h) => `<div class="list-row" title="Host + username Plenum remembers. The token stays in ${where || 'your git credential helper'}.">${iconHTML(h.kind === 'github' ? 'github-logo' : 'key')}<div class="name">${esc(h.host)}<small>${esc(h.username)}</small></div><div class="detail">Token in ${where || 'git credential helper'}</div><span class="status on"><i></i>Saved</span><button class="btn" type="button" data-remove-host="${esc(h.host)}" data-user="${esc(h.username)}">Remove</button></div>`).join('')
+      || `<div class="list-row" title="Add a host below so https push/pull can use a token without asking every time.">${iconHTML('key')}<div class="name">None yet</div><div class="detail">https remotes keep asking until you save one.</div><span></span><span></span></div>`;
     const field = (name, ph, type = 'text') => `<input class="input" name="${name}" type="${type}" placeholder="${ph}" aria-label="${ph}" autocomplete="off" required />`;
     const ssh = !a ? '' : a.ssh.state === 'keys' ? `${a.ssh.count} key${a.ssh.count === 1 ? '' : 's'} in ssh-agent` : a.ssh.state === 'none' ? 'ssh-agent has no keys' : 'No ssh-agent running';
-    return `<h1>Accounts</h1><p class="lede">Who commits as, and how https remotes authenticate. Tokens go to git’s helper${where ? ` (${where})` : ''}. Host + username only are remembered here.</p>
-      <div class="group-head">Git identity<small>Writes user.name / user.email in git config. Not app prefs.</small></div>
+    return `<h1>Accounts</h1><p class="lede">Commit author, and how https remotes log in. Tokens go to git’s helper${where ? ` (${where})` : ''}. Plenum only remembers host + username.</p>
+      <div class="group-head">Git identity<small>Writes user.name / user.email in git config — not app prefs.</small></div>
       <div class="list">
-        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repo to set a local identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'Global hits ~/.gitconfig. This repository writes only the open repo’s local config.')}
-        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on commits git creates.')}
-        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`, 'Author email on commits. Matches what remotes and hosting expect.')}
+        ${settingsRow('user', 'Applies to', '', state.board ? '' : 'Open a repo to set a local identity', optionGroup('identityScope', [['global', 'All repositories'], ...(state.board ? [['local', 'This repository']] : [])], state.identityScope, { label: 'Identity scope' }), 'Global → ~/.gitconfig. This repository → only the open repo’s local config.')}
+        ${settingsRow('user', 'Name', '', '', `<input class="input" data-identity="name" value="${esc(shown.name)}" placeholder="${esc(fallback.name || 'Your name')}" aria-label="Git name" />`, 'Author name on new commits.')}
+        ${settingsRow('user', 'Email', '', '', `<input class="input" data-identity="email" value="${esc(shown.email)}" placeholder="${esc(fallback.email || 'you@example.com')}" aria-label="Git email" />`, 'Author email. Same one remotes and hosting expect.')}
       </div>
       <div class="group-head">HTTPS</div>
       <div class="list">${saved}</div>
-      <div class="group-head">Add<small>Use a personal access token with repo scope, not your password.</small></div>
+      <div class="group-head">Add<small>Personal access token with repo scope — not your password.</small></div>
       <div class="list">
-        <form class="list-row acct" data-acct="github" title="Saves github.com credentials through git credential approve.">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
-        <form class="list-row acct" data-acct="https" title="Any https git host. Host is the hostname only, no https://.">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+        <form class="list-row acct" data-acct="github" title="Saves github.com via git credential approve.">${iconHTML('github-logo')}<div class="name">GitHub<small>github.com</small></div><div class="acct-fields">${field('username', 'Username')}${field('token', 'Personal access token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
+        <form class="list-row acct" data-acct="https" title="Any https git host. Hostname only — no https://.">${iconHTML('link-simple')}<div class="name">Other host<small>Any https remote</small></div><div class="acct-fields">${field('host', 'git.example.com')}${field('username', 'Username')}${field('token', 'Token', 'password')}</div><button class="btn primary" type="submit">Save</button><span></span></form>
       </div>
-      <div class="group-head">SSH<small>Plenum does not manage keys. Git uses ssh-agent and ~/.ssh/config.</small></div>
+      <div class="group-head">SSH<small>Plenum doesn’t manage keys. Git uses ssh-agent and ~/.ssh/config.</small></div>
       <div class="list">${settingsRow('terminal-window', 'ssh-agent', '', '', `<span class="status${a?.ssh.state === 'keys' ? ' on' : ' warn'}"><i></i>${ssh || 'Checking…'}</span>`, 'Status only. Add or unlock keys outside Plenum.')}</div>`;
   },
   repositories: () => {
     const tabs = state.store.tabs;
-    const head = `<h1>Repositories</h1><p class="lede">One open tab at a time. Team branch, lanes folder, and whether the repo can run.</p>`;
-    if (!tabs.length) return `${head}<div class="list">${settingsRow('folder-simple', 'No repositories open', '', 'Open one from the empty state or ⌘P.', '', 'Settings here are per open tab. Close a tab and it leaves this list.')}</div>`;
+    const head = `<h1>Repositories</h1><p class="lede">Per open tab: team branch, lanes folder, and whether Run works.</p>`;
+    if (!tabs.length) return `${head}<div class="list">${settingsRow('folder-simple', 'No repositories open', '', 'Open one from the empty screen or ⌘P.', '', 'These settings are per open tab. Close a tab and it drops off this list.')}</div>`;
     const activePath = state.settings.repoPath
       && tabs.some((t) => t.path === state.settings.repoPath)
       ? state.settings.repoPath
@@ -2997,7 +2997,7 @@ const SETTINGS_PAGES = {
       : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
     const runDetail = m?.run
       ? `run <span class="mono">${esc(m.run)}</span>${m.test ? ` · test <span class="mono">${esc(m.test)}</span>` : ''} · ports <span class="mono">+${esc(m.offset)}</span>`
-      : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet — lanes show on the board but cannot start.');
+      : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet — lanes still show, they just can’t start.');
     const svc = (m?.services || []).map((s) => `${esc(s.name)} (${esc(s.mode)})`).join(', ');
     const picker = `<div class="repo-picker" role="tablist" aria-label="Open repositories">${tabs.map((tab) => {
       const on = tab.path === activePath;
@@ -3011,10 +3011,10 @@ const SETTINGS_PAGES = {
     return `${head}${picker}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
-        ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Pick the integration tip for ↓↑ / create lane / merge. Auto re-detects from origin/HEAD. Stored as local git config plenum.teamBranch.')}
-        ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'Override only for this repo. Relative paths are under the checkout; absolute paths are allowed.')}
-        ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Run the doctor and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
-        ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared means one instance for every lane; snapshot seeds a copy before Run.')}
+        ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
+        ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'This repo only. Relative paths sit under the checkout; absolute paths are fine.')}
+        ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
+        ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared = one instance for every lane; snapshot seeds a copy before Run.')}
       </div>`;
   },
   setup: () => {
@@ -3027,14 +3027,14 @@ const SETTINGS_PAGES = {
         : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious turned up.</div></div>`;
     return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repositories</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
       <h1>Lane setup</h1>
-      <p class="lede">Why a second checkout cannot start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing is written until you hit Write.</p>
+      <p class="lede">Why a second checkout can’t start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing hits disk until Write.</p>
       <div class="cols">
         <div><div class="col-head">What the repo does today</div>${findings}</div>
         <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
       </div>
       <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
         <div class="row-end">
-          <button class="btn" type="button" data-copy-doctor title="Copy an plenum doctor command for this repo">Copy CLI</button>
+          <button class="btn" type="button" data-copy-doctor title="Copy a plenum doctor command for this repo">Copy CLI</button>
           <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
         </div>
       </div>`;
@@ -3043,23 +3043,23 @@ const SETTINGS_PAGES = {
     const sw = (label, on = true) => `<button class="switch${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" disabled title="Not wired yet — preview only."></button>`;
     const ask = (label) => `<select class="select" aria-label="${label}" disabled title="Not wired yet — preview only."><option>Ask me</option><option>Allow</option><option>Never</option></select>`;
     return `<h1>Agents</h1>
-      <p class="lede">Preview. Agents already reach lanes through <span class="mono">plenum mcp</span> (stdio) and the <span class="mono">plenum</span> CLI. These switches do nothing yet.</p>
+      <p class="lede">Preview only. Agents already hit lanes via <span class="mono">plenum mcp</span> (stdio) and the <span class="mono">plenum</span> CLI. These switches don’t do anything yet.</p>
       <div class="agents-stub">
         <div class="group-head">Local MCP</div>
         <div class="list">
-          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">plenum mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at plenum mcp. Plenum does not host an HTTP MCP port yet.')}
-          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appInfo.version || '…')}</span>`, 'Install the plenum binary on your PATH for shells and scripts.')}
+          ${settingsRow('broadcast', 'Server', 'stdio for now', '<span class="mono">plenum mcp</span>', `<span class="row-actions"><span class="status"><i></i>Not managed here</span>${sw('Local MCP server', false)}</span>`, 'Point Cursor / Claude Code / Codex at plenum mcp. No HTTP MCP port yet.')}
+          ${settingsRow('terminal-window', 'CLI', 'Same verbs', '<span class="mono">doctor, create, up, down, test, status, remove, mcp</span>', `<span class="status"><i></i>${esc(state.appInfo.version || '…')}</span>`, 'Put the plenum binary on your PATH for shells and scripts.')}
         </div>
         <div class="group-head">Clients<small>Later: detect each tool’s MCP config and write the two lines for you.</small></div>
         <div class="list">
-          ${['Cursor', 'Claude Code', 'Codex'].map((n) => settingsRow('plugs-connected', n, '', 'Not detected yet', `<span class="status"><i></i>Later</span><button class="btn" type="button" disabled title="Coming later">Add</button>`, `Will read and write this client’s MCP config when the Agents page ships for real.`)).join('')}
+          ${['Cursor', 'Claude Code', 'Codex'].map((n) => settingsRow('plugs-connected', n, '', 'Not detected yet', `<span class="status"><i></i>Later</span><button class="btn" type="button" disabled title="Coming later">Add</button>`, `Will read and write this client’s MCP config when Agents ships for real.`)).join('')}
         </div>
         <div class="group-head">What agents may do<small>Reads stay open. Commit / push / merge stay with whoever is in the lane.</small></div>
         <div class="list">
-          ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Allow agents to run the repo’s own start/stop/test commands with lane ports.')}
-          ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Allow agents to create worktrees from the team branch.')}
-          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Safe removes stay one-click; unsafe ones ask you to confirm before force-removing the folder.')}
-          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team decision — keep this on Ask until you trust it.')}
+          ${settingsRow('play', 'Start and stop lanes', '<span class="mono">lane.up, lane.down, lane.test</span>', '', sw('Agents may start and stop lanes'), 'Let agents run the repo’s start/stop/test commands on lane ports.')}
+          ${settingsRow('tree-structure', 'Create lanes', '<span class="mono">lane.create</span>', '', sw('Agents may create lanes'), 'Let agents create worktrees from the team branch.')}
+          ${settingsRow('warning-circle', 'Remove lanes', '<span class="mono">lane.remove</span>', '', ask('Remove lanes'), 'Safe removes stay one-click. Unsafe ones ask before force-removing the folder.')}
+          ${settingsRow('files', 'Write lane setup', '<span class="mono">repo.doctor --write</span>', '', ask('Write lane setup'), 'Writing .plenum/lane.yaml is a team call — leave this on Ask until you trust it.')}
         </div>
       </div>`;
   },
@@ -3256,7 +3256,7 @@ function paletteCommands() {
   const lane = laneByIndex(state.selectedLane);
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
-    { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStartSheet },
+    { id: 'quickstart', label: 'Quick start — what are lanes?', run: openQuickStartSheet },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },

@@ -10,7 +10,7 @@ import { manifestPath } from '../paths.mjs';
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
   if (!lane) throw new Error('Lane not found.');
-  if (lane.isPrimary) throw new Error('Plenum does not write in the protected checkout. Move this to a lane first.');
+  if (lane.isPrimary) throw new Error('Protected checkout — open this in a lane first.');
   return lane;
 }
 
@@ -147,13 +147,13 @@ export async function removeLane(root, laneIndex, { force = false } = {}) {
   const board = await loadBoard(root);
   const lane = board.lanes.find((l) => l.index === laneIndex);
   if (!lane) throw new Error('Lane not found.');
-  if (lane.isPrimary) throw new Error('Cannot remove the protected checkout.');
+  if (lane.isPrimary) throw new Error('Can’t remove the protected checkout.');
   if (lane.readiness !== 'safe' && !force) {
     const reasons = [];
     if (lane.dirty) reasons.push(`${lane.dirty} uncommitted file(s)`);
     if (lane.readiness === 'unmerged') reasons.push('branch not safely merged into the team branch');
     else if (lane.readiness === 'working') reasons.push('working tree is dirty');
-    throw new Error(`Not safe to remove: ${reasons.join('; ') || 'lane is not marked safe'}. Pass force to remove anyway.`);
+    throw new Error(`Not safe to remove: ${reasons.join('; ') || 'lane isn’t marked safe'}. Pass force to remove anyway.`);
   }
   // Auto-down if still running so worktree remove doesn't orphan processes/registry.
   if (getProc(board.root, laneIndex)?.running) {
@@ -175,7 +175,7 @@ export async function commitLane(root, laneIndex, message) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
   const status = await conflictStatusAt(lane.path);
-  if (status.operation) throw new Error(`Cannot commit while ${status.operation} is in progress. Resolve conflicts first.`);
+  if (status.operation) throw new Error(`Can’t commit while ${status.operation} is in progress. Resolve conflicts first.`);
   const msg = (message || '').trim();
   if (!msg) throw new Error('Commit message required.');
   await git(['add', '-A'], lane.path);
@@ -205,10 +205,10 @@ export async function pullLane(root, laneIndex) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
   const ref = lane.isPrimary ? board.teamBranch : lane.branch;
-  if (!ref) throw new Error('Cannot pull a detached HEAD.');
+  if (!ref) throw new Error('Can’t pull a detached HEAD.');
   if (lane.dirty > 0) {
     throw new Error(
-      `Cannot pull: ${lane.dirty} uncommitted change${lane.dirty === 1 ? '' : 's'} would be overwritten. Commit or stash first.`,
+      `Can’t pull — ${lane.dirty} uncommitted change${lane.dirty === 1 ? '' : 's'} would be overwritten. Commit or stash first.`,
     );
   }
   try {
@@ -218,12 +218,12 @@ export async function pullLane(root, laneIndex) {
   } catch (e) {
     const msg = e?.message || String(e);
     if (/would be overwritten|local changes/i.test(msg)) {
-      throw new Error('Cannot pull: uncommitted changes would be overwritten. Commit or stash first.');
+      throw new Error('Can’t pull — uncommitted changes would be overwritten. Commit or stash first.');
     }
     if (lane.isPrimary) {
-      throw new Error(`${msg}\nPrimary only fast-forwards. Resolve divergence outside Plenum.`);
+      throw new Error(`${msg}\nPrimary only fast-forwards. Fix the divergence outside Plenum.`);
     }
-    throw new Error(`${msg}\nTry Rebase on main instead.`);
+    throw new Error(`${msg}\nTry Rebase onto main instead.`);
   }
   return loadBoard(root);
 }
@@ -296,7 +296,7 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
   }
   const holder = board.lanes.find((l) => l.branch === name);
   if (holder) {
-    throw new Error(`${name} is checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Use Pull there.`);
+    throw new Error(`${name} is checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Pull there instead.`);
   }
   if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
     throw new Error(`Local branch ${name} not found.`);
@@ -310,7 +310,7 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
   } catch (e) {
     const msg = e?.message || String(e);
     if (/non-fast-forward|rejected|failed to update/i.test(msg)) {
-      throw new Error(`${name} has diverged from origin/${name}. Check out and pull/rebase.`);
+      throw new Error(`${name} has diverged from origin/${name}. Check it out and pull or rebase.`);
     }
     throw e;
   }
@@ -321,7 +321,7 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
 export async function pushBranchToRemote(root, { branch } = {}) {
   const board = await loadBoard(root);
   const name = assertBranchName(branch);
-  if (name.startsWith('origin/')) throw new Error('That tip is already on origin.');
+  if (name.startsWith('origin/')) throw new Error('That tip is already on origin — nothing to push.');
   if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
     throw new Error(`Local branch ${name} not found.`);
   }
@@ -330,7 +330,7 @@ export async function pushBranchToRemote(root, { branch } = {}) {
   } catch (e) {
     const msg = e?.message || String(e);
     if (/non-fast-forward|rejected/i.test(msg)) {
-      throw new Error(`${name} was rejected by origin. Pull (or rebase) first.`);
+      throw new Error(`${name} was rejected by origin. Pull or rebase first.`);
     }
     throw e;
   }
@@ -345,9 +345,9 @@ export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   const local = await ensureLocalBranch(board.root, branch);
   const holder = board.lanes.find((l) => l.branch === local);
   if (holder && holder.index !== lane.index) {
-    throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Select that worktree instead.`);
+    throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Select that worktree.`);
   }
-  if (lane.dirty) throw new Error('Uncommitted changes. Stash or commit before switching branches.');
+  if (lane.dirty) throw new Error('Uncommitted changes — stash or commit before switching branches.');
   if (lane.branch === local) return board;
   await git(['checkout', local], lane.path);
   return loadBoard(root);
@@ -387,7 +387,7 @@ export async function mergeLaneIntoMain(root, laneIndex, { mode = 'merge' } = {}
   const board = await loadBoard(root);
   const lane = assertLane(board, laneIndex);
   const primary = board.lanes[0];
-  if (primary.dirty) throw new Error('Primary checkout has uncommitted work. Clean it before merging into main.');
+  if (primary.dirty) throw new Error('Primary has uncommitted work. Clean it before merging into main.');
   if (!primary.onTeamBranch) throw new Error(`Primary must be on ${board.teamBranch} before merging.`);
   if (lane.dirty) throw new Error('Lane has uncommitted work.');
   const args = mode === 'ff'

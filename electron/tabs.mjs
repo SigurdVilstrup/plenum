@@ -129,7 +129,7 @@ export function setTabImage(id, relPath) {
   const tab = data.tabs.find((t) => t.id === id);
   if (!tab) throw new Error('Tab not found.');
   const fileUrl = repoImageFileUrl(tab.path, relPath);
-  if (!fileUrl) throw new Error('Image not found (PNG, JPEG, or SVG under the repo).');
+  if (!fileUrl) throw new Error('No image found (PNG, JPEG, or SVG under the repo).');
   tab.iconManual = true;
   tab.favicon = null;
   tab.faviconRel = String(relPath).replace(/\\/g, '/').replace(/^[/\\]+/, '');

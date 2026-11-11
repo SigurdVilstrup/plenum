@@ -30,9 +30,9 @@
           </button>
         </nav>
         <div class="title-actions">
-          <button class="searchbtn" type="button" data-palette-open title="Lanes, branches, files, commands">
+          <button class="searchbtn" type="button" data-palette-open title="Jump to a lane, branch, file, or command">
             <svg class="icon sm" aria-hidden="true"><use href="#i-magnifying-glass"></use></svg>
-            <span>Lanes, branches, files, commands</span>
+            <span>Jump to lane, branch, file…</span>
             <kbd>⌘P</kbd>
           </button>
           <div class="brand">
@@ -73,7 +73,7 @@
             <path d="M10.46,36.37 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.10,37.34 L33.84,38.31 L35.10,39.86 L35.69,41.41 L35.78,43.54 L35.40,45.00 L34.52,46.36 L33.55,47.13 L32.00,47.72 L12.31,47.81 L11.24,48.10 L10.27,48.69 L38.01,48.69 L39.28,47.91 L40.83,47.52 L51.79,47.52 L53.83,46.75 L54.99,45.49 L55.67,43.84 L55.67,41.31 L54.90,39.47 L53.25,37.92 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.21,36.37 Z"/>
             <path d="M33.94,46.84 L32.78,47.52 L31.13,47.81 L11.82,47.91 L9.98,48.88 L8.72,50.53 L8.23,52.47 L8.52,54.80 L9.10,55.96 L10.27,57.13 L11.63,57.81 L12.60,58.00 L31.13,58.00 L32.10,57.81 L33.26,57.32 L34.72,56.06 L35.59,54.41 L36.27,50.82 L37.04,49.56 L38.50,48.30 L40.83,47.52 L51.79,47.52 L53.63,46.84 Z"/>
           </svg>
-          <p>Open a repository to see its worktrees.</p>
+          <p>Open a repository to see its lanes.</p>
           <button class="btn primary" type="button" id="open-repo">Open Repository…</button>
         </div>
         <aside class="panel" id="panel" aria-label="Lanes" hidden></aside>
@@ -104,7 +104,7 @@
         <div class="palette">
           <div class="search">
             <svg class="icon" aria-hidden="true"><use href="#i-magnifying-glass"></use></svg>
-            <input type="text" id="palette-input" placeholder="Jump to a lane, branch, file, repo, or command" aria-label="Search" />
+            <input type="text" id="palette-input" placeholder="Lane, branch, file, repo, or command" aria-label="Search" />
             <kbd>esc</kbd>
           </div>
           <div class="results" id="palette-results"></div>

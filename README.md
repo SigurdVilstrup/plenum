@@ -10,7 +10,7 @@ npm run smoke:init          # disposable repo at tmp/smoke-repo
 PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev
 ```
 
-Or open any repo from the empty state / ⌘K.
+Or open any repo from the empty screen / ⌘K.
 
 Hand-write a minimal manifest to try Run on a feature lane:
 

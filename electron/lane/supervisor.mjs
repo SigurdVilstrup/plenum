@@ -144,7 +144,7 @@ export function getLastTest(root, laneIndex) {
 }
 
 async function prepareLane(root, laneIndex) {
-  if (laneIndex === 0) throw new Error('protected: primary checkout cannot be run');
+  if (laneIndex === 0) throw new Error('Protected checkout can’t be run — use a lane.');
 
   const { top, paths } = await resolveLanes(root);
   const cwd = paths[laneIndex];
@@ -228,7 +228,7 @@ export async function up(root, laneIndex, { force = false } = {}) {
   const { top, cwd, manifest, urls, ctx, env } = await prepareLane(root, laneIndex);
   const existing = getProc(top, laneIndex);
   if (existing?.running) return existing;
-  if (!manifest?.run) throw new Error('lane manifest has no run command');
+  if (!manifest?.run) throw new Error('lane.yaml has no run command');
 
   if (!force && manifest.data?.migrations && usesSharedData(manifest)) {
     const pending = await listPendingMigrations({
@@ -375,7 +375,7 @@ export async function test(root, laneIndex, { timeoutMs = TEST_TIMEOUT_MS } = {}
 
   const run = (async () => {
     const { top, cwd, manifest, ctx, env } = await prepareLane(root, laneIndex);
-    if (!manifest?.test) throw new Error('lane manifest has no test command');
+    if (!manifest?.test) throw new Error('lane.yaml has no test command');
 
     const child = spawn(renderTemplate(String(manifest.test), ctx), {
       shell: true,

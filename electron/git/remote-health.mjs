@@ -34,7 +34,7 @@ export async function probeOrigin(cwd, { fetchImpl = globalThis.fetch, timeoutMs
       url: '',
       display: '',
       status: 'none',
-      detail: 'No origin remote configured.',
+      detail: 'No origin remote set.',
     };
   }
   if (!url) {
@@ -43,7 +43,7 @@ export async function probeOrigin(cwd, { fetchImpl = globalThis.fetch, timeoutMs
       url: '',
       display: '',
       status: 'none',
-      detail: 'origin has no URL.',
+      detail: 'origin has no URL set.',
     };
   }
 
@@ -74,7 +74,7 @@ export async function probeOrigin(cwd, { fetchImpl = globalThis.fetch, timeoutMs
       return {
         ...base,
         status: 'missing',
-        detail: `GitHub has no ${gh.owner}/${gh.repo}. origin is stale (renamed or deleted) — update the remote URL.`,
+        detail: `GitHub has no ${gh.owner}/${gh.repo}. origin is stale (renamed or deleted) — fix the remote URL.`,
       };
     }
     if (res.status >= 300 && res.status < 400) {
@@ -86,7 +86,7 @@ export async function probeOrigin(cwd, { fetchImpl = globalThis.fetch, timeoutMs
           status: 'renamed',
           effectiveUrl: loc,
           effectiveDisplay: displayUrl(loc),
-          detail: `origin still points at ${gh.owner}/${gh.repo}; GitHub moved it to ${next.owner}/${next.repo}.`,
+          detail: `origin still points at ${gh.owner}/${gh.repo}. GitHub moved it to ${next.owner}/${next.repo}.`,
         };
       }
     }
