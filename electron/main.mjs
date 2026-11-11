@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, protocol, screen, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, protocol, screen, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -8,6 +8,7 @@ import { isPathUnderRepos } from './repo-favicon.mjs';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch, setBaselines } from './git/board.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
+import * as undo from './git/undo.mjs';
 import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
 import { doctor, acceptManifest } from './lane/doctor.mjs';
@@ -134,6 +135,23 @@ app.whenReady().then(async () => {
       console.error('[plenum] PLENUM_OPEN failed', e.message);
     }
   }
+  // Undo / Copy / Paste go to the page first: it decides between a focused text field
+  // (native editing) and the app-level action (undo last git op, copy SHA, paste repo path).
+  const edit = (cmd) => () => win?.webContents.send('edit', cmd);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    { label: 'Edit', submenu: [
+      { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: edit('undo') },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: edit('copy') },
+      { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: edit('paste') },
+      { role: 'selectAll' },
+    ] },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -155,7 +173,7 @@ function activePath() {
 
 ipcMain.handle('tabs.list', () => tabs.listTabs());
 ipcMain.handle('tabs.open', async (_e, repoPath) => {
-  const board = await loadBoard(repoPath);
+  const board = await loadBoard(expandHome(repoPath));
   const favicons = getPrefs(prefsDir()).tabFavicons !== false;
   return { store: tabs.openTab(board.root, board.repoName, { favicons }), board };
 });
@@ -173,6 +191,18 @@ ipcMain.handle('tabs.setIcon', (_e, id, icon) => tabs.setIcon(id, icon));
 ipcMain.handle('tabs.listImages', (_e, id) => tabs.listTabImages(id));
 ipcMain.handle('tabs.setImage', (_e, id, relPath) => tabs.setTabImage(id, relPath));
 ipcMain.handle('tabs.reorder', (_e, orderedIds) => tabs.reorderTabs(orderedIds));
+ipcMain.handle('tabs.restore', (_e, snap, index) => tabs.restoreTab(snap, index));
+
+ipcMain.handle('undo.snapshot', (_e, ...args) => withRoot(undo.snapshotLane, ...args));
+ipcMain.handle('undo.restorePaths', (_e, ...args) => withRoot(undo.restorePaths, ...args));
+ipcMain.handle('undo.restoreLane', (_e, ...args) => withRoot(undo.restoreLane, ...args));
+ipcMain.handle('undo.uncommit', (_e, ...args) => withRoot(undo.uncommit, ...args));
+ipcMain.handle('undo.restoreBranch', (_e, ...args) => withRoot(undo.restoreBranch, ...args));
+
+const NATIVE_EDIT = new Set(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll']);
+ipcMain.handle('edit.native', (e, cmd) => { if (NATIVE_EDIT.has(cmd)) e.sender[cmd](); });
+ipcMain.handle('clipboard.read', () => clipboard.readText());
+ipcMain.handle('clipboard.write', (_e, text) => clipboard.writeText(String(text ?? '')));
 
 ipcMain.handle('prefs.get', () => getPrefs(prefsDir()));
 ipcMain.handle('prefs.set', (_e, partial) => {

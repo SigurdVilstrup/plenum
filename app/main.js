@@ -91,6 +91,8 @@ const state = {
   /** Bumped on every tab switch so superseded select/load work stops painting. */
   switchSeq: 0,
   pendingGraphScroll: null,
+  /** ⌘Z stack: { label, tabId|null, run, opts } — newest last. */
+  undoStack: [],
 };
 
 const el = {
@@ -182,13 +184,13 @@ function tabGlyph(tab) {
 applyTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
-function toast(msg, kind = '') {
+function toast(msg, kind = '', { undo = false } = {}) {
   el.toast.hidden = false;
   el.toast.className = `toast ${kind}`.trim();
   el.toast.setAttribute('role', 'status');
-  el.toast.textContent = String(msg).replace(/^Error:\s*/i, '').split('\n')[0];
+  el.toast.textContent = String(msg).replace(/^Error:\s*/i, '').split('\n')[0] + (undo ? ' · ⌘Z to undo' : '');
   clearTimeout(toast._t);
-  const ms = kind === 'bad' ? 6000 : 2800;
+  const ms = kind === 'bad' ? 6000 : undo ? 5000 : 2800;
   toast._t = setTimeout(() => { el.toast.hidden = true; }, ms);
 }
 
@@ -377,6 +379,94 @@ function settleBoard(tabId, root, board, opts) {
   }
   return false;
 }
+
+/* ---- Undo (⌘Z) and copy/paste ---- */
+const UNDO_MAX = 20;
+
+/** `run` re-applies the inverse and returns a board to settle (or nothing). tabId null = tab-strip action. */
+function pushUndo(label, tabId, run, opts) {
+  state.undoStack.push({ label, tabId, run, opts });
+  if (state.undoStack.length > UNDO_MAX) state.undoStack.shift();
+}
+
+async function undoLast() {
+  if (el.sheetLayer.classList.contains('open') || !el.paletteLayer.hidden) return;
+  if (state.busy) { toast('Wait for the current operation to finish'); return; }
+  const active = state.store.activeId;
+  const i = state.undoStack.findLastIndex((u) => u.tabId == null || u.tabId === active);
+  if (i < 0) { toast('Nothing to undo'); return; }
+  const [entry] = state.undoStack.splice(i, 1);
+  const root = state.board?.root;
+  try {
+    const board = await entry.run();
+    if (board) settleBoard(active, root, board, entry.opts);
+    toast(`Undid: ${entry.label}`, 'ok');
+  } catch (e) {
+    toast(String(e?.message || e).replace(/^Error invoking remote method [^:]+:\s*/, ''), 'bad');
+  }
+}
+
+async function copyText(text, what) {
+  try {
+    await api.invoke('clipboard.write', text);
+    toast(`Copied ${what}`, 'ok');
+  } catch { toast('Couldn’t copy', 'bad'); }
+}
+
+/** ⌘C with no text selected: selected changed files, else the open commit's SHA, else the lane's branch. */
+function copyFocused() {
+  const rows = [...el.changes.querySelectorAll('[data-select-file][aria-selected="true"], [data-select-dir][aria-selected="true"]')];
+  if (!el.changes.hidden && rows.length) {
+    const paths = rows.map((r) => r.dataset.selectFile || r.dataset.selectDir);
+    return copyText(paths.join('\n'), paths.length === 1 ? 'path' : `${paths.length} paths`);
+  }
+  if (state.changes?.kind === 'commit') return copyText(state.changes.sha, 'SHA');
+  const lane = laneByIndex(state.selectedLane);
+  if (lane?.branch) return copyText(lane.branch, 'branch name');
+}
+
+/** ⌘V outside a text field: a repo path opens that repo, anything else goes to the palette search. */
+async function pasteIntoApp() {
+  if (el.sheetLayer.classList.contains('open') || state.settings.open) return;
+  const text = String(await api.invoke('clipboard.read')).trim();
+  if (!text || text.includes('\n')) return;
+  if (/^(\/|~\/)/.test(text)) return openRepoPath(text);
+  openPalette();
+  el.paletteInput.value = text;
+  renderPalette(text);
+}
+
+const isEditable = (n) => Boolean(n?.matches?.('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button])'));
+api.onEdit((cmd) => {
+  const editable = isEditable(document.activeElement);
+  if (cmd === 'undo') return editable ? api.invoke('edit.native', 'undo') : undoLast();
+  if (cmd === 'copy') return editable || window.getSelection()?.toString() ? api.invoke('edit.native', 'copy') : copyFocused();
+  if (cmd === 'paste') return editable ? api.invoke('edit.native', 'paste') : pasteIntoApp();
+});
+
+/** Undo for create lane: remove the new worktree (and its branch when we made it) if still untouched. */
+function pushCreateLaneUndo(tabId, created, { newBranch }) {
+  if (!created) return;
+  pushUndo(`create lane ${created.name}`, tabId, async () => {
+    const cur = state.board?.lanes.find((l) => l.path === created.path);
+    if (!cur) return null;
+    if (cur.dirty) throw new Error('That lane has uncommitted changes now — remove it from the lane menu.');
+    let board = await invoke('lane.remove', ...pin(cur.index, { force: true }));
+    if (newBranch && created.branch) board = (await api.invoke('branch.delete', ...pin(created.branch)).catch(() => null)) || board;
+    return board;
+  }, { selectLane: 0 });
+}
+
+/** Undo for tab rename / icon / close: put the stored tab back as it was. */
+function pushTabRestoreUndo(before, label) {
+  const index = state.store.tabs.findIndex((t) => t.id === before.id);
+  pushUndo(label, null, async () => {
+    applyStore(await invoke('tabs.restore', before, index));
+    if (label.startsWith('close')) await selectTab(before.id);
+    else paintTabs();
+  });
+}
+const tabLook = (t) => JSON.stringify([t?.title, t?.icon, t?.iconManual, t?.favicon, t?.faviconRel]);
 
 const OP_LABELS = {
   checkout: 'Checkout',
@@ -592,9 +682,15 @@ async function applyTabOrder(fromId, overId, after) {
   if (insert < 0) return;
   if (after) insert += 1;
   tabs.splice(insert, 0, moved);
+  const oldIds = state.store.tabs.map((t) => t.id);
   const store = await invoke('tabs.reorder', tabs.map((t) => t.id));
   applyStore(store);
   paintTabs();
+  pushUndo('move tab', null, async () => {
+    applyStore(await invoke('tabs.reorder', oldIds));
+    paintTabs();
+  });
+  toast('Moved tab', 'ok', { undo: true });
 }
 
 /** Spare room tabs should keep before we reclaim the search label. */
@@ -793,8 +889,11 @@ function openCtxMenu(x, y, tab, anchor) {
     dropWarm(tab.id);
     state.opsByTab.delete(tab.id);
     state.refreshingByTab.delete(tab.id);
+    const before = { ...tab };
+    pushTabRestoreUndo(before, `close ${tab.title}`);
     const res = await invoke('tabs.close', tab.id);
     applyStore(res.store);
+    toast(`Closed ${tab.title}`, 'ok', { undo: true });
     if (!wasActive) {
       paintTabs();
       return;
@@ -969,6 +1068,10 @@ function openRename(tab, anchor) {
       else if (chosen !== (tab.icon || 'folder-simple') || !tab.iconManual || tab.favicon) iconArg = chosen;
       const store = await invoke('tabs.rename', tab.id, input.value, iconArg);
       applyStore(store);
+      if (tabLook(store.tabs.find((t) => t.id === tab.id)) !== tabLook(tab)) {
+        pushTabRestoreUndo({ ...tab }, 'rename tab');
+        toast('Renamed tab', 'ok', { undo: true });
+      }
     } catch { /* toasted */ }
     paintTabs();
   };
@@ -1039,10 +1142,12 @@ async function openTabImageSheet(tab) {
       b.appendChild(cap);
       b.addEventListener('click', async () => {
         try {
+          const before = { ...(state.store.tabs.find((t) => t.id === tab.id) || tab) };
           applyStore(await invoke('tabs.setImage', tab.id, item.rel));
           closeSheet();
           paintTabs();
-          toast('Tab icon updated', 'ok');
+          pushTabRestoreUndo(before, 'tab icon');
+          toast('Tab icon updated', 'ok', { undo: true });
         } catch { /* toasted */ }
       });
       grid.appendChild(b);
@@ -1426,15 +1531,13 @@ function paintHeader() {
     const upBehind = br?.upstreamBehind || 0;
     const pullBlocked = dirty && upBehind > 0;
     html = `<div class="head-row">
-      <div class="title">
+      <div class="title" title="Primary checkout · ${esc(l.displayPath || l.path)}">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
-        <div><h1>${esc(l.name)}</h1><div class="path">Checked out · ${esc(l.displayPath || l.path)} · primary</div></div>
+        <h1>${esc(l.name)}</h1>
       </div>
       <div class="facts">
-        ${dirty
-          ? `<span class="fact bad">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
-          : `<span class="fact">${iconHTML('shield-check', 'sm')}<strong>${l.onTeamBranch ? 'on' : 'not on'}</strong> ${esc(b.teamBranch)}</span>
-             <span class="fact">${iconHTML('circle-dashed', 'sm')}<strong>clean</strong></span>`}
+        ${l.onTeamBranch ? '' : `<span class="fact bad">${iconHTML('shield-check', 'sm')}<strong>not on</strong> ${esc(b.teamBranch)}</span>`}
+        ${dirty ? `<span class="fact bad">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>` : ''}
         ${upBehind
           ? `<span class="fact ${pullBlocked ? 'bad' : 'warn'}" title="${pullBlocked ? 'Commit or stash before pull' : `vs ${br.upstream || 'upstream'}`}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${upBehind}↓</strong>${pullBlocked ? ' · pull blocked' : ` ${esc(br.upstream || 'upstream')}`}</span>`
           : ''}
@@ -1465,7 +1568,7 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML('tree-structure')}
-        <div><h1>${esc(l.name)}</h1><div class="path">Checked out · ${esc(l.folder || l.displayPath || l.path)}</div></div>
+        <div><h1>${esc(l.name)}</h1><div class="path">${esc(l.folder || l.displayPath || l.path)}</div></div>
       </div>
       <div class="facts">${behind}${dirty}${pill}</div>
       <div class="actions">
@@ -1477,6 +1580,10 @@ function paintHeader() {
     <div class="env-row">${runActionsHTML(l)}</div>`;
   }
   el.laneHead.innerHTML = html;
+  el.laneHead.querySelector('.title').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openLaneCtxMenu(e.clientX, e.clientY, l);
+  });
   el.laneHead.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1505,7 +1612,10 @@ async function handleAction(act, lane, url) {
     if (act === 'doctor') return openLaneSetup();
     if (act === 'conflicts') return openConflictSheet(lane);
     if (act === 'stash') {
-      return runGit('lane.stash', lane.index, `Stashed changes on ${lane.name}`, 'stash');
+      return runGit('lane.stash', lane.index, `Stashed changes on ${lane.name}`, 'stash', {
+        label: `stash on ${lane.name}`,
+        run: () => invoke('lane.stashPop', ...pin(lane.index, 'stash@{0}')),
+      });
     }
     if (act === 'stashPop') {
       return openStashPopSheet(lane);
@@ -1551,15 +1661,16 @@ function setActionBusy(act, on) {
   });
 }
 
-async function runGit(channel, laneIndex, okMsg, act) {
+async function runGit(channel, laneIndex, okMsg, act, undo) {
   const tabId = beginOp(act);
   if (!tabId) return;
   const root = state.board?.root;
   try {
     const board = await invoke(channel, ...pin(laneIndex));
+    if (undo) pushUndo(undo.label, tabId, undo.run);
     if (settleBoard(tabId, root, board)) {
       state.flashMarks.add(laneIndex);
-      toast(okMsg, 'ok');
+      toast(okMsg, 'ok', { undo: Boolean(undo) });
     }
   } finally {
     endOp(tabId, act);
@@ -1980,10 +2091,14 @@ async function checkoutBranchRow(name) {
   const tabId = beginOp('checkout', br.short || br.name);
   if (!tabId) return;
   const root = state.board?.root;
+  const prev = lane.branch;
   try {
     const board = await invoke('branch.checkout', ...pin({ branch: br.name, laneIndex: lane.index }));
+    if (prev && prev !== br.name) {
+      pushUndo(`switch to ${br.short || br.name}`, tabId, () => invoke('branch.checkout', ...pin({ branch: prev, laneIndex: lane.index })), { selectLane: lane.index });
+    }
     if (settleBoard(tabId, root, board, { selectLane: lane.index })) {
-      toast(`Checked out ${br.short || br.name}${lane.isPrimary ? '' : ` in ${lane.name}`}`, 'ok');
+      toast(`Checked out ${br.short || br.name}${lane.isPrimary ? '' : ` in ${lane.name}`}`, 'ok', { undo: Boolean(prev && prev !== br.name) });
     }
   } catch { /* toasted */ }
   finally { endOp(tabId, 'checkout'); }
@@ -2031,6 +2146,8 @@ function openLaneCtxMenu(x, y, lane) {
   }
   add('Reveal in Finder', () => handleAction('reveal', lane));
   add(`Open in ${editorName()}`, () => handleAction('editor', lane));
+  add('Copy path', () => copyText(lane.path, 'path'));
+  if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'));
   add('Pull from remote', () => handleAction('pull', lane));
   if (lane.unpushed) add('Push to remote', () => handleAction('push', lane));
   if (!lane.isPrimary) {
@@ -2052,6 +2169,7 @@ function openBranchCtxMenu(x, y, name) {
   const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
   const { menu, add } = ctxMenuAt(x, y);
   add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
+  add('Copy name', () => copyText(br.name, 'branch name'));
   if (br.remote) {
     add('Fetch', () => updateBranchRow(br.name));
   } else {
@@ -2095,7 +2213,8 @@ function openRenameBranchSheet(br) {
     try {
       const board = await invoke('branch.rename', ...pin(br.name, to));
       closeSheet();
-      if (settleBoard(tabId, root, board)) toast(`Renamed ${br.name} → ${to}`, 'ok');
+      if (to !== br.name) pushUndo(`rename ${br.name}`, tabId, () => invoke('branch.rename', ...pin(to, br.name)));
+      if (settleBoard(tabId, root, board)) toast(`Renamed ${br.name} → ${to}`, 'ok', { undo: to !== br.name });
     } catch { /* toasted */ }
   });
 }
@@ -2126,7 +2245,10 @@ function openDeleteBranchSheet(br) {
         board = await invoke('branch.delete', ...pin(`origin/${br.short || br.name}`, { remote: true }));
       }
       closeSheet();
-      if (settleBoard(tabId, root, board)) toast(`Deleted ${br.name}`, 'ok');
+      // Only a local-only delete can be undone; a deleted remote ref is gone for good.
+      const undoable = !br.remote && !alsoRemote && Boolean(br.head);
+      if (undoable) pushUndo(`delete ${br.name}`, tabId, () => invoke('undo.restoreBranch', ...pin(br.name, br.head)));
+      if (settleBoard(tabId, root, board)) toast(`Deleted ${br.name}`, 'ok', { undo: undoable });
     } catch { /* toasted */ }
   });
 }
@@ -2165,8 +2287,9 @@ async function openLaneFromBranch(branch) {
   try {
     const board = await invoke('lane.create', ...pin({ existing: true, branch: name }));
     const created = board.lanes.find((l) => l.branch === name) || board.lanes[board.lanes.length - 1];
+    pushCreateLaneUndo(tabId, created, { newBranch: false });
     if (settleBoard(tabId, root, board, { selectLane: created?.index, enterLane: created?.index })) {
-      toast(`Lane ${created?.name || name} opened`, 'ok');
+      toast(`Lane ${created?.name || name} opened`, 'ok', { undo: Boolean(created) });
       if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
     }
   } catch { /* toasted */ }
@@ -2213,8 +2336,9 @@ function openCreateLane() {
       const created = board.lanes.find((l) => l.branch === branch || l.name.includes(name))
         || board.lanes[board.lanes.length - 1];
       closeSheet();
+      pushCreateLaneUndo(tabId, created, { newBranch: true });
       if (settleBoard(tabId, root, board, { selectLane: created?.index, enterLane: created?.index })) {
-        toast(`Lane ${created?.name || name} created`, 'ok');
+        toast(`Lane ${created?.name || name} created`, 'ok', { undo: Boolean(created) });
         if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
       }
     } catch { /* toasted */ }
@@ -2310,14 +2434,22 @@ function openRemoveSheet(lane) {
         });
         paintOpBusy();
       }
+      // Uncommitted files get a private snapshot so ⌘Z can bring the lane back whole.
+      const snap = lane.dirty ? await api.invoke('undo.snapshot', ...pin(lane.index)).catch(() => null) : null;
       const board = await invoke(
         'lane.remove',
         ...pin(...(force ? [lane.index, { force: true }] : [lane.index])),
       );
       step('Refreshing board…');
       setLoading(false);
+      const undoable = Boolean(lane.head) && (!lane.dirty || Boolean(snap));
+      if (undoable) {
+        pushUndo(`remove lane ${lane.name}`, tabId, () => invoke('undo.restoreLane', ...pin({
+          path: lane.path, branch: lane.branch, head: lane.head, sha: snap?.sha,
+        })), { selectLane: lane.index });
+      }
       if (settleBoard(tabId, root, board, { selectLane: 0 })) {
-        toast(`Removed worktree for ${lane.name}`, 'ok');
+        toast(`Removed worktree for ${lane.name}`, 'ok', { undo: undoable });
       }
     } catch {
       setLoading(false);
@@ -2635,21 +2767,32 @@ async function commitLaneMessage(lane, message, paths = []) {
   state.flashMarks.add(lane.index);
   state.commitDraft = '';
   if (state.changes?.kind === 'wip') closeChanges();
-  toast(`Committed on ${lane.name}`, 'ok');
+  const tip = board.lanes.find((l) => l.index === lane.index)?.head;
+  if (tip) {
+    pushUndo(`commit on ${lane.name}`, tabId, async () => {
+      const back = await invoke('undo.uncommit', ...pin(lane.index, tip));
+      state.commitDraft = msg;
+      return back;
+    });
+  }
+  toast(`Committed on ${lane.name}`, 'ok', { undo: Boolean(tip) });
   return true;
 }
 
 async function revertWorkingFiles(lane, paths) {
   const names = paths.length === 1 ? paths[0] : `${paths.length} files`;
-  if (!window.confirm(`Revert uncommitted changes to ${names}? This cannot be undone.`)) return;
+  if (!window.confirm(`Revert uncommitted changes to ${names}?`)) return;
   const tabId = state.store.activeId;
   const root = state.board?.root;
   try {
+    // Private snapshot first: it is what ⌘Z restores from.
+    const snap = await api.invoke('undo.snapshot', ...pin(lane.index, paths)).catch(() => null);
     const board = await invoke('lane.revert', ...pin(lane.index, paths));
+    if (snap) pushUndo(`revert ${names}`, tabId, () => invoke('undo.restorePaths', ...pin(lane.index, { sha: snap.sha, paths })));
     if (!settleBoard(tabId, root, board)) return;
     state.selectedWipEntries.delete(lane.index);
     state.filePane = null;
-    toast(paths.length === 1 ? `Reverted ${paths[0]}` : `Reverted ${paths.length} files`, 'ok');
+    toast(paths.length === 1 ? `Reverted ${paths[0]}` : `Reverted ${paths.length} files`, 'ok', { undo: Boolean(snap) });
     if (state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index) paintChanges();
   } catch { /* toasted */ }
 }
@@ -2724,6 +2867,16 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
       select(row, e);
     });
   });
+  // Read-only trees (commit view) have no select rows: Copy path on the file button.
+  el.changes.querySelectorAll('[data-file]').forEach((btn) => {
+    if (btn.closest('[data-select-file]')) return;
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
+      add('Copy path', () => copyText(btn.dataset.file, 'path'));
+      attachCtxMenu(menu);
+    });
+  });
   if (onRevert) rows.forEach((row) => row.addEventListener('contextmenu', (e) => {
     e.preventDefault(); e.stopPropagation();
     const key = keyOf(row);
@@ -2737,6 +2890,7 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
     }
     const paths = wipSelectedPaths(laneByIndex(state.changes?.laneIndex), selected.has(key) ? selected : new Set([key]));
     const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
+    add(paths.length > 1 ? `Copy ${paths.length} paths` : 'Copy path', () => copyText(paths.join('\n'), paths.length > 1 ? `${paths.length} paths` : 'path'));
     const folderName = key.startsWith('d:') ? key.slice(2).split('/').pop() : '';
     const label = selected.size === 1 && folderName
       ? `Revert folder “${folderName}”…`
@@ -3649,7 +3803,10 @@ document.addEventListener('keydown', (e) => {
 
 async function openRepo() {
   const path = await invoke('os.pickFolder');
-  if (!path) return;
+  if (path) return openRepoPath(path);
+}
+
+async function openRepoPath(path) {
   setLoading(true, 'Opening repository…', path);
   try {
     state.settings.open = false;
@@ -3892,10 +4049,21 @@ el.graph.addEventListener('click', (e) => {
 });
 el.graph.addEventListener('contextmenu', (e) => {
   const ref = e.target.closest('[data-branch-name]');
-  if (!ref || !el.graph.contains(ref)) return;
+  if (ref && el.graph.contains(ref)) {
+    e.preventDefault();
+    e.stopPropagation();
+    openBranchCtxMenu(e.clientX, e.clientY, ref.dataset.branchName);
+    return;
+  }
+  const row = e.target.closest('[data-commit]');
+  if (!row || !el.graph.contains(row)) return;
   e.preventDefault();
-  e.stopPropagation();
-  openBranchCtxMenu(e.clientX, e.clientY, ref.dataset.branchName);
+  const sha = row.dataset.commit;
+  const subject = state.board?.commits?.find((c) => c.id === sha)?.subject;
+  const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
+  add('Copy SHA', () => copyText(sha, 'SHA'));
+  if (subject) add('Copy message', () => copyText(subject, 'message'));
+  attachCtxMenu(menu);
 });
 el.graph.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;

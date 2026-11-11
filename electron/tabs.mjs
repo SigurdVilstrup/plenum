@@ -178,4 +178,25 @@ export function reorderTabs(orderedIds) {
   return hydrate(data);
 }
 
+/** Put a tab back (undo of close) or overwrite its look (undo of rename/icon). Active tab is unchanged. */
+export function restoreTab(snap, index) {
+  const data = read();
+  const tab = {
+    id: String(snap?.id || ''),
+    path: String(snap?.path || ''),
+    title: String(snap?.title || '').trim() || path.basename(String(snap?.path || '')),
+    icon: ICONS.includes(snap?.icon) ? snap.icon : 'folder-simple',
+    iconManual: Boolean(snap?.iconManual),
+    favicon: String(snap?.favicon || '').startsWith('data:') ? snap.favicon : null,
+    faviconRel: snap?.faviconRel ? String(snap.faviconRel) : null,
+  };
+  if (!tab.id || !fs.existsSync(tab.path)) throw new Error('Tab can’t be restored.');
+  const i = data.tabs.findIndex((t) => t.id === tab.id);
+  if (i >= 0) data.tabs[i] = tab;
+  else if (data.tabs.some((t) => t.path === tab.path)) throw new Error('That repository is already open.');
+  else data.tabs.splice(Math.min(Math.max(0, Number(index) || 0), data.tabs.length), 0, tab);
+  write(data);
+  return hydrate(data);
+}
+
 export { ICONS as TAB_ICONS };

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 
 /** Run git; reject on non-zero. Read stdout/stderr in parallel to avoid pipe stalls. */
-export function git(args, cwd) {
+export function git(args, cwd, extraEnv) {
   return new Promise((resolve, reject) => {
     const env = {
       ...process.env,
@@ -20,6 +20,7 @@ export function git(args, cwd) {
     ]) {
       delete env[key];
     }
+    Object.assign(env, extraEnv);
     const child = spawn('git', ['--no-pager', '-c', 'core.quotepath=false', ...args], {
       cwd,
       env,
