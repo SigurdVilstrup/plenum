@@ -814,14 +814,67 @@ a.iconbtn,
   transition: transform 120ms ease;
 }
 
-.fx-folder.collapsed .caret {
+.fx-folder-toggle.collapsed .caret {
   transform: rotate(-90deg);
+}
+
+.fx-folder-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-subtle);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+}
+
+.fx-folder-row:hover,
+.fx-folder-row.selected,
+.fx-file-row.selected { background: var(--surface-2); }
+
+.fx-folder-toggle {
+  width: 12px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.fx-folder-toggle .caret { width: 12px; height: 12px; }
+
+.fx-folder-row > .icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.fx-folder-row .name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fx-file {
   cursor: pointer;
   transition: background 100ms ease;
 }
+
+.fx-file-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.fx-file-row .fx-file { flex: 1; width: auto; }
 
 .fx-file:hover {
   background: var(--surface-2);
@@ -832,6 +885,8 @@ a.iconbtn,
   background: var(--surface-2);
   color: var(--ink);
 }
+
+.fx-file-row.selected .fx-file { background: transparent; }
 
 .fx-file .name,
 .fx-folder .name {

@@ -171,15 +171,45 @@ function laneOrPrimary(board, laneIndex) {
   return lane;
 }
 
-export async function commitLane(root, laneIndex, message) {
+function selectedDirtyPaths(lane, paths) {
+  const requested = [...new Set((Array.isArray(paths) ? paths : []).map((p) => String(p || '')))];
+  if (!requested.length) return [];
+  const dirty = new Set((lane.dirtyFiles || []).map((f) => f.path));
+  for (const file of requested) {
+    if (!file || path.isAbsolute(file) || file.split(/[\\/]/).includes('..') || !dirty.has(file)) {
+      throw new Error(`File is not a current uncommitted change: ${file || '(empty)'}`);
+    }
+  }
+  return requested;
+}
+
+export async function commitLane(root, laneIndex, message, paths) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
   const status = await conflictStatusAt(lane.path);
   if (status.operation) throw new Error(`Can’t commit while ${status.operation} is in progress. Resolve conflicts first.`);
   const msg = (message || '').trim();
   if (!msg) throw new Error('Commit message required.');
-  await git(['add', '-A'], lane.path);
-  await git(['commit', '-m', msg], lane.path);
+  const selected = selectedDirtyPaths(lane, paths);
+  if (selected.length) {
+    await git(['add', '--', ...selected], lane.path);
+    await git(['commit', '-m', msg, '--', ...selected], lane.path);
+  } else {
+    await git(['add', '-A'], lane.path);
+    await git(['commit', '-m', msg], lane.path);
+  }
+  return loadBoard(root);
+}
+
+export async function revertLaneChanges(root, laneIndex, paths) {
+  const board = await loadBoard(root);
+  const lane = laneOrPrimary(board, laneIndex);
+  const selected = selectedDirtyPaths(lane, paths);
+  if (!selected.length) throw new Error('Select at least one uncommitted file.');
+  const tracked = selected.filter((file) => (lane.dirtyFiles || []).find((f) => f.path === file)?.code !== '??');
+  const untracked = selected.filter((file) => (lane.dirtyFiles || []).find((f) => f.path === file)?.code === '??');
+  if (tracked.length) await git(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked], lane.path);
+  if (untracked.length) await git(['clean', '-f', '--', ...untracked], lane.path);
   return loadBoard(root);
 }
 

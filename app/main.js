@@ -70,6 +70,8 @@ const state = {
   changesPaintKey: '',
   changesCache: null,
   commitDraft: '',
+  selectedWipEntries: new Map(),
+  wipSelectionAnchor: new Map(),
   warmTabs: new Map(),
   prefs: {},
   identity: null,
@@ -2328,23 +2330,26 @@ function sumTreeStats(node) {
   return { added, deleted };
 }
 
-function renderDirtyTree(node, depth = 0, prefix = '') {
+function renderDirtyTree(node, depth = 0, prefix = '', selectable = false, selected = new Set()) {
   const pad = `padding-left:${6 + depth * 12}px`;
   let html = '';
   for (const [name, child] of [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const key = prefix ? `${prefix}/${name}` : name;
     const collapsed = state.collapsedDirs.has(key);
-    html += `<button class="fx-folder${collapsed ? ' collapsed' : ''}" type="button" style="${pad}" data-dir="${esc(key)}">
-      ${iconHTML('caret-down', 'sm caret')}${iconHTML('folder-simple', 'sm')}<span class="name">${esc(name)}</span>${collapsed ? formatStat(sumTreeStats(child)) : ''}
-    </button>`;
-    if (!collapsed) html += renderDirtyTree(child, depth + 1, key);
+    const selectedFolder = selected.has(`d:${key}`);
+    html += `<div class="fx-folder-row${selectedFolder ? ' selected' : ''}"${selectable ? ` data-select-dir="${esc(key)}" tabindex="0" role="treeitem" aria-selected="${selectedFolder}"` : ''} style="${pad}">
+      <button class="fx-folder-toggle${collapsed ? ' collapsed' : ''}" type="button" data-dir="${esc(key)}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${esc(name)}">${iconHTML('caret-down', 'sm caret')}</button>
+      ${iconHTML('folder-simple', 'sm')}<span class="name">${esc(name)}</span>${collapsed ? formatStat(sumTreeStats(child)) : ''}
+    </div>`;
+    if (!collapsed) html += renderDirtyTree(child, depth + 1, key, selectable, selected);
   }
   for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) {
     const kind = dirtyKind(f.code);
     const on = state.filePane?.path === f.path ? ' on' : '';
-    html += `<button class="fx-file${on}" type="button" style="${pad}" data-file="${esc(f.path)}" title="${esc(f.path)}"${on ? ' aria-current="true"' : ''}>
+    const marked = selected.has(`f:${f.path}`);
+    html += `<div class="fx-file-row${marked ? ' selected' : ''}"${selectable ? ` data-select-file="${esc(f.path)}" tabindex="0" role="treeitem" aria-selected="${marked}"` : ''} style="${pad}"><button class="fx-file${on}" type="button" data-file="${esc(f.path)}" title="${esc(f.path)}"${on ? ' aria-current="true"' : ''}>
       ${iconHTML('files', 'sm')}<span class="name">${esc(f.name)}</span>${formatStat(f)}<span class="mark ${kind}">${dirtyMark(f.code)}</span>
-    </button>`;
+    </button></div>`;
   }
   return html;
 }
@@ -2357,7 +2362,8 @@ function changesKey(view) {
   if (view.kind === 'wip') {
     const lane = laneByIndex(view.laneIndex);
     const files = lane?.dirtyFiles || [];
-    return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}:${paneKey}`;
+    const selected = [...(state.selectedWipEntries.get(view.laneIndex) || [])].sort().join(',');
+    return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}:${paneKey}:${selected}`;
   }
   return `c:${view.sha}:${fold}:${paneKey}`;
 }
@@ -2556,7 +2562,7 @@ function bindWipCommitFields() {
   });
 }
 
-async function commitLaneMessage(lane, message) {
+async function commitLaneMessage(lane, message, paths = []) {
   const msg = String(message || '').trim();
   if (!msg) {
     toast('Commit message required', 'bad');
@@ -2564,7 +2570,7 @@ async function commitLaneMessage(lane, message) {
   }
   const tabId = state.store.activeId;
   const root = state.board?.root;
-  const board = await invoke('lane.commit', ...pin(lane.index, msg));
+  const board = await invoke('lane.commit', ...pin(lane.index, msg, paths));
   if (!settleBoard(tabId, root, board)) return true;
   state.flashMarks.add(lane.index);
   state.commitDraft = '';
@@ -2573,13 +2579,44 @@ async function commitLaneMessage(lane, message) {
   return true;
 }
 
-function bindChangesTree(basePath, { onFile } = {}) {
+async function revertWorkingFiles(lane, paths) {
+  const names = paths.length === 1 ? paths[0] : `${paths.length} files`;
+  if (!window.confirm(`Revert uncommitted changes to ${names}? This cannot be undone.`)) return;
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
+  try {
+    const board = await invoke('lane.revert', ...pin(lane.index, paths));
+    if (!settleBoard(tabId, root, board)) return;
+    state.selectedWipEntries.delete(lane.index);
+    state.filePane = null;
+    toast(paths.length === 1 ? `Reverted ${paths[0]}` : `Reverted ${paths.length} files`, 'ok');
+    if (state.changes?.kind === 'wip' && state.changes.laneIndex === lane.index) paintChanges();
+  } catch { /* toasted */ }
+}
+
+function wipSelectedPaths(lane, selected) {
+  const files = lane?.dirtyFiles || [];
+  if (!selected?.size) return files.map((f) => f.path);
+  const paths = new Set();
+  for (const entry of selected) {
+    if (entry.startsWith('f:')) paths.add(entry.slice(2));
+    if (entry.startsWith('d:')) {
+      const dir = entry.slice(2);
+      for (const file of files) if (file.path.startsWith(`${dir}/`)) paths.add(file.path);
+    }
+  }
+  return [...paths];
+}
+
+function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
   el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => {
     closeChanges();
     paint();
   });
   el.changes.querySelectorAll('[data-dir]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      const laneIndex = state.changes?.laneIndex;
+      if (laneIndex != null) state.wipSelectionAnchor.set(laneIndex, null);
       const key = btn.dataset.dir;
       if (state.collapsedDirs.has(key)) state.collapsedDirs.delete(key);
       else state.collapsedDirs.add(key);
@@ -2592,6 +2629,67 @@ function bindChangesTree(basePath, { onFile } = {}) {
       if (onFile) onFile(filePath);
       else invoke('os.openEditor', `${basePath}/${filePath}`);
     });
+  });
+  const rows = [...el.changes.querySelectorAll('[data-select-file], [data-select-dir]')];
+  const keyOf = (row) => row.dataset.selectFile ? `f:${row.dataset.selectFile}` : `d:${row.dataset.selectDir}`;
+  const select = (row, e) => {
+    const laneIndex = state.changes?.laneIndex;
+    if (laneIndex == null) return;
+    const key = keyOf(row);
+    let selected = new Set(state.selectedWipEntries.get(laneIndex) || []);
+    if (e.shiftKey) {
+      const anchorKey = state.wipSelectionAnchor.get(laneIndex) || key;
+      const start = rows.findIndex((item) => keyOf(item) === anchorKey);
+      const end = rows.indexOf(row);
+      if (!e.metaKey && !e.ctrlKey) selected.clear();
+      rows.slice(Math.min(start < 0 ? end : start, end), Math.max(start < 0 ? end : start, end) + 1).forEach((item) => selected.add(keyOf(item)));
+    } else if (e.metaKey || e.ctrlKey) {
+      if (selected.has(key)) selected.delete(key); else selected.add(key);
+      state.wipSelectionAnchor.set(laneIndex, key);
+    } else {
+      selected = new Set([key]);
+      state.wipSelectionAnchor.set(laneIndex, key);
+    }
+    state.selectedWipEntries.set(laneIndex, selected);
+    paintChanges();
+  };
+  rows.forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('[data-dir]')) return;
+      select(row, e);
+    });
+    row.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      select(row, e);
+    });
+  });
+  if (onRevert) rows.forEach((row) => row.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const key = keyOf(row);
+    let selected = state.selectedWipEntries.get(state.changes?.laneIndex) || new Set();
+    if (!selected.has(key)) {
+      selected = new Set([key]);
+      state.selectedWipEntries.set(state.changes?.laneIndex, selected);
+      state.wipSelectionAnchor.set(state.changes?.laneIndex, key);
+      row.classList.add('selected');
+      row.setAttribute('aria-selected', 'true');
+    }
+    const paths = wipSelectedPaths(laneByIndex(state.changes?.laneIndex), selected.has(key) ? selected : new Set([key]));
+    const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
+    const folderName = key.startsWith('d:') ? key.slice(2).split('/').pop() : '';
+    const label = selected.size === 1 && folderName
+      ? `Revert folder “${folderName}”…`
+      : paths.length > 1 ? `Revert ${paths.length} selected files…` : 'Revert changes…';
+    add(label, () => onRevert(paths), true);
+    attachCtxMenu(menu);
+  }));
+  if (onTreeRevert) el.changes.querySelector('.changes-tree')?.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('[data-select-file], [data-select-dir]')) return;
+    e.preventDefault();
+    const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
+    add('Revert all changes…', onTreeRevert, true);
+    attachCtxMenu(menu);
   });
 }
 
@@ -2615,6 +2713,8 @@ async function paintChanges() {
       return;
     }
     const files = lane.dirtyFiles || [];
+    const selected = state.selectedWipEntries.get(lane.index) || new Set();
+    state.selectedWipEntries.set(lane.index, selected);
     const tree = nestDirty(files);
     const totals = sumStats(files);
     const fileLabel = `${files.length} file${files.length === 1 ? '' : 's'}`;
@@ -2625,14 +2725,14 @@ async function paintChanges() {
         <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
       </div>
       <div class="changes-tree" role="tree">
-        ${files.length ? renderDirtyTree(tree) : '<div class="fx-empty">No uncommitted files</div>'}
+          ${files.length ? renderDirtyTree(tree, 0, '', true, selected) : '<div class="fx-empty">No uncommitted files</div>'}
       </div>
       <div class="changes-foot">
         ${files.length ? `
           <textarea class="commit-msg" name="message" rows="2" placeholder="Commit message" aria-label="Commit message"></textarea>
           <div class="foot-actions">
             <button class="btn" type="button" data-stash>${iconHTML('stack', 'sm')}Stash</button>
-            <button class="btn primary" type="button" data-commit>${iconHTML('git-commit', 'sm')}Commit</button>
+            <button class="btn primary" type="button" data-commit>${iconHTML('git-commit', 'sm')}Commit ${selected.size ? wipSelectedPaths(lane, selected).length : 'all'}</button>
             <span class="hint">⌘⏎</span>
           </div>` : ''}
       </div>`;
@@ -2641,10 +2741,13 @@ async function paintChanges() {
         state.filePane = { sha: 'WORKTREE', cwd: lane.path, path: filePath, mode: 'diff' };
         paintChanges();
       },
+      onRevert: (paths) => revertWorkingFiles(lane, paths),
+      onTreeRevert: () => revertWorkingFiles(lane, files.map((f) => f.path)),
     });
     const ta = el.changes.querySelector('.commit-msg');
     const doCommit = async () => {
-      try { await commitLaneMessage(lane, ta?.value); } catch { /* toasted */ }
+      const paths = selected.size ? wipSelectedPaths(lane, selected) : undefined;
+      try { await commitLaneMessage(lane, ta?.value, paths); } catch { /* toasted */ }
     };
     el.changes.querySelector('[data-commit]')?.addEventListener('click', doCommit);
     el.changes.querySelector('[data-stash]')?.addEventListener('click', () => handleAction('stash', lane));

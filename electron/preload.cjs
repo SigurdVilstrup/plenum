@@ -5,7 +5,7 @@ const ALLOWED = new Set([
   'tabs.listImages', 'tabs.setImage', 'tabs.reorder',
   'board.get', 'repo.refresh', 'repo.doctor', 'repo.acceptManifest', 'repo.setTeamBranch',
   'os.pickFolder', 'os.reveal', 'os.openExternal', 'os.openEditor', 'os.openTerminal', 'os.displayPath',
-  'lane.create', 'lane.remove', 'lane.commit', 'lane.push', 'lane.pull',
+  'lane.create', 'lane.remove', 'lane.commit', 'lane.revert', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.conflicts',
   'branch.checkout', 'branch.update', 'branch.push', 'branch.rename', 'branch.delete',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',

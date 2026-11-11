@@ -448,6 +448,7 @@ ipcMain.handle('git.identity.get', () => getIdentity(activePath()));
 ipcMain.handle('git.identity.set', (_e, payload) => setIdentity(activePath(), payload || {}));
 ipcMain.handle('lane.remove', (_e, ...args) => withRoot(ops.removeLane, ...args));
 ipcMain.handle('lane.commit', (_e, ...args) => withRoot(ops.commitLane, ...args));
+ipcMain.handle('lane.revert', (_e, ...args) => withRoot(ops.revertLaneChanges, ...args));
 ipcMain.handle('lane.push', (_e, ...args) => withRoot(ops.pushLane, ...args));
 ipcMain.handle('lane.pull', (_e, ...args) => withRoot(ops.pullLane, ...args));
 ipcMain.handle('lane.rebase', async (_e, ...args) => {
