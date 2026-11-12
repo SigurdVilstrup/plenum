@@ -25,6 +25,7 @@ export function defaultPrefs() {
     reopenTabs: true,
     tabFavicons: true,
     gravatar: true,
+    tourDone: false,
     warmTabTtlMs: 120_000,
     credentialHosts: [],
     repoOverrides: {},
@@ -66,7 +67,7 @@ const ENUMS = {
   mergeTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
 };
 const ABS_PATHS = ['editorPath', 'terminalPath', 'cloneDefaultPath', 'diffToolPath', 'mergeToolPath'];
-const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar'];
+const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar', 'tourDone'];
 
 export function getPrefs(userDataDir) {
   const raw = read(userDataDir);
