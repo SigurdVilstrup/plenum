@@ -585,6 +585,17 @@ async function undoLast() {
   }
 }
 
+/* plenum.sh headline reads "Work in plenum.sh with <from>" when the link has ?from=. Name is the git author's first name. */
+async function shareLink() {
+  closePalette();
+  let first = '';
+  try {
+    const id = await invoke('git.identity.get');
+    first = ((id.local?.name || id.global?.name || '').trim().split(/\s+/)[0] || '').slice(0, 40);
+  } catch { /* no name: plain link */ }
+  copyText('https://plenum.sh/' + (first ? `?from=${encodeURIComponent(first)}` : ''), first ? `link (headline says “with ${first}”)` : 'link');
+}
+
 async function copyText(text, what) {
   try {
     await api.invoke('clipboard.write', text);
@@ -4309,6 +4320,7 @@ function paletteCommands() {
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
     { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStart },
+    { id: 'share', label: 'Share Plenum: copy a link for a friend', run: shareLink, match: ['invite', 'friend', 'colleague', 'recommend'] },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },

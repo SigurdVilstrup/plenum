@@ -66,6 +66,7 @@
   .js .ch.on { opacity: 1; }
   @keyframes blink { 50% { opacity: 0; } }
 
+  .who { color: var(--ink-subtle); }
   .gloss { margin: 22px 0 0; max-width: 540px; font-size: 14px; line-height: 1.55; color: var(--ink-subtle); font-style: italic; }
   .gloss b { font-style: normal; font-weight: 500; color: var(--ink-muted); }
   .sub { margin: 28px 0 22px; font-size: 18px; color: var(--ink-subtle); letter-spacing: -0.01em; }
@@ -144,7 +145,7 @@
 </header>
 
 <main>
-  <h1 aria-label="Work in plenum.sh"><span class="prompt" aria-hidden="true">$</span><span id="tx" aria-hidden="true">Work in <span class="name"><span class="acc">plenum</span>.sh</span></span><span class="cur" id="cur" aria-hidden="true"></span></h1>
+  <h1 aria-label="Work in plenum.sh"><span class="prompt" aria-hidden="true">$</span><span id="tx" aria-hidden="true">Work in <span class="name"><span class="acc">plenum</span>.sh</span><span class="who" id="who"></span></span><span class="cur" id="cur" aria-hidden="true"></span></h1>
   <p class="gloss rev"><b>in plenum</b>, <i>adv.</i> with everyone present. You, your agents, every lane on one screen.</p>
   <p class="sub rev">A git client for parallel work in teams.</p>
   <div class="rev">
@@ -182,6 +183,13 @@
     if (m) $('ver').textContent = 'v' + m[1];
   }).catch(function () {});
 
+  // ?from=Anna: the headline becomes "Work in plenum.sh with Anna". Plain text only, trimmed, capped.
+  var from = (new URLSearchParams(location.search).get('from') || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
+  if (from) {
+    $('who').textContent = ' with ' + from;
+    document.querySelector('h1').setAttribute('aria-label', 'Work in plenum.sh with ' + from);
+  }
+
   // Enter downloads, but never steal Enter from a focused link or button.
   addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target === document.body && !document.documentElement.classList.contains('not-mac') && !e.metaKey && !e.ctrlKey && !e.altKey) $('dl').click();
@@ -189,7 +197,7 @@
 
   // Share sheet where there is one (phones, Edge/Chrome on Windows), otherwise a pre-filled email.
   $('send').addEventListener('click', async function () {
-    var url = location.origin + '/', text = 'Plenum, a git client for parallel work in teams. Open this on your Mac:';
+    var url = location.origin + '/' + location.search, text = 'Plenum, a git client for parallel work in teams. Open this on your Mac:';
     try {
       if (navigator.share) { await navigator.share({ title: 'Plenum', text: text, url: url }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
