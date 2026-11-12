@@ -35,6 +35,8 @@ Add them under **Repo → Settings → Secrets and variables → Actions**.
 
 ## Landing page vs updates
 
+The landing page is `site/index.html`. [`.github/workflows/site.yml`](../.github/workflows/site.yml) FTPs `site/` to the web root whenever `site/**` changes on `main`. It needs one more secret, `FTP_SITE_DIR` (e.g. `public_html/`, the parent of `updates/`, trailing slash). It only syncs files it uploaded, so `updates/` is never touched.
+
 - **plenum.sh/** — marketing + “Download” → `https://plenum.sh/updates/Plenum.dmg`
 - **plenum.sh/updates/** — feed the app polls (`latest-mac.yml` + zip)
 
