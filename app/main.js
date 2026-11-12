@@ -14,6 +14,7 @@ import {
 } from './lib/warm-tabs.js';
 import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-pane.js';
 import { groupBranchesByPrefix } from './lib/branch-folders.js';
+import { startTour } from './lib/tour.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -717,6 +718,7 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
     }
   }
   paint();
+  maybeStartTour();
   requestAnimationFrame(() => {
     state.enteringLanes.clear();
     state.flashMarks.clear();
@@ -1986,23 +1988,18 @@ el.sheetLayer.addEventListener('click', (e) => {
   closeSheet();
 });
 
-function openQuickStartSheet() {
-  const rows = [
-    ['git-branch', 'Plenum, not a normal client', 'Still git. Same repo. The board just shows every worktree against the team branch, with the usual verbs per lane.'],
-    ['tree-structure', 'Lane', 'A worktree on its own branch. Several features going at once, side by side.'],
-    ['shield-check', 'Protected main', 'The checkout on the team branch. Plenum watches it and won’t work in it.'],
-    ['cloud-arrow-down', 'Behind', 'Commits on the team branch that this lane doesn’t have yet.'],
-    ['sparkle', 'Authorship', 'Who wrote the newest tip, from author + agent trailers. Humans don’t get a pill.'],
-    ['play', 'Runnable lanes', 'Phase two: start a lane on its own ports via .plenum/lane.yaml. Without that file it still shows up on the board.'],
-    ['pencil-simple', 'Feedback', '⌘K → Feedback…, or the Feedback link in the panel. Point at something if it helps. We get a blurred screenshot. Your repo path stays here.'],
-  ].map(([i, t, d]) => `<div class="list-row compact">${iconHTML(i)}<div class="name">${t}<small>${d}</small></div></div>`).join('');
-  openSheet(`
-    <form class="modal" role="dialog" aria-labelledby="qs-title">
-      <h1 id="qs-title">Quick start: what are lanes?</h1>
-      <div class="list">${rows}</div>
-      <div class="row-end"><button class="btn primary" type="button" data-close>Done</button></div>
-    </form>`);
+function openQuickStart() {
+  closePalette();
+  startTour({ onEnd: () => { if (state.board && !state.prefs.tourDone) setPref({ tourDone: true }, false); } });
 }
+
+// First board of a fresh install: walk through it once.
+function maybeStartTour() {
+  if (state.prefs.tourDone || !state.board || state.settings.open) return;
+  if (el.sheetLayer.classList.contains('open')) return;
+  requestAnimationFrame(openQuickStart);
+}
+document.querySelector('[data-tour]')?.addEventListener('click', openQuickStart);
 
 const WARM_PRESETS = [[30000, '30 seconds'], [120000, '2 minutes'], [300000, '5 minutes'], [600000, '10 minutes']];
 
@@ -4224,7 +4221,7 @@ function paletteCommands() {
   const lane = laneByIndex(state.selectedLane);
   const cmds = [
     { id: 'open', label: 'Open Repository…', run: openRepo },
-    { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStartSheet },
+    { id: 'quickstart', label: 'Quick start: what are lanes?', run: openQuickStart },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },

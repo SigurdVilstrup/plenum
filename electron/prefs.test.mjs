@@ -89,3 +89,9 @@ test('setPrefs accepts diff and merge tool enums', () => {
   assert.equal(setPrefs({ diffTool: 'beyondcompare' }, dir).diffTool, 'vscode');
   assert.equal(setPrefs({ mergeTool: 'kaleidoscope' }, dir).mergeTool, 'opendiff');
 });
+
+test('setPrefs stores tourDone', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.equal(getPrefs(dir).tourDone, false);
+  assert.equal(setPrefs({ tourDone: true }, dir).tourDone, true);
+});
