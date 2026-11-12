@@ -207,13 +207,45 @@ export async function sendFeedbackReport(dir, { endpoint, anonKey, fetchImpl = f
     patchFeedbackMeta(dir, { status: 'failed', error: 'Relay returned no issue URL' });
     throw new Error('Relay returned no issue URL');
   }
-  return patchFeedbackMeta(dir, {
+  const sentMeta = patchFeedbackMeta(dir, {
     status: 'sent',
     issueUrl: String(issueUrl),
     issueNumber: Number(issueNumber),
     sentAt: new Date().toISOString(),
+    screenshot: data?.screenshot !== false,
     error: null,
   });
+  // Filed: it's the relay's now. If the delete fails, the status:'sent' skip in the retry keeps it from resending.
+  fs.rmSync(dir, { recursive: true, force: true });
+  return sentMeta;
+}
+
+const RETRY_MAX_AGE_MS = 14 * 24 * 3600 * 1000;
+
+/**
+ * Local outbox: resend reports that never made it (relay down, offline). Oldest first,
+ * stops at the first failure so an outage costs one request. Returns how many went out.
+ * ponytail: a report the relay filed but whose reply was lost is filed twice; add a client id if it bites.
+ */
+export async function retryUnsentFeedback(baseDir, opts = {}) {
+  const root = path.resolve(baseDir, 'feedback');
+  let names;
+  try { names = fs.readdirSync(root).sort(); } catch { return 0; }
+  let sent = 0;
+  for (const name of names) {
+    const dir = path.join(root, name);
+    try {
+      const { meta } = readFeedbackReport(dir);
+      if (meta.status === 'sent') continue;
+      if (Date.now() - Date.parse(meta.createdAt) > RETRY_MAX_AGE_MS) continue;
+      await sendFeedbackReport(dir, opts);
+      sent++;
+    } catch (e) {
+      if (e.code === 'ENOENT' || e instanceof SyntaxError) continue; // not a report dir
+      break;
+    }
+  }
+  return sent;
 }
 
 const CHECKIN_KINDS = ['update', 'checkin'];

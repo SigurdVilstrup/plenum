@@ -11,6 +11,8 @@ import {
   patchFeedbackMeta,
   sanitizeReporterEmail,
   sendCheckin,
+  readFeedbackReport,
+  retryUnsentFeedback,
   sendFeedbackReport,
   writeFeedbackReport,
 } from './feedback.mjs';
@@ -199,6 +201,7 @@ test('sendFeedbackReport patches sent meta and never posts repoPath', async () =
   assert.equal('repoPath' in posted.body, false);
   assert.equal(posted.body.comment, 'lane truncates');
   assert.equal(meta.status, 'sent');
+  assert.equal(fs.existsSync(out), false);
   assert.equal(meta.issueNumber, 12);
   assert.match(meta.issueUrl, /plenum\/issues\/12/);
   assert.ok(meta.sentAt);
@@ -262,4 +265,19 @@ test('sendCheckin rejects a missing rating and surfaces relay errors', async () 
   const opts = { endpoint: 'https://relay.test/x', fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({ error: 'Slow down' }) }) };
   await assert.rejects(sendCheckin({ rating: 'meh' }, {}, opts), /rating/);
   await assert.rejects(sendCheckin({ rating: 'up' }, {}, opts), /Slow down/);
+});
+
+test('retryUnsentFeedback resends failed reports and stops at the first failure', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const mk = () => writeFeedbackReport(dir, { comment: 'x', appVersion: '0.0.0', platform: 'darwin', png: tinyPng });
+  const a = await mk();
+  const b = await mk();
+  const ok = { ok: true, json: async () => ({ issueUrl: 'https://github.com/o/r/issues/1', issueNumber: 1, screenshot: false }) };
+  const down = { ok: false, status: 500, json: async () => ({ error: 'db timeout' }) };
+  const opts = (res) => ({ endpoint: 'https://example.test/s', fetchImpl: async () => res });
+  assert.equal(await retryUnsentFeedback(dir, opts(down)), 0);
+  assert.equal(readFeedbackReport(a).meta.status, 'failed');
+  assert.equal(await retryUnsentFeedback(dir, opts(ok)), 2);
+  assert.equal(fs.existsSync(a) || fs.existsSync(b), false); // sent reports leave the queue
+  assert.equal(await retryUnsentFeedback(dir, opts(ok)), 0); // already sent
 });

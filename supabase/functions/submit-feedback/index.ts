@@ -106,12 +106,18 @@ Deno.serve(async (req) => {
     let imageUrl: string | null = null;
     if (png) {
       const objectPath = `${id}/window.png`;
-      const { error: upErr } = await supabase.storage
-        .from('feedback-screenshots')
-        .upload(objectPath, png, { contentType: 'image/png', upsert: false });
-      if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
-      imageUrl = supabase.storage.from('feedback-screenshots').getPublicUrl(objectPath).data.publicUrl;
+      // A flaky Storage service must not lose the report: file the issue without the image.
+      try {
+        const { error: upErr } = await supabase.storage
+          .from('feedback-screenshots')
+          .upload(objectPath, png, { contentType: 'image/png', upsert: false });
+        if (upErr) throw new Error(upErr.message);
+        imageUrl = supabase.storage.from('feedback-screenshots').getPublicUrl(objectPath).data.publicUrl;
+      } catch (e) {
+        console.error('Storage upload failed:', (e as Error).message);
+      }
     }
+    const screenshotLost = !!png && !imageUrl;
 
     const target = body?.target;
     const env = body?.env && typeof body.env === 'object' ? body.env : {};
@@ -135,10 +141,11 @@ Deno.serve(async (req) => {
         ? `- Window: ${env.windowSize.width}×${env.windowSize.height}`
         : null,
       '',
+      screenshotLost ? '_Screenshot upload failed; the reporter still has it locally._' : null,
       imageUrl ? '### Screenshot (redacted)' : null,
       imageUrl ? `![window](${imageUrl})` : null,
       '',
-      checkin ? '_Anonymous check-in from Plenum._' : '_Sent from Plenum. Local outbox kept a copy on the reporter’s Mac._',
+      checkin ? '_Anonymous check-in from Plenum._' : '_Sent from Plenum._',
     ].filter((l) => l != null);
 
     const [owner, repo] = githubRepo.split('/');
@@ -178,6 +185,7 @@ Deno.serve(async (req) => {
     return json(200, {
       issueUrl: issue.html_url,
       issueNumber: issue.number,
+      screenshot: !screenshotLost,
     });
   } catch (e) {
     console.error(e);

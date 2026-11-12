@@ -2390,18 +2390,17 @@ async function openFeedbackSheet(seed = {}) {
         pngBase64,
       });
       try {
-        await invoke('feedback.send', dir);
+        const sent = await invoke('feedback.send', dir);
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast('Sent. Thanks.', 'ok');
-      } catch (sendErr) {
-        setSendBusy(false);
-        const pretty = await prettyPath(dir).catch(() => dir);
-        toast(
-          `${sendErr.message || 'Couldn’t send'} · kept a copy here · ${pretty}`,
-          'bad',
-        );
+        toast(sent?.screenshot === false ? 'Sent, but the screenshot didn’t upload. Thanks.' : 'Sent. Thanks.', 'ok');
+      } catch {
+        // Saved locally; main retries unsent reports on launch and every 15 min.
+        feedbackPreviewPng = null;
+        closeSheet();
+        stopFeedbackPick();
+        toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
       }
     } catch (e) {
       setSendBusy(false);

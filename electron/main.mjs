@@ -23,6 +23,7 @@ import {
   collectFeedbackEnv,
   sanitizeReporterEmail,
   sendFeedbackReport,
+  retryUnsentFeedback,
   sendCheckin,
 } from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
@@ -147,6 +148,10 @@ app.whenReady().then(async () => {
 
   // Sync favicon cache with the pref (clear stale data URLs when off).
   tabs.refreshFavicons(getPrefs(prefsDir()).tabFavicons !== false);
+
+  const flushFeedback = () => retryUnsentFeedback(prefsDir(), relayOpts()).catch(() => {});
+  flushFeedback();
+  setInterval(flushFeedback, 15 * 60 * 1000).unref();
 
   const openPath = brandEnv('OPEN');
   if (openPath && fs.existsSync(openPath)) {
@@ -336,6 +341,11 @@ ipcMain.handle('feedback.checkin', (_e, payload) => sendCheckin(payload, feedbac
   anonKey: brandEnv('SUPABASE_ANON_KEY'),
 }));
 
+const relayOpts = () => ({
+  endpoint: brandEnv('FEEDBACK_URL', DEFAULT_FEEDBACK_URL),
+  anonKey: brandEnv('SUPABASE_ANON_KEY'),
+});
+
 ipcMain.handle('feedback.send', async (_e, dir) => {
   const root = path.resolve(prefsDir(), 'feedback');
   const reportDir = path.resolve(String(dir || ''));
@@ -345,12 +355,10 @@ ipcMain.handle('feedback.send', async (_e, dir) => {
   if (!fs.existsSync(path.join(reportDir, 'meta.json')) || !fs.existsSync(path.join(reportDir, 'window.png'))) {
     throw new Error('bad report path');
   }
-  const meta = await sendFeedbackReport(reportDir, {
-    endpoint: brandEnv('FEEDBACK_URL', DEFAULT_FEEDBACK_URL),
-    anonKey: brandEnv('SUPABASE_ANON_KEY'),
-  });
+  const meta = await sendFeedbackReport(reportDir, relayOpts());
   return {
     dir: reportDir,
+    screenshot: meta.screenshot !== false,
     issueUrl: meta.issueUrl,
     issueNumber: meta.issueNumber,
   };
