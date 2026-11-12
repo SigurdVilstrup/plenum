@@ -103,6 +103,8 @@ export function initialState(partial = {}) {
     availableVersion: null,
     downloadedVersion: null,
     downloadPercent: null,
+    /** Commit headers since the installed version (from latest-mac.yml releaseNotes). */
+    releaseNotes: '',
     checkedAt: null,
     message: null,
     canRetry: false,
@@ -143,10 +145,17 @@ export function reduceOnCheckFailure(state, message, checkedAt) {
   };
 }
 
-export function reduceOnUpdateAvailable(state, version, checkedAt) {
+/** electron-updater gives a string (generic feed) or [{version, note}] (GitHub). */
+export function notesText(raw) {
+  if (Array.isArray(raw)) return raw.map((r) => r?.note || '').filter(Boolean).join('\n');
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+export function reduceOnUpdateAvailable(state, version, checkedAt, releaseNotes = '') {
   const already = state.downloadedVersion === version;
   return {
     ...state,
+    releaseNotes,
     status: already ? 'downloaded' : 'available',
     availableVersion: version,
     downloadedVersion: already ? version : null,
@@ -243,7 +252,7 @@ export function actionLabel(state) {
       return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
     }
     case 'downloaded':
-      return 'Install & Restart';
+      return 'Close & update';
     case 'checking':
       return 'Checking…';
     case 'error':
@@ -317,7 +326,8 @@ export function createUpdater(opts) {
     if (String(envGet('DISABLE_AUTO_UPDATE', '') || '').trim() === '1') {
       return 'Automatic updates are disabled by PLENUM_DISABLE_AUTO_UPDATE.';
     }
-    if (!opts.isPackaged) {
+    // A mock-update file/env lets dev builds dogfood the update UI.
+    if (!opts.isPackaged && !readMockUpdateVersion(runHome)) {
       return 'Automatic updates are only available in packaged builds.';
     }
     return null;
@@ -362,7 +372,7 @@ export function createUpdater(opts) {
     updater.removeAllListeners?.('error');
 
     updater.on('update-available', (info) => {
-      publish(reduceOnUpdateAvailable(state, String(info?.version || ''), nowIso()));
+      publish(reduceOnUpdateAvailable(state, String(info?.version || ''), nowIso(), notesText(info?.releaseNotes)));
     });
     updater.on('update-not-available', () => {
       publish(reduceOnNoUpdate(state, nowIso()));
@@ -404,7 +414,7 @@ export function createUpdater(opts) {
       if (mock) {
         const cur = opts.getVersion();
         if (isNewerVersion(mock, cur)) {
-          publish(reduceOnUpdateAvailable(state, mock, nowIso()));
+          publish(reduceOnUpdateAvailable(state, mock, nowIso(), '- Mock release note one\n- Mock release note two'));
         } else {
           publish(reduceOnNoUpdate(state, nowIso()));
         }

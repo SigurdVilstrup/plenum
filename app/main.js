@@ -15,6 +15,7 @@ import {
 import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-pane.js';
 import { groupBranchesByPrefix } from './lib/branch-folders.js';
 import { startTour } from './lib/tour.js';
+import { noteLaunch, pickNudge, markShown } from './lib/nudge.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -189,7 +190,7 @@ function tabGlyph(tab) {
 applyTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
-function toast(msg, kind = '', { undo = false, link = null } = {}) {
+function toast(msg, kind = '', { undo = false, link = null, action = null } = {}) {
   el.toast.hidden = false;
   el.toast.className = `toast ${kind}`.trim();
   el.toast.setAttribute('role', 'status');
@@ -207,8 +208,20 @@ function toast(msg, kind = '', { undo = false, link = null } = {}) {
     });
     el.toast.append(a);
   }
+  if (action) {
+    el.toast.append(document.createTextNode(' · '));
+    const a = document.createElement('a');
+    a.href = '#';
+    a.textContent = action.label;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      el.toast.hidden = true;
+      action.run();
+    });
+    el.toast.append(a);
+  }
   clearTimeout(toast._t);
-  const ms = kind === 'bad' ? 6000 : undo ? 5000 : link ? 6000 : 2800;
+  const ms = action ? 8000 : kind === 'bad' ? 6000 : undo ? 5000 : link ? 6000 : 2800;
   toast._t = setTimeout(() => { el.toast.hidden = true; }, ms);
 }
 
@@ -258,6 +271,17 @@ function versionDetailHTML() {
   return `<span class="mono">${ver} · ${rest}</span>`;
 }
 
+/** Release notes are one commit header per line ("- subject"). */
+function updateNotes(u = state.update) {
+  return String(u?.releaseNotes || '').split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean);
+}
+
+function updateNotesHTML(u = state.update) {
+  const items = updateNotes(u);
+  if (!u || !items.length || !(u.status === 'available' || u.status === 'downloaded')) return '';
+  return `<div class="update-notes"><div class="update-notes-head">What’s new in ${esc(updateTargetVersion(u) || 'this update')}</div><ul>${items.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></div>`;
+}
+
 function updateTargetVersion(u = state.update) {
   return u?.availableVersion || u?.downloadedVersion || null;
 }
@@ -267,12 +291,12 @@ function updateActionLabel(u = state.update) {
   if (!u || !u.enabled) return null;
   const v = updateTargetVersion(u);
   switch (u.status) {
-    case 'available': return v ? `Install ${v}` : 'Install update';
+    case 'available': return v ? `Download ${v}` : 'Download update';
     case 'downloading': {
       const pct = u.downloadPercent;
       return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
     }
-    case 'downloaded': return 'Install update';
+    case 'downloaded': return 'Close & update';
     case 'checking': return 'Checking…';
     case 'error': return u.canRetry ? 'Try again' : 'Update unavailable';
     case 'up-to-date':
@@ -286,12 +310,12 @@ function updateFootLabel(u = state.update) {
   if (!u?.enabled) return null;
   const v = updateTargetVersion(u);
   switch (u.status) {
-    case 'available': return v ? `Install ${v}` : 'Install update';
+    case 'available': return v ? `Download ${v}` : 'Download update';
     case 'downloading': {
       const pct = u.downloadPercent;
       return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
     }
-    case 'downloaded': return 'Install update';
+    case 'downloaded': return 'Close & update';
     default: return null;
   }
 }
@@ -303,11 +327,13 @@ function updateHoverTip(u = state.update) {
   const cur = u.currentVersion || state.appInfo.version || '?';
   const next = updateTargetVersion(u);
   const arrow = next ? `${cur} → ${next}` : null;
+  const notes = updateNotes(u).map((l) => `• ${l}`).join('\n');
+  const withNotes = (t) => (notes ? `${t}\n\nWhat’s new:\n${notes}` : t);
   switch (u.status) {
     case 'available':
-      return arrow
-        ? `Install update\n${arrow}\nDownloads ${next}, then you install & restart.`
-        : 'Install update. Downloads first, then you restart.';
+      return withNotes(arrow
+        ? `Download update\n${arrow}\nThen click Close & update to finish.`
+        : 'Download update. Then click Close & update to finish.');
     case 'downloading': {
       const pct = u.downloadPercent != null ? ` (${Math.round(u.downloadPercent)}%)` : '';
       return arrow
@@ -315,9 +341,9 @@ function updateHoverTip(u = state.update) {
         : `Downloading update${pct}`;
     }
     case 'downloaded':
-      return arrow
-        ? `Install update\n${arrow}\nQuits Plenum and restarts on ${next}.`
-        : 'Install update. Quits Plenum and restarts.';
+      return withNotes(arrow
+        ? `Downloaded — click Close & update\n${arrow}\nPlenum quits and reopens on ${next}.`
+        : 'Downloaded — click Close & update. Plenum quits and reopens.');
     case 'up-to-date':
       return `You’re on ${cur} — latest GitHub release.`;
     case 'idle':
@@ -331,9 +357,17 @@ function updateHoverTip(u = state.update) {
   }
 }
 
+/** Spinner only while checking; downloads show a progress ring / percent instead. */
 function updateActionBusy(u = state.update) {
+  return u?.status === 'checking';
+}
+
+function updateActionDisabled(u = state.update) {
   return u?.status === 'checking' || u?.status === 'downloading';
 }
+
+const RING_C = 2 * Math.PI * 12;
+const ringOffset = (pct) => RING_C * (1 - Math.min(100, Math.max(0, Number(pct) || 0)) / 100);
 
 function updateControlHTML() {
   const u = state.update;
@@ -346,7 +380,7 @@ function updateControlHTML() {
   const busy = updateActionBusy(u);
   const hot = u.status === 'available' || u.status === 'downloaded' || u.status === 'downloading';
   const tip = updateHoverTip(u);
-  return `<button class="btn${hot ? ' primary' : ''}${busy ? ' busy' : ''}" type="button" data-update-act${busy ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
+  return `<button class="btn${hot ? ' primary' : ''}${busy ? ' busy' : ''}" type="button" data-update-act${updateActionDisabled(u) ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
 }
 
 function applyUpdateState(next) {
@@ -375,6 +409,8 @@ function applyUpdateState(next) {
     btn.title = tip;
     btn.setAttribute('aria-label', tip.replace(/\n/g, ' — '));
     btn.classList.toggle('busy', updateActionBusy(next));
+    const bar = btn.querySelector('.ring-bar');
+    if (bar) bar.style.strokeDashoffset = ringOffset(next.downloadPercent);
   });
 }
 
@@ -406,8 +442,13 @@ async function invoke(channel, ...args) {
   try {
     return await api.invoke(channel, ...args);
   } catch (e) {
-    const msg = e?.message || String(e);
-    toast(msg.replace(/^Error invoking remote method [^:]+:\s*/, ''), 'bad');
+    const msg = (e?.message || String(e)).replace(/^Error invoking remote method [^:]+:\s*/, '');
+    // One tap from an error to a pre-filled report. The feedback and updater channels
+    // are excluded so a failed send can't offer to report itself.
+    const reportable = state.prefs?.feedbackPrompts !== false && !/^(feedback|app\.update)\./.test(channel);
+    toast(msg, 'bad', reportable
+      ? { action: { label: 'Report', run: () => openFeedbackSheet({ comment: `${msg.split('\n')[0]}\n\nWhat I was doing: ` }) } }
+      : {});
     throw e;
   }
 }
@@ -2115,14 +2156,21 @@ function panelFootHTML(settingsActive = false) {
   // Foot CTA only for a real update path — failed checks stay in Settings (“Try again”).
   const showUpdate = u?.enabled && (u.status === 'available' || u.status === 'downloading' || u.status === 'downloaded');
   const updateBusy = updateActionBusy(u);
+  const updateOff = updateActionDisabled(u);
   const tip = updateHoverTip(u);
   const tipAttr = esc(tip);
   const aria = esc(tip.replace(/\n/g, ' — '));
   // Icon-only: accent fill + notification dot (label lives in the tooltip).
+  const ready = u?.status === 'downloaded';
+  const downloading = u?.status === 'downloading';
+  // T3-style states: dot (available) → progress ring (downloading) → check badge + label (ready).
+  const ring = downloading
+    ? `<svg class="foot-update-ring" viewBox="0 0 28 28" aria-hidden="true"><circle class="ring-track" cx="14" cy="14" r="12"/><circle class="ring-bar" cx="14" cy="14" r="12" style="stroke-dasharray:${RING_C};stroke-dashoffset:${ringOffset(u.downloadPercent)}"/></svg>`
+    : '';
   const updateBtn = showUpdate
-    ? `<button class="foot-update${updateBusy ? ' busy' : ''}" type="button" data-update-act${updateBusy ? ' disabled' : ''} title="${tipAttr}" aria-label="${aria}">
-        <span class="foot-update-dot" aria-hidden="true"></span>
-        ${iconHTML('cloud-arrow-down')}
+    ? `<button class="foot-update${updateBusy ? ' busy' : ''}${ready ? ' ready' : ''}${downloading ? ' downloading' : ''}" type="button" data-update-act${updateOff ? ' disabled' : ''} title="${tipAttr}" aria-label="${aria}">
+        ${ready ? '<span class="foot-update-badge" aria-hidden="true">✓</span>' : downloading ? '' : '<span class="foot-update-dot" aria-hidden="true"></span>'}
+        ${ring}${iconHTML(ready ? 'arrows-clockwise' : 'cloud-arrow-down')}${ready ? '<span>Close &amp; update</span>' : ''}
       </button>`
     : '';
   return `<div class="panel-foot">
@@ -2133,19 +2181,44 @@ function panelFootHTML(settingsActive = false) {
   </div>`;
 }
 
-async function runUpdateAct() {
+/** Ask before quitting — lanes and their services stop when Plenum closes. */
+function confirmCloseAndUpdate() {
+  const v = updateTargetVersion();
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="upd-title">
+      <div class="eyebrow">${iconHTML('arrows-clockwise', 'sm')}Update ready</div>
+      <h1 id="upd-title">Close Plenum and update${v ? ` to ${esc(v)}` : ''}?</h1>
+      <p>Plenum will close and reopen by itself on the new version. Anything running in your lanes (dev servers, services) stops when it closes.</p>
+      ${updateNotesHTML()}
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Not now</button>
+        <button class="btn primary" type="submit">Close &amp; update</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    closeSheet();
+    runUpdateAct(true);
+  });
+  form.querySelector('[type=submit]').focus();
+}
+
+async function runUpdateAct(confirmed = false) {
   try {
     const prev = state.update;
+    if (prev?.status === 'downloaded' && !confirmed) return confirmCloseAndUpdate();
+    if (prev?.status === 'downloaded') toast('Closing Plenum to finish the update — it will reopen on its own.', 'ok');
     const next = await invoke('app.update.act');
     if (next) applyUpdateState(next);
-    // Surface mock / install failures — the foot label often stays “Install update”.
+    // Surface mock / install failures — the foot label often stays “Close & update”.
     if (next?.message && next.message !== prev?.message) {
       const kind = next.status === 'downloaded' || next.status === 'available' || next.status === 'error'
         ? 'bad'
         : '';
       toast(next.message, kind);
     } else if (next?.status === 'downloaded' && prev?.status === 'downloading') {
-      toast(next.downloadedVersion ? `Downloaded ${next.downloadedVersion}` : 'Download complete', 'ok');
+      toast(`Update${next.downloadedVersion ? ` ${next.downloadedVersion}` : ''} downloaded. Click “Close & update” to finish.`, 'ok');
     } else if (next?.status === 'available' && prev?.status === 'checking') {
       toast(next.availableVersion ? `Update ${next.availableVersion} available` : 'Update available', 'ok');
     }
@@ -3666,8 +3739,9 @@ const SETTINGS_PAGES = {
           '',
           versionDetailHTML(),
           updateControlHTML(),
-          'Packaged builds check GitHub Releases (T3-style: download, then Install & Restart). Dev builds stay on npm run pack / dist.',
+          'Download the update, then click Close & update. Plenum quits and reopens on the new version.',
         )}
+        ${updateNotesHTML()}
       </div>
       <div class="group-head">Open with</div>
       <div class="list">
@@ -3692,6 +3766,10 @@ const SETTINGS_PAGES = {
         ${settingsRow('arrows-clockwise', 'Reopen tabs', '', 'Restore open repos on launch', switchHTML('reopenTabs', p.reopenTabs, 'Reopen tabs'), 'Off clears the saved tab list on launch so you start empty.')}
         ${settingsRow('globe-simple', 'Repo favicons', '', 'Auto-detect, or rename a tab → Choose image from repo', switchHTML('tabFavicons', p.tabFavicons !== false, 'Repo favicons'), 'Looks for favicon.ico / .svg / .png. Rename a tab to pick a preset or any PNG / JPEG / SVG from the checkout. Off always uses the presets.')}
         ${settingsRow('clock', 'Tab warm time', '', 'How long a left tab stays hot', optionGroup('warmTabTtlMs', WARM_PRESETS.map(([ms, t]) => [ms, t.replace('seconds', 's').replace('minutes', 'min')]), p.warmTabTtlMs, { num: true, label: 'Tab warm time' }), 'Inside this window, switching back paints the last board instantly while git refreshes. After it freezes you still get one instant paint, then a full reload.')}
+      </div>
+      <div class="group-head">Feedback</div>
+      <div class="list">
+        ${settingsRow('pencil-simple', 'Feedback prompts', '', 'A rare check-in, and Report on errors', switchHTML('feedbackPrompts', p.feedbackPrompts !== false, 'Feedback prompts'), 'About once a month, and once after an update, a small card asks how Plenum is going. It waits until you have been idle for a while, never covers your work, and fades by itself. Off also hides the Report link on errors. Feedback in the palette always works.')}
       </div>
 `;
   },
@@ -3815,8 +3893,10 @@ const SETTINGS_PAGES = {
     const { launcher } = a;
     const cmd = settingsRow('terminal-window', 'plenum', esc(state.appInfo.version || '…'), `<span class="mono">${esc(launcher.shown || launcher.path)}</span>`,
       launcher.onPath ? status('on', 'On your PATH') : btn('Add to PATH', 'data-agent-link'),
-      "Agents don't need this. It's for using plenum in your own shell.")
-      + (!launcher.onPath && agentsView.linkCmd ? note(`Run this in Terminal:<pre>${esc(agentsView.linkCmd)}</pre>`) : '');
+      "Lets you type plenum in your own terminal. Agents don't need this.")
+      + (!launcher.onPath && agentsView.linkCmd
+        ? note(`Plenum can't write to ${esc(launcher.linkPath)} itself. Paste this in Terminal, then check again:<pre>${esc(agentsView.linkCmd)}</pre><div class="row-end">${btn('Copy', 'data-link-copy')}${btn('Check again', 'data-link-recheck', true)}</div>`)
+        : '');
     const clientRow = (c) => {
       const id = `data-client="${esc(c.id)}"`;
       const file = esc(c.shown || c.file);
@@ -4043,6 +4123,14 @@ function bindAgents(root) {
       } else agentsView.linkCmd = res.command;
     } catch { /* toasted */ }
     rerenderAgents();
+  });
+  root.querySelector('[data-link-copy]')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(agentsView.linkCmd).then(() => toast('Copied', 'ok'), () => {});
+  });
+  root.querySelector('[data-link-recheck]')?.addEventListener('click', async () => {
+    await loadAgents();
+    if (state.agents?.launcher.onPath) { agentsView.linkCmd = ''; toast('plenum is on your PATH', 'ok'); rerenderAgents(); }
+    else toast("Still not on your PATH. Run the command above, then check again.", 'bad');
   });
   root.querySelectorAll('[data-agent-lines]').forEach((b) => b.addEventListener('click', async () => {
     const id = b.dataset.client;
@@ -4294,6 +4382,8 @@ el.paletteInput.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown') { e.preventDefault(); paletteActive = Math.min(items.length - 1, paletteActive + 1); renderPalette(el.paletteInput.value); }
   if (e.key === 'ArrowUp') { e.preventDefault(); paletteActive = Math.max(0, paletteActive - 1); renderPalette(el.paletteInput.value); }
   if (e.key === 'Enter') {
+    // Swallow the key: a sheet opened by the command autofocuses before the default action runs (#78).
+    e.preventDefault();
     closePalette();
     items[paletteActive]?.run();
   }
@@ -4503,6 +4593,127 @@ async function loadOlderHistory() {
 
 window.addEventListener('focus', () => { refresh(); });
 
+// ── Feedback nudges ─────────────────────────────────────────────────────────
+// Rules live in lib/nudge.js. Here: a small non-modal card, never focused on its own,
+// shown only when the user has gone quiet, and gone for good once it has been shown.
+const nudgeBootAt = Date.now();
+let nudgeLastInputAt = Date.now();
+let nudgeFade = null;
+let nudgePathMissing = false;
+for (const t of ['keydown', 'pointerdown', 'wheel']) {
+  window.addEventListener(t, () => { nudgeLastInputAt = Date.now(); }, { capture: true, passive: true });
+}
+
+/** Write prefs without the "Saved" toast that setPref raises. */
+async function saveQuietPrefs(partial) {
+  try { state.prefs = await invoke('prefs.set', partial); } catch { /* best effort */ }
+}
+
+function nudgeBusy() {
+  const a = document.activeElement;
+  return !document.hasFocus() || document.hidden || !state.board || state.loading || state.settings.open
+    || el.sheetLayer.classList.contains('open') || !el.paletteLayer.hidden || !el.toast.hidden
+    || !!document.querySelector('.tour-layer, #nudge')
+    || !!a?.matches?.('input, textarea, select, [contenteditable]');
+}
+
+function hideNudge() {
+  clearTimeout(nudgeFade);
+  document.getElementById('nudge')?.remove();
+}
+
+function showPathNudge() {
+  const card = document.createElement('div');
+  card.id = 'nudge';
+  card.className = 'nudge';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', 'Set up the plenum command');
+  card.setAttribute('data-feedback-ignore', '');
+  card.innerHTML = `
+    <div class="nudge-head"><strong>Use <span class="mono">plenum</span> from your terminal?</strong>
+      <button class="iconbtn" type="button" data-nudge-x aria-label="Dismiss" title="Dismiss">${iconHTML('x', 'sm')}</button></div>
+    <div class="nudge-body">
+      <button class="btn primary" type="button" data-path-go>Set up</button>
+      <button class="btn" type="button" data-nudge-x>Not now</button>
+      <span class="nudge-off">Settings → Agents any time</span>
+    </div>`;
+  (document.querySelector('.window.app') || document.body).appendChild(card);
+  card.querySelectorAll('[data-nudge-x]').forEach((b) => b.addEventListener('click', hideNudge));
+  card.querySelector('[data-path-go]').addEventListener('click', () => { hideNudge(); openSettings('agents'); });
+  nudgeFade = setTimeout(hideNudge, 30_000);
+}
+
+function showNudge(kind) {
+  if (kind === 'path') return showPathNudge();
+  const v = state.appInfo?.version;
+  const title = kind === 'update' && v ? `You’re on ${v}. How is it so far?` : 'How’s Plenum treating you?';
+  const card = document.createElement('div');
+  card.id = 'nudge';
+  card.className = 'nudge';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', 'Quick feedback');
+  card.setAttribute('data-feedback-ignore', '');
+  card.innerHTML = `
+    <div class="nudge-head"><strong>${esc(title)}</strong>
+      <button class="iconbtn" type="button" data-nudge-x aria-label="Dismiss" title="Dismiss">${iconHTML('x', 'sm')}</button></div>
+    <div class="nudge-body">
+      <button class="btn" type="button" data-rate="up">Good</button>
+      <button class="btn" type="button" data-rate="down">Not great</button>
+      <button class="nudge-off" type="button" data-nudge-off title="Settings → General turns them back on">Stop asking</button>
+    </div>`;
+  (document.querySelector('.window.app') || document.body).appendChild(card);
+  card.querySelector('[data-nudge-x]').addEventListener('click', hideNudge);
+  card.querySelector('[data-nudge-off]').addEventListener('click', async () => {
+    hideNudge();
+    await saveQuietPrefs({ feedbackPrompts: false });
+    toast('Prompts off. Settings → General turns them back on.');
+  });
+  card.querySelectorAll('[data-rate]').forEach((b) => b.addEventListener('click', () => {
+    clearTimeout(nudgeFade);
+    const rating = b.dataset.rate;
+    card.querySelector('.nudge-head strong').textContent = rating === 'up' ? 'Glad to hear it.' : 'Sorry about that.';
+    const body = card.querySelector('.nudge-body');
+    body.innerHTML = `<input class="input" type="text" maxlength="500" placeholder="Anything to add? (optional)" aria-label="Anything to add" />
+      <button class="btn primary" type="button" data-nudge-send>Send</button>`;
+    const input = body.querySelector('input');
+    const send = async (comment) => {
+      const btn = body.querySelector('[data-nudge-send]');
+      btn.disabled = true;
+      try {
+        await invoke('feedback.checkin', { rating, context: kind, comment });
+        hideNudge();
+        toast('Thanks.', 'ok');
+      } catch { btn.disabled = false; /* invoke already toasted */ }
+    };
+    body.querySelector('[data-nudge-send]').addEventListener('click', () => send(input.value));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(input.value); } });
+    input.focus();
+  }));
+  // Ignoring it is an answer: it fades on its own.
+  nudgeFade = setTimeout(hideNudge, 30_000);
+}
+
+function nudgeTick() {
+  const now = Date.now();
+  const kind = pickNudge({
+    prefs: state.prefs, now, sessionMs: now - nudgeBootAt, idleMs: now - nudgeLastInputAt, busy: nudgeBusy(), pathMissing: nudgePathMissing,
+  });
+  if (!kind) return;
+  saveQuietPrefs({ nudge: markShown(state.prefs.nudge, kind, now) });
+  showNudge(kind);
+}
+
+async function startNudges() {
+  const version = state.appInfo?.version;
+  if (!version) return; // dev runs have no version to compare
+  const next = noteLaunch(state.prefs.nudge, version, Date.now());
+  if (next !== state.prefs.nudge) await saveQuietPrefs({ nudge: next });
+  if (!state.prefs.nudge?.pathAskedAt) {
+    api.invoke('agents.get').then((a) => { nudgePathMissing = !a.launcher.onPath; }, () => {});
+  }
+  setInterval(nudgeTick, 30_000);
+}
+
 async function boot() {
   try {
     state.prefs = await invoke('prefs.get');
@@ -4521,6 +4732,7 @@ async function boot() {
     state.appInfo = { version: '', commit: '', committedAt: '' };
   }
   paintVersion();
+  startNudges();
   try {
     const u = await invoke('app.update.state');
     if (u) state.update = u;

@@ -95,3 +95,12 @@ test('setPrefs stores tourDone', () => {
   assert.equal(getPrefs(dir).tourDone, false);
   assert.equal(setPrefs({ tourDone: true }, dir).tourDone, true);
 });
+
+test('feedback prompts default on; nudge state keeps only known fields', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.equal(getPrefs(dir).feedbackPrompts, true);
+  setPrefs({ feedbackPrompts: false, nudge: { firstSeenAt: 5, lastShownAt: 'x', seenVersion: '1.0.0', evil: 1 } }, dir);
+  const p = getPrefs(dir);
+  assert.equal(p.feedbackPrompts, false);
+  assert.deepEqual(p.nudge, { firstSeenAt: 5, seenVersion: '1.0.0' });
+});

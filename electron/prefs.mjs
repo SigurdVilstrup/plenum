@@ -26,6 +26,8 @@ export function defaultPrefs() {
     tabFavicons: true,
     gravatar: true,
     tourDone: false,
+    feedbackPrompts: true,
+    nudge: {},
     warmTabTtlMs: 120_000,
     credentialHosts: [],
     repoOverrides: {},
@@ -67,7 +69,7 @@ const ENUMS = {
   mergeTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
 };
 const ABS_PATHS = ['editorPath', 'terminalPath', 'cloneDefaultPath', 'diffToolPath', 'mergeToolPath'];
-const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar', 'tourDone'];
+const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar', 'tourDone', 'feedbackPrompts'];
 
 export function getPrefs(userDataDir) {
   const raw = read(userDataDir);
@@ -89,7 +91,15 @@ function sanitize(partial) {
       if (typeof v === 'string' && (v === '' || v === '~' || v.startsWith('~/') || path.isAbsolute(v))) out[k] = v.trim();
     } else if (BOOLS.includes(k)) out[k] = Boolean(v);
     else if (k === 'defaultLanesFolder') { if (typeof v === 'string') out[k] = v.trim(); }
-    else if (k === 'credentialHosts') { if (Array.isArray(v)) out[k] = v; }
+    else if (k === 'nudge') {
+      if (!v || typeof v !== 'object') continue;
+      const o = {};
+      for (const f of ['firstSeenAt', 'lastShownAt', 'checkinAt', 'updatedAt', 'pathAskedAt']) {
+        if (v[f] === null || Number.isFinite(v[f])) o[f] = v[f];
+      }
+      if (typeof v.seenVersion === 'string') o.seenVersion = v.seenVersion.slice(0, 40);
+      out[k] = o;
+    } else if (k === 'credentialHosts') { if (Array.isArray(v)) out[k] = v; }
     else if (k === 'repoOverrides') {
       if (!v || typeof v !== 'object') continue;
       out[k] = {};

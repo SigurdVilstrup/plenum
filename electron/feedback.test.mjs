@@ -10,6 +10,7 @@ import {
   collectFeedbackEnv,
   patchFeedbackMeta,
   sanitizeReporterEmail,
+  sendCheckin,
   sendFeedbackReport,
   writeFeedbackReport,
 } from './feedback.mjs';
@@ -239,4 +240,26 @@ test('patchFeedbackMeta merges fields', async () => {
   assert.equal(next.status, 'sent');
   assert.equal(next.issueNumber, 3);
   assert.equal(next.comment, 'x');
+});
+
+test('sendCheckin posts rating + trimmed comment + env, no screenshot', async () => {
+  let sent;
+  const fetchImpl = async (url, init) => { sent = { url, body: JSON.parse(init.body) }; return { ok: true }; };
+  await sendCheckin(
+    { rating: 'down', context: 'update', comment: '  slow  ' },
+    { appVersion: '1.2.3', platform: 'darwin' },
+    { endpoint: 'https://relay.test/x', fetchImpl },
+  );
+  assert.equal(sent.body.kind, 'checkin');
+  assert.equal(sent.body.rating, 'down');
+  assert.equal(sent.body.context, 'update');
+  assert.equal(sent.body.comment, 'slow');
+  assert.equal(sent.body.env.appVersion, '1.2.3');
+  assert.equal('pngBase64' in sent.body, false);
+});
+
+test('sendCheckin rejects a missing rating and surfaces relay errors', async () => {
+  const opts = { endpoint: 'https://relay.test/x', fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({ error: 'Slow down' }) }) };
+  await assert.rejects(sendCheckin({ rating: 'meh' }, {}, opts), /rating/);
+  await assert.rejects(sendCheckin({ rating: 'up' }, {}, opts), /Slow down/);
 });

@@ -50,28 +50,34 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+    // Check-ins (thumbs + optional one-liner) carry no screenshot.
+    const checkin = body?.kind === 'checkin';
+    const rating = body?.rating === 'up' ? 'up' : body?.rating === 'down' ? 'down' : null;
+    if (checkin && !rating) return json(400, { error: 'Missing rating.' });
     const comment = String(body?.comment || '').trim();
-    if (!comment) return json(400, { error: 'Add a comment.' });
+    if (!comment && !checkin) return json(400, { error: 'Add a comment.' });
     if (comment.length > MAX_COMMENT) return json(400, { error: 'Comment too long.' });
 
-    const pngBase64 = String(body?.pngBase64 || '');
-    if (!pngBase64) return json(400, { error: 'Missing screenshot.' });
-    // Cap encoded size before decode so huge bodies fail cheaply.
-    if (pngBase64.length > Math.ceil(MAX_PNG_BYTES * 4 / 3) + 8) {
-      return json(400, { error: 'Screenshot size out of range.' });
-    }
-    let png: Uint8Array;
-    try {
-      png = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
-    } catch {
-      return json(400, { error: 'Invalid screenshot encoding.' });
-    }
-    if (png.byteLength < 32 || png.byteLength > MAX_PNG_BYTES) {
-      return json(400, { error: 'Screenshot size out of range.' });
-    }
-    // PNG signature
-    if (!(png[0] === 0x89 && png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47)) {
-      return json(400, { error: 'Screenshot must be a PNG.' });
+    let png: Uint8Array | null = null;
+    if (!checkin) {
+      const pngBase64 = String(body?.pngBase64 || '');
+      if (!pngBase64) return json(400, { error: 'Missing screenshot.' });
+      // Cap encoded size before decode so huge bodies fail cheaply.
+      if (pngBase64.length > Math.ceil(MAX_PNG_BYTES * 4 / 3) + 8) {
+        return json(400, { error: 'Screenshot size out of range.' });
+      }
+      try {
+        png = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
+      } catch {
+        return json(400, { error: 'Invalid screenshot encoding.' });
+      }
+      if (png.byteLength < 32 || png.byteLength > MAX_PNG_BYTES) {
+        return json(400, { error: 'Screenshot size out of range.' });
+      }
+      // PNG signature
+      if (!(png[0] === 0x89 && png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47)) {
+        return json(400, { error: 'Screenshot must be a PNG.' });
+      }
     }
 
     let reporterEmail: string | null = null;
@@ -97,20 +103,25 @@ Deno.serve(async (req) => {
     }
 
     const id = crypto.randomUUID();
-    const objectPath = `${id}/window.png`;
-    const { error: upErr } = await supabase.storage
-      .from('feedback-screenshots')
-      .upload(objectPath, png, { contentType: 'image/png', upsert: false });
-    if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
-
-    const { data: pub } = supabase.storage.from('feedback-screenshots').getPublicUrl(objectPath);
-    const imageUrl = pub.publicUrl;
+    let imageUrl: string | null = null;
+    if (png) {
+      const objectPath = `${id}/window.png`;
+      const { error: upErr } = await supabase.storage
+        .from('feedback-screenshots')
+        .upload(objectPath, png, { contentType: 'image/png', upsert: false });
+      if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
+      imageUrl = supabase.storage.from('feedback-screenshots').getPublicUrl(objectPath).data.publicUrl;
+    }
 
     const target = body?.target;
     const env = body?.env && typeof body.env === 'object' ? body.env : {};
-    const title = comment.length > 72 ? `${comment.slice(0, 69)}…` : comment;
+    const mark = rating === 'up' ? '👍' : '👎';
+    const ctx = ['update', 'checkin'].includes(body?.context) ? body.context : 'checkin';
+    const title = checkin
+      ? `Check-in ${mark} (${ctx}) v${env.appVersion ?? '?'}${comment ? `: ${comment.slice(0, 50)}` : ''}`
+      : comment.length > 72 ? `${comment.slice(0, 69)}…` : comment;
     const lines = [
-      comment,
+      comment || (checkin ? `_${mark} with no note._` : ''),
       '',
       target?.label ? `**Target:** ${String(target.label).slice(0, 200)}` : null,
       reporterEmail ? `**Reported by** ${reporterEmail}` : null,
@@ -124,10 +135,10 @@ Deno.serve(async (req) => {
         ? `- Window: ${env.windowSize.width}×${env.windowSize.height}`
         : null,
       '',
-      '### Screenshot (redacted)',
-      `![window](${imageUrl})`,
+      imageUrl ? '### Screenshot (redacted)' : null,
+      imageUrl ? `![window](${imageUrl})` : null,
       '',
-      '_Sent from Plenum. Local outbox kept a copy on the reporter’s Mac._',
+      checkin ? '_Anonymous check-in from Plenum._' : '_Sent from Plenum. Local outbox kept a copy on the reporter’s Mac._',
     ].filter((l) => l != null);
 
     const [owner, repo] = githubRepo.split('/');
@@ -143,7 +154,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         title,
         body: lines.join('\n'),
-        labels: ['feedback'],
+        labels: [checkin ? 'checkin' : 'feedback'],
       }),
     });
     if (!ghRes.ok) {

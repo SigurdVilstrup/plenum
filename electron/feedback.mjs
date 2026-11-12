@@ -215,3 +215,32 @@ export async function sendFeedbackReport(dir, { endpoint, anonKey, fetchImpl = f
     error: null,
   });
 }
+
+const CHECKIN_KINDS = ['update', 'checkin'];
+
+/** Rating + optional one-liner. No screenshot, no local folder: just the relay. */
+export async function sendCheckin(input, env, { endpoint, anonKey, fetchImpl = fetch } = {}) {
+  if (!endpoint) throw new Error('Feedback relay is not configured (PLENUM_FEEDBACK_URL).');
+  if (input?.rating !== 'up' && input?.rating !== 'down') throw new Error('Pick a rating.');
+  const context = CHECKIN_KINDS.includes(input.context) ? input.context : 'checkin';
+  const headers = { 'Content-Type': 'application/json' };
+  if (anonKey) {
+    headers.Authorization = `Bearer ${anonKey}`;
+    headers.apikey = anonKey;
+  }
+  const res = await fetchImpl(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      kind: 'checkin',
+      rating: input.rating,
+      context,
+      comment: String(input.comment || '').trim().slice(0, 500),
+      env: buildUploadEnv(env),
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error((data && data.error) || `Submit failed (${res.status})`);
+  }
+}

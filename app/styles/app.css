@@ -503,6 +503,59 @@ button.env-link {
   animation: toast-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+.nudge {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  box-shadow: var(--shadow-pop);
+  font-size: 12px;
+  z-index: 15;
+  animation: fade-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.nudge-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nudge-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nudge-body .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.nudge-off {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-tertiary);
+  opacity: 0.65;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nudge-off:hover { opacity: 1; text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nudge { animation: none; }
+}
+
 .app-version {
   font-size: 11px;
   line-height: 1;

@@ -23,6 +23,7 @@ import {
   collectFeedbackEnv,
   sanitizeReporterEmail,
   sendFeedbackReport,
+  sendCheckin,
 } from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
 import { env as brandEnv } from './paths.mjs';
@@ -329,6 +330,11 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
   });
   return { dir };
 });
+
+ipcMain.handle('feedback.checkin', (_e, payload) => sendCheckin(payload, feedbackEnvSnapshot(), {
+  endpoint: brandEnv('FEEDBACK_URL', DEFAULT_FEEDBACK_URL),
+  anonKey: brandEnv('SUPABASE_ANON_KEY'),
+}));
 
 ipcMain.handle('feedback.send', async (_e, dir) => {
   const root = path.resolve(prefsDir(), 'feedback');
