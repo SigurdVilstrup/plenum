@@ -326,8 +326,7 @@ export function createUpdater(opts) {
     if (String(envGet('DISABLE_AUTO_UPDATE', '') || '').trim() === '1') {
       return 'Automatic updates are disabled by PLENUM_DISABLE_AUTO_UPDATE.';
     }
-    // A mock-update file/env lets dev builds dogfood the update UI.
-    if (!opts.isPackaged && !readMockUpdateVersion(runHome)) {
+    if (!opts.isPackaged) {
       return 'Automatic updates are only available in packaged builds.';
     }
     return null;

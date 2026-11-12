@@ -208,24 +208,6 @@ test('mock-update file forces available without calling GitHub', async () => {
   }
 });
 
-test('a mock-update file enables the updater in unpackaged dev builds, with notes', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-'));
-  fs.writeFileSync(path.join(dir, 'mock-update'), '0.3.0\n');
-  const mk = (runHome) => createUpdater({
-    getVersion: () => '0.2.6', isPackaged: false, platform: 'darwin', send: () => {}, runHome,
-    updater: { removeAllListeners() {}, on() {}, setFeedURL() {} },
-    envGet: () => undefined,
-  });
-  const noMock = mk(fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-')));
-  noMock.configure();
-  assert.equal(noMock.getState().enabled, false);
-  const u = mk(dir);
-  u.configure();
-  await u.check();
-  assert.equal(u.getState().status, 'available');
-  assert.ok(u.getState().releaseNotes.includes('Mock release note'));
-});
-
 test('PLENUM_DISABLE_AUTO_UPDATE disables the updater', () => {
   const u = createUpdater({
     getVersion: () => '0.2.5',
