@@ -330,8 +330,7 @@ input, textarea, [contenteditable="true"] {
   pointer-events: none;
 }
 .btn.busy,
-.iconbtn.busy,
-.foot-update.busy {
+.iconbtn.busy {
   position: relative;
   pointer-events: none;
   opacity: 1;
@@ -339,20 +338,17 @@ input, textarea, [contenteditable="true"] {
   --spin: var(--ink);
 }
 .btn.busy > *,
-.iconbtn.busy > *,
-.foot-update.busy > * {
+.iconbtn.busy > * {
   opacity: 0;
 }
 .btn.primary.busy,
 .iconbtn.primary.busy,
-.iconbtn.danger.busy,
-.foot-update.busy {
+.iconbtn.danger.busy {
   --spin: #fff;
 }
 /* One spinner for every busy button: ::after, centered, zero layout impact. */
 .btn.busy::after,
-.iconbtn.busy::after,
-.foot-update.busy::after {
+.iconbtn.busy::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -906,6 +902,8 @@ button.env-link {
     animation: none !important;
   }
   .spinner, .btn-spin { animation: spin 2s linear infinite !important; }
+  .panel-foot .foot-update .icon.spin,
+  .btn.update-act .icon.spin { animation: none !important; }
   .window.app .row.wip .who .wip-mark { animation: none !important; opacity: 0.75; }
   .lane-row .mark { transition: none; }
 }

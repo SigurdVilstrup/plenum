@@ -6,6 +6,8 @@
  * Default feed is the public generic URL on plenum.sh (no GitHub token).
  * Override with PLENUM_UPDATE_FEED_URL, or PLENUM_UPDATE_REPOSITORY=owner/repo for GitHub.
  * Dogfood UI without files: ~/.plenum/mock-update containing a semver (e.g. `0.2.7`).
+ * Unpackaged (dev) builds stay enabled and mock a patch bump — no network.
+ * Manual checks stay on “checking” for at least CHECK_MIN_MS so the spinner is visible.
  *
  * Releases are Developer ID–signed + notarized so Squirrel.Mac can install the zip.
  */
@@ -57,6 +59,23 @@ export function readMockUpdateVersion(dir = RUN_HOME) {
   if (fromEnv) return fromEnv.replace(/^v/i, '');
   const fromFile = readFirstLine(path.join(dir, 'mock-update'));
   return fromFile ? fromFile.replace(/^v/i, '') : '';
+}
+
+/** Dev / unpackaged default: always offer a patch bump so the UI can be dogfooded. */
+export function bumpPatchVersion(current) {
+  try {
+    const semver = require('semver');
+    if (semver.valid(current)) return semver.inc(current, 'patch');
+  } catch { /* fall through */ }
+  return '0.0.1';
+}
+
+export const CHECK_MIN_MS = 1000;
+/** Mock / unpackaged downloads animate progress over this long so the ring is visible. */
+export const MOCK_DOWNLOAD_MS = 5000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function readUpdateGithubToken(dir = RUN_HOME) {
@@ -301,16 +320,24 @@ function errMessage(err) {
  *   send: (state: ReturnType<typeof initialState>) => void,
  *   updater?: object,
  *   envGet?: (name: string, fallback?: string) => string|undefined,
+ *   checkMinMs?: number,
+ *   mockDownloadMs?: number,
  * }} opts
  */
 export function createUpdater(opts) {
   const updater = opts.updater || defaultAutoUpdater();
   const envGet = opts.envGet || env;
   const runHome = opts.runHome || RUN_HOME;
+  const checkMinMs = opts.checkMinMs == null ? CHECK_MIN_MS : Math.max(0, Number(opts.checkMinMs) || 0);
+  const mockDownloadMs = opts.mockDownloadMs == null
+    ? MOCK_DOWNLOAD_MS
+    : Math.max(0, Number(opts.mockDownloadMs) || 0);
   let state = initialState({ currentVersion: opts.getVersion() });
   let timers = [];
   let busy = null;
   let started = false;
+  /** Deferred result while a check is held for CHECK_MIN_MS. */
+  let checkHold = null;
 
   function publish(next) {
     state = next;
@@ -322,12 +349,19 @@ export function createUpdater(opts) {
     return { ...state };
   }
 
+  /** Env / ~/.plenum/mock-update, or a patch bump in unpackaged (dev) builds. */
+  function resolveMockVersion() {
+    const fromEnv = String(envGet('MOCK_UPDATE', '') || '').trim().replace(/^v/i, '');
+    if (fromEnv) return fromEnv;
+    const fromFile = readFirstLine(path.join(runHome, 'mock-update'));
+    if (fromFile) return fromFile.replace(/^v/i, '');
+    if (!opts.isPackaged) return bumpPatchVersion(opts.getVersion());
+    return '';
+  }
+
   function disabledReason() {
     if (String(envGet('DISABLE_AUTO_UPDATE', '') || '').trim() === '1') {
       return 'Automatic updates are disabled by PLENUM_DISABLE_AUTO_UPDATE.';
-    }
-    if (!opts.isPackaged) {
-      return 'Automatic updates are only available in packaged builds.';
     }
     return null;
   }
@@ -371,10 +405,14 @@ export function createUpdater(opts) {
     updater.removeAllListeners?.('error');
 
     updater.on('update-available', (info) => {
-      publish(reduceOnUpdateAvailable(state, String(info?.version || ''), nowIso(), notesText(info?.releaseNotes)));
+      const next = reduceOnUpdateAvailable(state, String(info?.version || ''), nowIso(), notesText(info?.releaseNotes));
+      if (busy === 'check') checkHold = next;
+      else publish(next);
     });
     updater.on('update-not-available', () => {
-      publish(reduceOnNoUpdate(state, nowIso()));
+      const next = reduceOnNoUpdate(state, nowIso());
+      if (busy === 'check') checkHold = next;
+      else publish(next);
     });
     updater.on('download-progress', (p) => {
       const pct = Number(p?.percent);
@@ -386,12 +424,15 @@ export function createUpdater(opts) {
     updater.on('error', (err) => {
       if (busy === 'download' || state.status === 'downloading') {
         publish(reduceOnDownloadFailure(state, errMessage(err)));
+        busy = null;
       } else if (busy === 'install') {
         publish(reduceOnInstallFailure(state, errMessage(err)));
+        busy = null;
+      } else if (busy === 'check') {
+        checkHold = reduceOnCheckFailure(state, errMessage(err), nowIso());
       } else {
         publish(reduceOnCheckFailure(state, errMessage(err), nowIso()));
       }
-      busy = null;
     });
 
     return publish(initialState({
@@ -405,34 +446,39 @@ export function createUpdater(opts) {
     if (!state.enabled) return snapshot();
     if (busy) return snapshot();
     busy = 'check';
+    checkHold = null;
+    const started = Date.now();
     publish(reduceOnCheckStart(state, nowIso()));
     try {
-      const mock = envGet('MOCK_UPDATE') != null && String(envGet('MOCK_UPDATE')).trim() !== ''
-        ? String(envGet('MOCK_UPDATE')).trim().replace(/^v/i, '')
-        : readMockUpdateVersion(runHome);
+      const mock = resolveMockVersion();
       if (mock) {
         const cur = opts.getVersion();
-        if (isNewerVersion(mock, cur)) {
-          publish(reduceOnUpdateAvailable(state, mock, nowIso(), '- Mock release note one\n- Mock release note two'));
+        checkHold = isNewerVersion(mock, cur)
+          ? reduceOnUpdateAvailable(state, mock, nowIso(), '- Mock release note one\n- Mock release note two')
+          : reduceOnNoUpdate(state, nowIso());
+      } else {
+        const feed = resolveUpdateFeed(envGet);
+        if (feed.provider === 'github' && !readUpdateGithubToken(runHome)) {
+          checkHold = reduceOnCheckFailure(
+            state,
+            'GitHub update feed needs ~/.plenum/update-github-token (private repo). Prefer the public https://plenum.sh/updates/ feed.',
+            nowIso(),
+          );
         } else {
-          publish(reduceOnNoUpdate(state, nowIso()));
+          await updater.checkForUpdates();
         }
-        return snapshot();
       }
-      const feed = resolveUpdateFeed(envGet);
-      if (feed.provider === 'github' && !readUpdateGithubToken(runHome)) {
-        publish(reduceOnCheckFailure(
-          state,
-          'GitHub update feed needs ~/.plenum/update-github-token (private repo). Prefer the public https://plenum.sh/updates/ feed.',
-          nowIso(),
-        ));
-        return snapshot();
-      }
-      await updater.checkForUpdates();
     } catch (err) {
-      publish(reduceOnCheckFailure(state, errMessage(err), nowIso()));
+      checkHold = reduceOnCheckFailure(state, errMessage(err), nowIso());
     } finally {
-      if (busy === 'check') busy = null;
+      const wait = checkMinMs - (Date.now() - started);
+      if (wait > 0) await sleep(wait);
+      const final = checkHold || (state.status === 'checking'
+        ? reduceOnNoUpdate(state, nowIso())
+        : null);
+      checkHold = null;
+      busy = null;
+      if (final) publish(final);
     }
     return snapshot();
   }
@@ -446,10 +492,15 @@ export function createUpdater(opts) {
     busy = 'download';
     publish(reduceOnDownloadStart(state));
     try {
-      const mock = readMockUpdateVersion(runHome) || String(envGet('MOCK_UPDATE', '') || '').trim().replace(/^v/i, '');
+      const mock = resolveMockVersion();
       if (mock) {
-        // UI dogfood only — no real package to swap in.
-        publish(reduceOnDownloadProgress(state, 100));
+        // UI dogfood — animate the ring so downloading is visible.
+        const steps = Math.max(1, Math.round(mockDownloadMs / 250) || 1);
+        const stepMs = mockDownloadMs / steps;
+        for (let i = 1; i <= steps; i++) {
+          if (stepMs > 0) await sleep(stepMs);
+          publish(reduceOnDownloadProgress(state, (i / steps) * 100));
+        }
         publish(reduceOnDownloadComplete(state, mock));
         return snapshot();
       }
@@ -470,10 +521,12 @@ export function createUpdater(opts) {
     if (state.status !== 'downloaded' && state.downloadedVersion == null) return snapshot();
     busy = 'install';
     try {
-      if (readMockUpdateVersion(runHome) || String(envGet('MOCK_UPDATE', '') || '').trim()) {
+      if (resolveMockVersion()) {
         publish(reduceOnInstallFailure(
           state,
-          'Mock update only — publish zip + latest-mac.yml to https://plenum.sh/updates/ to install for real.',
+          opts.isPackaged
+            ? 'Mock update only — publish zip + latest-mac.yml to https://plenum.sh/updates/ to install for real.'
+            : 'Dev build — mock update only. Pack a signed release to install for real.',
         ));
         busy = null;
         return snapshot();

@@ -1490,7 +1490,7 @@ a.iconbtn,
   color: var(--ink);
 }
 
-/* In-app update CTA — iconbtn-sized, accent fill + notification dot. */
+/* In-app update CTA — same chrome as the neighbouring foot iconbtns. Never disabled. */
 .panel-foot .foot-update {
   position: relative;
   display: inline-flex;
@@ -1501,69 +1501,65 @@ a.iconbtn,
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--primary);
-  color: var(--on-primary);
+  background: transparent;
+  color: var(--ink-tertiary);
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.panel-foot { flex-wrap: wrap; }
-/* Ready to install: its own full-width row above the icons, so the label never fights Feedback for space. */
-.panel-foot .foot-update.ready {
-  order: -1;
-  flex: 1 0 100%;
-  width: 100%;
-  height: 30px;
-  margin-bottom: 6px;
-  gap: 6px;
-  font: inherit;
-  font-weight: 600;
-  white-space: nowrap;
+.panel-foot .foot-update:hover {
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
-.panel-foot .foot-update.downloading { cursor: progress; opacity: 1; }
+.panel-foot .foot-update.available,
+.panel-foot .foot-update.downloading,
+.panel-foot .foot-update.downloaded {
+  color: var(--ink);
+}
+
+.panel-foot .foot-update.error {
+  color: var(--danger);
+}
+
+.panel-foot .foot-update.error:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.panel-foot .foot-update .icon {
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.panel-foot .foot-update .icon.spin,
+.btn.update-act .icon.spin {
+  animation: spin 0.9s linear infinite;
+}
+
 .foot-update-ring {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 16px;
+  height: 16px;
   transform: rotate(-90deg);
   pointer-events: none;
   fill: none;
-  stroke-width: 1.75;
+  stroke-width: 2.25;
+  flex-shrink: 0;
 }
-.foot-update-ring .ring-track { stroke: color-mix(in srgb, var(--on-primary) 28%, transparent); }
+.foot-update-ring .ring-track { stroke: color-mix(in srgb, currentColor 28%, transparent); }
 .foot-update-ring .ring-bar {
-  stroke: var(--on-primary);
+  stroke: currentColor;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.3s ease-out;
 }
-.foot-update-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  display: grid;
-  place-items: center;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--ink, #111);
-  color: var(--surface-1, #fff);
-  border: 2px solid var(--surface-1);
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1;
-  box-sizing: content-box;
-  animation: update-badge-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
-}
-@keyframes update-badge-pop { from { transform: scale(0); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .foot-update-ring .ring-bar { transition: none; }
-  .foot-update-badge { animation: none; }
+  .panel-foot .foot-update .icon.spin,
+  .btn.update-act .icon.spin { animation: none; }
 }
 
 .update-notes {
-  margin: 8px 2px 0;
+  margin: 0 0 16px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--surface-2, rgba(127, 127, 127, 0.08));
@@ -1572,23 +1568,11 @@ a.iconbtn,
 .update-notes-head { font-weight: 600; margin-bottom: 4px; }
 .update-notes ul { margin: 0; padding-left: 16px; }
 
-.panel-foot .foot-update .icon {
-  color: var(--on-primary);
-  flex-shrink: 0;
-}
-
-.panel-foot .foot-update:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.panel-foot .foot-update:disabled {
-  cursor: wait;
-}
-
-.panel-foot .foot-update-dot {
+.panel-foot .foot-update-dot,
+.btn.update-act .foot-update-dot {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -3px;
+  right: -3px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
@@ -1598,14 +1582,52 @@ a.iconbtn,
   animation: update-dot-pulse 1.6s ease-in-out infinite;
 }
 
-.panel-foot .foot-update.busy .foot-update-dot {
-  animation: none;
-  background: var(--warning, #e8a317);
-}
-
 @keyframes update-dot-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+/* Settings text twin of the foot icon — same states, label carries the %. */
+.btn.update-act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 148px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn.update-act:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+.btn.update-act.available,
+.btn.update-act.downloading,
+.btn.update-act.downloaded {
+  color: var(--ink);
+}
+.btn.update-act.error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--hairline));
+}
+.btn.update-act.error:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.btn.update-act .icon,
+.btn.update-act .foot-update-ring {
+  color: inherit;
+  flex-shrink: 0;
+}
+.btn.update-act .update-act-label {
+  white-space: nowrap;
 }
 
 /* Mac sheets: drop from under the title bar, rounded at the bottom only. */
@@ -2680,7 +2702,8 @@ a.navitem {
   width: 460px;
   border: 1px solid var(--hairline-strong);
   background: var(--surface-1);
-  padding: 18px;
+  /* Extra inset so :focus-visible outline (offset 2px) stays inside the chrome. */
+  padding: 20px;
 }
 
 .modal .eyebrow {
@@ -2771,6 +2794,10 @@ a.navitem {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.modal .row-end {
+  margin-top: 4px;
 }
 
 /* Motion */

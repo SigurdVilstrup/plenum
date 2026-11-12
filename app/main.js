@@ -287,7 +287,7 @@ function updateTargetVersion(u = state.update) {
   return u?.availableVersion || u?.downloadedVersion || null;
 }
 
-/** Mirror of electron/updates.mjs actionLabel for the Settings / foot button. */
+/** Mirror of electron/updates.mjs actionLabel for the Settings text button. */
 function updateActionLabel(u = state.update) {
   if (!u || !u.enabled) return null;
   const v = updateTargetVersion(u);
@@ -306,69 +306,58 @@ function updateActionLabel(u = state.update) {
   }
 }
 
-/** Short disruptive label for the sidebar foot (never the error/retry state). */
-function updateFootLabel(u = state.update) {
-  if (!u?.enabled) return null;
-  const v = updateTargetVersion(u);
-  switch (u.status) {
-    case 'available': return v ? `Download ${v}` : 'Download update';
-    case 'downloading': {
-      const pct = u.downloadPercent;
-      return pct != null ? `Downloading ${Math.round(pct)}%` : 'Downloading…';
-    }
-    case 'downloaded': return 'Close & update';
-    default: return null;
-  }
+/** Glyph for both foot icon + Settings text leading icon. */
+function updateActionIcon(u = state.update) {
+  if (u?.status === 'available') return 'cloud-arrow-down';
+  return 'arrows-clockwise';
 }
 
-/** Hover copy: always show current → next when we know the target. */
+/** Hover / aria: icon must name the version when one is in play. */
 function updateHoverTip(u = state.update) {
   if (!u) return '';
-  if (u.message && (u.status === 'error' || u.status === 'disabled')) return u.message;
+  if (u.status === 'disabled') return u.message || 'Updates unavailable';
+  if (u.status === 'error') return u.message || 'Update failed — try again';
   const cur = u.currentVersion || state.appInfo.version || '?';
   const next = updateTargetVersion(u);
-  const arrow = next ? `${cur} → ${next}` : null;
-  const notes = updateNotes(u).map((l) => `• ${l}`).join('\n');
-  const withNotes = (t) => (notes ? `${t}\n\nWhat’s new:\n${notes}` : t);
   switch (u.status) {
     case 'available':
-      return withNotes(arrow
-        ? `Download update\n${arrow}\nThen click Close & update to finish.`
-        : 'Download update. Then click Close & update to finish.');
+      return next ? `Download ${next}` : 'Download update';
     case 'downloading': {
       const pct = u.downloadPercent != null ? ` (${Math.round(u.downloadPercent)}%)` : '';
-      return arrow
-        ? `Downloading update${pct}\n${arrow}`
-        : `Downloading update${pct}`;
+      return next ? `Downloading ${next}${pct}` : `Downloading update${pct}`;
     }
     case 'downloaded':
-      return withNotes(arrow
-        ? `Downloaded — click Close & update\n${arrow}\nPlenum quits and reopens on ${next}.`
-        : 'Downloaded — click Close & update. Plenum quits and reopens.');
-    case 'up-to-date':
-      return `You’re on ${cur} — latest GitHub release.`;
-    case 'idle':
-      return `Installed ${cur}. Check GitHub Releases for a newer Plenum.`;
+      return next ? `Close & update to ${next}` : 'Close & update';
     case 'checking':
       return `Checking for updates… (installed ${cur})`;
-    case 'error':
-      return u.message || 'Update check failed.';
+    case 'up-to-date':
+      return `You’re on ${cur} — check again`;
+    case 'idle':
+      return `Installed ${cur}. Check for updates`;
     default:
-      return arrow || `Installed ${cur}`;
+      return next || `Installed ${cur}`;
   }
-}
-
-/** Spinner only while checking; downloads show a progress ring / percent instead. */
-function updateActionBusy(u = state.update) {
-  return u?.status === 'checking';
-}
-
-function updateActionDisabled(u = state.update) {
-  return u?.status === 'checking' || u?.status === 'downloading';
 }
 
 const RING_C = 2 * Math.PI * 12;
 const ringOffset = (pct) => RING_C * (1 - Math.min(100, Math.max(0, Number(pct) || 0)) / 100);
+
+function updateRingHTML(u = state.update) {
+  if (u?.status !== 'downloading') return '';
+  return `<svg class="foot-update-ring" viewBox="0 0 28 28" aria-hidden="true"><circle class="ring-track" cx="14" cy="14" r="12"/><circle class="ring-bar" cx="14" cy="14" r="12" style="stroke-dasharray:${RING_C};stroke-dashoffset:${ringOffset(u.downloadPercent)}"/></svg>`;
+}
+
+function updateStatusClass(u = state.update) {
+  const s = u?.status;
+  if (!s || s === 'disabled') return '';
+  return s;
+}
+
+function updateNotifyDot(u = state.update) {
+  return u?.status === 'available' || u?.status === 'downloaded'
+    ? '<span class="foot-update-dot" aria-hidden="true"></span>'
+    : '';
+}
 
 function updateControlHTML() {
   const u = state.update;
@@ -378,10 +367,14 @@ function updateControlHTML() {
   }
   const label = updateActionLabel(u);
   if (!label) return '';
-  const busy = updateActionBusy(u);
-  const hot = u.status === 'available' || u.status === 'downloaded' || u.status === 'downloading';
   const tip = updateHoverTip(u);
-  return `<button class="btn${hot ? ' primary' : ''}${busy ? ' busy' : ''}" type="button" data-update-act${updateActionDisabled(u) ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
+  const status = updateStatusClass(u);
+  const checking = u.status === 'checking';
+  const downloading = u.status === 'downloading';
+  const icon = downloading
+    ? updateRingHTML(u)
+    : iconHTML(updateActionIcon(u), checking ? 'spin' : '');
+  return `<button class="btn update-act ${esc(status)}" type="button" data-update-act title="${esc(tip)}">${icon}<span class="update-act-label">${esc(label)}</span>${updateNotifyDot(u)}</button>`;
 }
 
 function applyUpdateState(next) {
@@ -404,14 +397,15 @@ function applyUpdateState(next) {
     paint();
     return;
   }
-  // Progress-only: refresh tooltips (foot is icon-only; Settings keeps its label via paint).
+  // Progress-only: keep the ring + tip in sync without a full paint.
   const tip = updateHoverTip(next);
-  document.querySelectorAll('.foot-update[data-update-act]').forEach((btn) => {
+  document.querySelectorAll('[data-update-act]').forEach((btn) => {
     btn.title = tip;
     btn.setAttribute('aria-label', tip.replace(/\n/g, ' — '));
-    btn.classList.toggle('busy', updateActionBusy(next));
     const bar = btn.querySelector('.ring-bar');
     if (bar) bar.style.strokeDashoffset = ringOffset(next.downloadPercent);
+    const label = btn.querySelector('.update-act-label');
+    if (label) label.textContent = updateActionLabel(next) || '';
   });
 }
 
@@ -2180,24 +2174,19 @@ function startFeedbackPick() {
 /** Footer shared by the board sidebar and the Settings sidebar so both look identical. */
 function panelFootHTML(settingsActive = false) {
   const u = state.update;
-  // Foot CTA only for a real update path — failed checks stay in Settings (“Try again”).
-  const showUpdate = u?.enabled && (u.status === 'available' || u.status === 'downloading' || u.status === 'downloaded');
-  const updateBusy = updateActionBusy(u);
-  const updateOff = updateActionDisabled(u);
+  const showUpdate = Boolean(u?.enabled);
   const tip = updateHoverTip(u);
   const tipAttr = esc(tip);
   const aria = esc(tip.replace(/\n/g, ' — '));
-  // Icon-only: accent fill + notification dot (label lives in the tooltip).
-  const ready = u?.status === 'downloaded';
+  const status = updateStatusClass(u);
+  const checking = u?.status === 'checking';
   const downloading = u?.status === 'downloading';
-  // T3-style states: dot (available) → progress ring (downloading) → check badge + label (ready).
-  const ring = downloading
-    ? `<svg class="foot-update-ring" viewBox="0 0 28 28" aria-hidden="true"><circle class="ring-track" cx="14" cy="14" r="12"/><circle class="ring-bar" cx="14" cy="14" r="12" style="stroke-dasharray:${RING_C};stroke-dashoffset:${ringOffset(u.downloadPercent)}"/></svg>`
-    : '';
+  const icon = downloading
+    ? updateRingHTML(u)
+    : iconHTML(updateActionIcon(u), checking ? 'spin' : '');
   const updateBtn = showUpdate
-    ? `<button class="foot-update${updateBusy ? ' busy' : ''}${ready ? ' ready' : ''}${downloading ? ' downloading' : ''}" type="button" data-update-act${updateOff ? ' disabled' : ''} title="${tipAttr}" aria-label="${aria}">
-        ${ready ? '<span class="foot-update-badge" aria-hidden="true">✓</span>' : downloading ? '' : '<span class="foot-update-dot" aria-hidden="true"></span>'}
-        ${ring}${iconHTML(ready ? 'arrows-clockwise' : 'cloud-arrow-down')}${ready ? '<span>Close &amp; update</span>' : ''}
+    ? `<button class="foot-update ${esc(status)}" type="button" data-update-act title="${tipAttr}" aria-label="${aria}">
+        ${icon}${updateNotifyDot(u)}
       </button>`
     : '';
   return `<div class="panel-foot">
@@ -3776,7 +3765,7 @@ const SETTINGS_PAGES = {
           '',
           versionDetailHTML(),
           updateControlHTML(),
-          'Download the update, then click Close & update. Plenum quits and reopens on the new version.',
+          'Check, download, then Close & update. Plenum quits and reopens on the new version.',
         )}
         ${updateNotesHTML()}
       </div>

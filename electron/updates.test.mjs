@@ -6,6 +6,8 @@ import path from 'node:path';
 import {
   actionKind,
   actionLabel,
+  bumpPatchVersion,
+  CHECK_MIN_MS,
   createUpdater,
   DEFAULT_UPDATE_FEED_URL,
   initialState,
@@ -99,8 +101,7 @@ test('install failure keeps the downloaded package', () => {
   assert.equal(s.canRetry, true);
 });
 
-test('createUpdater stays disabled outside packaged builds', async () => {
-  const sent = [];
+test('createUpdater enables mock updates in unpackaged (dev) builds', async () => {
   const fake = {
     autoDownload: true,
     autoInstallOnAppQuit: true,
@@ -109,23 +110,50 @@ test('createUpdater stays disabled outside packaged builds', async () => {
     verifyUpdateCodeSignature: true,
     removeAllListeners() {},
     on() {},
+    setFeedURL() {},
     checkForUpdates: async () => { throw new Error('should not run'); },
   };
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-dev-'));
   const u = createUpdater({
     getVersion: () => '0.2.5',
     isPackaged: false,
     platform: 'darwin',
-    send: (s) => sent.push(s),
+    send: () => {},
     updater: fake,
     envGet: () => undefined,
+    runHome: emptyHome,
+    checkMinMs: 0,
+    mockDownloadMs: 0,
   });
   const s = u.configure();
-  assert.equal(s.enabled, false);
-  assert.equal(s.status, 'disabled');
-  assert.match(s.message, /packaged/);
-  assert.equal(fake.autoDownload, true); // never configured
+  assert.equal(s.enabled, true);
+  assert.equal(s.status, 'idle');
+  assert.equal(fake.autoDownload, false);
   await u.check();
-  assert.equal(u.getState().status, 'disabled');
+  assert.equal(u.getState().status, 'available');
+  assert.equal(u.getState().availableVersion, bumpPatchVersion('0.2.5'));
+});
+
+test('check holds checking status for at least CHECK_MIN_MS', async () => {
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-min-'));
+  const u = createUpdater({
+    getVersion: () => '0.2.5',
+    isPackaged: false,
+    platform: 'darwin',
+    send: () => {},
+    updater: { removeAllListeners() {}, on() {}, setFeedURL() {} },
+    envGet: () => undefined,
+    runHome: emptyHome,
+    checkMinMs: CHECK_MIN_MS,
+    mockDownloadMs: 0,
+  });
+  u.configure();
+  const t0 = Date.now();
+  const done = u.check();
+  assert.equal(u.getState().status, 'checking');
+  await done;
+  assert.ok(Date.now() - t0 >= CHECK_MIN_MS - 20);
+  assert.equal(u.getState().status, 'available');
 });
 
 test('createUpdater configures no-auto download/install and runs check', async () => {
@@ -160,6 +188,8 @@ test('createUpdater configures no-auto download/install and runs check', async (
     updater: fake,
     envGet: () => undefined,
     runHome: emptyHome,
+    checkMinMs: 0,
+    mockDownloadMs: 0,
   });
   u.configure();
   assert.equal(fake.autoDownload, false);
@@ -182,30 +212,26 @@ test('createUpdater configures no-auto download/install and runs check', async (
 test('mock-update file forces available without calling GitHub', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-upd-'));
   fs.writeFileSync(path.join(dir, 'mock-update'), '0.3.0\n');
-  const prev = process.env.PLENUM_MOCK_UPDATE;
-  process.env.PLENUM_MOCK_UPDATE = '0.3.0';
-  try {
-    const u = createUpdater({
-      getVersion: () => '0.2.6',
-      isPackaged: true,
-      platform: 'darwin',
-      send: () => {},
-      updater: {
-        removeAllListeners() {},
-        on() {},
-        setFeedURL() {},
-        async checkForUpdates() { throw new Error('should not hit network'); },
-      },
-      envGet: () => undefined,
-    });
-    u.configure();
-    await u.check();
-    assert.equal(u.getState().status, 'available');
-    assert.equal(u.getState().availableVersion, '0.3.0');
-  } finally {
-    if (prev == null) delete process.env.PLENUM_MOCK_UPDATE;
-    else process.env.PLENUM_MOCK_UPDATE = prev;
-  }
+  const u = createUpdater({
+    getVersion: () => '0.2.6',
+    isPackaged: true,
+    platform: 'darwin',
+    send: () => {},
+    updater: {
+      removeAllListeners() {},
+      on() {},
+      setFeedURL() {},
+      async checkForUpdates() { throw new Error('should not hit network'); },
+    },
+    envGet: () => undefined,
+    runHome: dir,
+    checkMinMs: 0,
+    mockDownloadMs: 0,
+  });
+  u.configure();
+  await u.check();
+  assert.equal(u.getState().status, 'available');
+  assert.equal(u.getState().availableVersion, '0.3.0');
 });
 
 test('PLENUM_DISABLE_AUTO_UPDATE disables the updater', () => {
