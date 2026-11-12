@@ -13,6 +13,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags, for the release notes
 
       - uses: actions/setup-node@v4
         with:
@@ -22,6 +24,15 @@ jobs:
       - run: npm ci
 
       - run: npm test
+
+      - name: Release notes = commit headers since the previous tag
+        run: |
+          set -euo pipefail
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          # electron-builder picks build/release-notes.md up and writes it into latest-mac.yml.
+          git log -30 --no-merges --format='- %s' ${prev:+"$prev..${GITHUB_REF_NAME}"} \
+            | grep -Ev '^- v?[0-9]+\.[0-9]+\.[0-9]+$' > build/release-notes.md || true
+          cat build/release-notes.md
 
       - name: Write App Store Connect API key
         env:
