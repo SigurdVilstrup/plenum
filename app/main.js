@@ -2762,6 +2762,13 @@ function openDeleteBranchSheet(br) {
     const alsoRemote = Boolean(form.querySelector('[name=remote]')?.checked);
     const tabId = state.store.activeId;
     const root = state.board?.root;
+    // Remote deletes hit the network: keep the sheet open with a spinner until it settles.
+    const controls = form.querySelectorAll('button, input');
+    const setBusy = (on) => {
+      controls.forEach((c) => { c.disabled = on; });
+      form.querySelector('[type=submit]').classList.toggle('busy', on);
+    };
+    setBusy(true);
     try {
       let board = await invoke('branch.delete', ...pin(br.name, { force, remote: br.remote }));
       if (alsoRemote && !br.remote) {
@@ -2772,7 +2779,9 @@ function openDeleteBranchSheet(br) {
       const undoable = !br.remote && !alsoRemote && Boolean(br.head);
       if (undoable) pushUndo(`delete ${br.name}`, tabId, () => invoke('undo.restoreBranch', ...pin(br.name, br.head)));
       if (settleBoard(tabId, root, board)) toast(`Deleted ${br.name}`, 'ok', { undo: undoable });
-    } catch { /* toasted */ }
+    } catch {
+      setBusy(false); // toasted; let the user retry or cancel
+    }
   });
 }
 
