@@ -69,6 +69,7 @@ const state = {
   /** Remote path folders start collapsed (#62); keys here are the ones the user opened. */
   openRemoteFolders: new Set(),
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
+  branchFilter: '', // #69 search across local + remote tips
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
   changesPaintKey: '',
@@ -1414,12 +1415,14 @@ function paintPanel() {
   </div>`;
 
   const allBranches = b.branches || [];
-  const locals = allBranches.filter((br) => !br.remote);
-  const remotes = allBranches.filter((br) => br.remote);
+  const q = state.branchFilter.trim().toLowerCase();
+  const matches = (br) => !q || br.name.toLowerCase().includes(q);
+  const locals = allBranches.filter((br) => !br.remote && matches(br));
+  const remotes = allBranches.filter((br) => br.remote && matches(br));
   const refreshing = state.refreshingByTab.has(state.store.activeId);
   const localBody = locals.length
     ? renderBranchListHTML(locals, b, selected, refreshing)
-    : `<div class="empty-note">None</div>`;
+    : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
   const remoteBody = remotes.length
     ? renderBranchListHTML(remotes, b, selected, refreshing, true)
     : `<div class="empty-note">None</div>`;
@@ -1441,24 +1444,27 @@ function paintPanel() {
       <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
     </div>`;
   }
+  html += `<div class="section branch-search">
+    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Search local and remote branches" aria-label="Search local and remote branches" spellcheck="false" autocomplete="off" /></label>
+  </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
     <div class="branch-head">
-    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs protected tip stays on the lane header.">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen || !!q}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
-      <span class="name" style="color: var(--ink-subtle)">Branches</span>
+      <span class="name">Branches</span>
       <span class="meta">${branchMeta}</span>
     </button>
     ${branchVsSelectHTML(b)}
     </div>
-    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen}" title="Remote-only tips: no local branch of the same name. origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists, so this can read 0.">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen || !!q}" title="Remote-only tips: no local branch of the same name. origin/${esc(b.teamBranch || 'main')} hides here when a local tip exists, so this can read 0.">
       <span class="mark">${iconHTML('caret-right')}</span>
-      <span class="name" style="color: var(--ink-subtle)">Remotes</span>
+      <span class="name">Remotes</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
       remotes.length
         ? remoteBody
         : `<div class="empty-note">${origin?.display ? `Tracking tips sit under Branches · origin is <span class="mono">${esc(origin.display)}</span>` : 'No remote-only tips'}</div>`
@@ -1500,6 +1506,14 @@ function paintPanel() {
   el.panel.querySelector('[data-branches]')?.addEventListener('click', () => {
     state.branchesOpen = !state.branchesOpen;
     paint();
+  });
+  el.panel.querySelector('[data-branch-filter]')?.addEventListener('input', (e) => {
+    state.branchFilter = e.target.value;
+    const pos = e.target.selectionStart;
+    paint();
+    const inp = el.panel.querySelector('[data-branch-filter]');
+    inp?.focus();
+    inp?.setSelectionRange(pos, pos);
   });
   el.panel.querySelector('[data-branch-vs]')?.addEventListener('change', (e) => {
     setBranchVs(b.root, e.target.value);
@@ -1635,7 +1649,7 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false,
   const entries = [
     ...singles.map((s) => ({ kind: 'single', sort: s.label, ...s })),
     ...[...folders.keys()].map((key) => ({ kind: 'folder', sort: key, key, items: folders.get(key) })),
-  ].sort((a, b) => a.sort.localeCompare(b.sort));
+  ].sort((a, b) => (a.kind === b.kind ? a.sort.localeCompare(b.sort) : a.kind === 'folder' ? -1 : 1)); // #63 folders first, then tips
   const parts = [];
   for (const entry of entries) {
     if (entry.kind === 'single') {
@@ -1643,7 +1657,7 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false,
       continue;
     }
     const key = remote ? `r:${entry.key}` : entry.key;
-    const open = remote ? state.openRemoteFolders.has(key) : !state.collapsedBranchFolders.has(key);
+    const open = state.branchFilter.trim() || (remote ? state.openRemoteFolders.has(key) : !state.collapsedBranchFolders.has(key));
     parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(key)}" aria-expanded="${open}">
       <span class="mark">${iconHTML('caret-right', 'sm')}</span>
       <span class="name">${esc(entry.key)}/</span>
@@ -1672,7 +1686,9 @@ function gitActionsHTML(l) {
   a.push(stashes
     ? `<button class="btn" type="button" data-act="stashPop" title="Pop latest stash">${iconHTML('stack', 'sm')}Pop${stashes > 1 ? ` · ${stashes}` : ''}</button>`
     : `<button class="btn" type="button" data-act="stashPop" disabled title="No stash">${iconHTML('stack', 'sm')}Pop</button>`);
-  a.push(`<button class="btn" type="button" data-act="pull" title="Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull</button>`);
+  const behindBr = (state.board?.branches || []).find((x) => !x.remote && (x.name === l.branch || x.short === l.branch));
+  const pullBehind = behindBr?.upstreamBehind || 0;
+  a.push(`<button class="btn${pullBehind ? ' primary' : ''}" type="button" data-act="pull" title="${pullBehind ? `${pullBehind} behind ${esc(behindBr.upstream)}. ` : ''}Pull ${esc(l.name)} (ff-only)">${iconHTML('cloud-arrow-down', 'sm')}Pull${pullBehind ? ` <span class="mono">${pullBehind}↓</span>` : ''}</button>`);
   a.push(l.unpushed
     ? `<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`
     : `<button class="btn" type="button" data-act="push" disabled title="Nothing to push">${iconHTML('arrow-up', 'sm')}Push</button>`);
@@ -3126,7 +3142,8 @@ function bindFilePaneChrome() {
 function bindFilePaneJumps() {
   el.fileStage.querySelectorAll('[data-jump-sha]').forEach((node) => {
     const go = () => jumpToCommitOnGraph(node.dataset.jumpSha);
-    node.addEventListener('click', go);
+    // #77 a drag-select across blame text must not jump away
+    node.addEventListener('click', () => { if (!window.getSelection()?.toString()) go(); });
     node.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });
@@ -3156,12 +3173,12 @@ async function paintFilePane(pane) {
   el.fileStage.hidden = false;
   el.fileStage.innerHTML = `
     <div class="changes-head file-pane-head">
-      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Back to graph" aria-label="Back to graph">${iconHTML('caret-right')}</button>
       <div class="title">${title}<small>${esc(pane.path)}</small></div>
       <div class="file-pane-modes" role="group" aria-label="File view mode">
         ${modes}
       </div>
-      <button class="btn" type="button" data-open-external title="Open in ${esc(editorName())}">${iconHTML('arrow-square-out', 'sm')}Editor</button>
+      <button class="btn" type="button" data-open-external title="Open in ${esc(editorName())}">${iconHTML(editorIcon(), 'sm')}${esc(editorName())}</button>
+      <button class="iconbtn file-pane-back" type="button" data-file-pane-back title="Close (back to graph)" aria-label="Close file view">${iconHTML('x')}</button>
     </div>
     <div class="file-pane-body" role="region" aria-label="${esc(title)}"><div class="fx-empty">Loading…</div></div>`;
   bindFilePaneChrome();
@@ -4544,6 +4561,7 @@ async function selectTab(id) {
   if (seq === state.switchSeq && keepSettings) syncSettingsAfterTabSwitch({ afterSelect: true });
 }
 
+const lastFetchAt = new Map(); // root → ms
 async function refresh() {
   const tabId = state.store.activeId;
   const root = state.board?.root;
@@ -4554,7 +4572,10 @@ async function refresh() {
   if (state.store.activeId === tabId) paintPanel();
   let board = null;
   try {
-    board = await invoke('board.get', root, { historyLimit: limit });
+    // #81 fetch origin at most every 30s so ↓ pull counts track the real remote
+    const fetch = Date.now() - (lastFetchAt.get(root) || 0) > 30000;
+    if (fetch) lastFetchAt.set(root, Date.now());
+    board = await invoke('board.get', root, { historyLimit: limit, fetch });
   } catch { /* toasted */ }
   finally {
     state.refreshingByTab.delete(tabId);

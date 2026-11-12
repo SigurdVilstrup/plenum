@@ -500,8 +500,6 @@ a.iconbtn,
   border-radius: 2px;
   object-fit: contain;
   background: transparent;
-  /* Soft well so dark logos stay readable on dark tabs. */
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hairline) 80%, transparent);
 }
 
 .tab:hover {
@@ -950,10 +948,6 @@ a.iconbtn,
   font-size: 12px;
 }
 
-.file-pane-head .file-pane-back .icon {
-  transform: rotate(180deg);
-}
-
 .file-pane-diff {
   flex: 1;
   min-height: 0;
@@ -1176,6 +1170,8 @@ a.iconbtn,
 
 .blame-lines {
   min-width: 0;
+  user-select: text; /* #77 mark and copy */
+  -webkit-user-select: text;
 }
 
 .blame-line {
@@ -1839,8 +1835,7 @@ a.navitem.back {
   display: flex;
 }
 
-.body.with-file-pane .lane-head,
-.body.with-file-pane .graph {
+.body.with-file-pane .graph { /* #65 lane-head (push/merge/…) stays visible */
   display: none;
 }
 

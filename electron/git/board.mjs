@@ -607,13 +607,22 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
   return { rows, scanned: raw.split("\x1e").filter(Boolean).length };
 }
 
-export async function loadBoard(repoPath, { historyLimit = 120 } = {}) {
+export async function loadBoard(repoPath, { historyLimit = 120, fetch = false } = {}) {
   const opened = path.resolve(repoPath);
   const inside = (await git(['rev-parse', '--is-inside-work-tree'], opened)).trim();
   if (inside !== 'true') throw new Error(`${opened} is not a git repository.`);
   const top = (await git(['rev-parse', '--show-toplevel'], opened)).trim();
   const trees = parseWorktrees(await git(['worktree', 'list', '--porcelain'], top));
   if (!trees.length) throw new Error(`${opened} is not a git repository.`);
+
+  // #81 the remote-tracking refs behind ↓ counts are only as fresh as the last fetch.
+  // ponytail: offline/slow origin just skips the wait after 15s; the git process is left to finish on its own.
+  if (fetch) {
+    await Promise.race([
+      git(['fetch', '--prune', '--quiet', 'origin'], top).catch(() => {}),
+      new Promise((r) => setTimeout(r, 15000)),
+    ]);
+  }
 
   const teamInfo = await teamBranch(top);
   const team = teamInfo.name;
