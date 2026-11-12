@@ -5,7 +5,7 @@ const ALLOWED = new Set([
   'tabs.listImages', 'tabs.setImage', 'tabs.reorder', 'tabs.restore',
   'undo.snapshot', 'undo.restorePaths', 'undo.restoreLane', 'undo.uncommit', 'undo.restoreBranch',
   'edit.native', 'clipboard.write',
-  'board.get', 'repo.refresh', 'repo.doctor', 'repo.acceptManifest', 'repo.setTeamBranch', 'repo.setBaselines',
+  'board.get', 'stats.get', 'repo.refresh', 'repo.doctor', 'repo.acceptManifest', 'repo.setTeamBranch', 'repo.setBaselines',
   'os.pickFolder', 'os.reveal', 'os.openExternal', 'os.openEditor', 'os.openTerminal', 'os.displayPath',
   'lane.create', 'lane.remove', 'lane.commit', 'lane.revert', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.conflicts',

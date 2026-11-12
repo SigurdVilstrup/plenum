@@ -110,7 +110,7 @@ async function detectTeamBranch(cwd) {
 }
 
 /** Local `git config plenum.teamBranch` wins when the ref exists (legacy `overlook.teamBranch` ok). */
-async function teamBranch(cwd) {
+export async function teamBranch(cwd) {
   for (const key of [TEAM_BRANCH_KEY, LEGACY_TEAM_BRANCH_KEY]) {
     try {
       const override = (await git(['config', '--local', '--get', key], cwd)).trim();
@@ -163,7 +163,7 @@ export async function setBaselines(repoPath, names) {
   return loadBoard(cwd);
 }
 
-async function resolveTeamRef(branch, cwd) {
+export async function resolveTeamRef(branch, cwd) {
   if (await gitOk(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`], cwd)) {
     return `origin/${branch}`;
   }

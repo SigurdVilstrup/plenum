@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { loadRepoEnv } from './load-env.mjs';
 import { isPathUnderRepos } from './repo-favicon.mjs';
+import { loadStats } from './git/stats.mjs';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch, setBaselines } from './git/board.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
@@ -364,6 +365,7 @@ ipcMain.handle('feedback.send', async (_e, dir) => {
   };
 });
 
+ipcMain.handle('stats.get', (_e, root, scope) => loadStats(root || activePath(), scope));
 ipcMain.handle('board.get', async (_e, root, opts) => loadBoard(root || activePath(), opts || {}));
 ipcMain.handle('repo.setTeamBranch', async (_e, name, rootArg) => {
   const root = tabRoot(rootArg);

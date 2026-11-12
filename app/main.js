@@ -1,7 +1,7 @@
 import './lib/icons.js';
 import { renderGraph } from './lib/graph-live.js';
 import { authorshipPillHTML } from './lib/authorship-pill.js';
-import { authorshipBadgeLegendHTML } from './lib/ai-tool-badge.js';
+import { authorshipBadgeLegendHTML, aiToolPillIconHTML } from './lib/ai-tool-badge.js';
 import {
   shouldFreeze,
   evictOldest,
@@ -3697,6 +3697,7 @@ const SETTINGS_NAV = [
   ['accounts', 'key', 'Accounts'],
   ['repositories', 'folder-simple', 'Repository'],
   ['agents', 'robot', 'Agents'],
+  ['statistics', 'git-commit', 'Statistics'],
 ];
 
 const optionGroup = (key, options, cur, { num = false, label = key } = {}) =>
@@ -3910,6 +3911,7 @@ const SETTINGS_PAGES = {
         </div>
       </div>`;
   },
+  statistics: () => statsPageHTML(),
   agents: () => {
     const a = state.agents;
     const head = `<h1>Agents</h1><p class="lede">Let Cursor, Claude Code and Codex create, start and test lanes through Plenum.</p>`;
@@ -4116,6 +4118,136 @@ function bindRepos(root) {
 /** Agents page view-only bits: preview lines and restart notes per client, and the PATH command. */
 const agentsView = { lines: {}, restart: {}, linkCmd: '' };
 
+/* Statistics: read-only numbers from git history (electron/git/stats.mjs). */
+const statsView = { scope: 'protected', data: null, root: null, loading: false };
+
+async function loadStats() {
+  const tab = activeTab();
+  if (!tab) return;
+  statsView.root = tab.path;
+  statsView.loading = true;
+  if (statsView.data?.root !== tab.path) statsView.data = null;
+  rerenderStats();
+  try {
+    const data = await invoke('stats.get', tab.path, statsView.scope);
+    if (statsView.root === tab.path) statsView.data = { ...data, root: tab.path };
+  } catch { statsView.data = null; /* toasted */ }
+  statsView.loading = false;
+  rerenderStats();
+}
+
+function rerenderStats() {
+  if (!(state.settings.open && state.settings.page === 'statistics')) return;
+  const top = el.settingsBody.scrollTop;
+  renderSettings();
+  el.settingsBody.scrollTop = top;
+}
+
+function bindStats(root) {
+  root.querySelectorAll('[data-stats-scope]').forEach((b) => b.addEventListener('click', () => {
+    if (statsView.scope === b.dataset.statsScope) return;
+    statsView.scope = b.dataset.statsScope;
+    loadStats();
+  }));
+}
+
+// Award id -> [icon, token colour]. Only design-system colours: agent, human, lane 2-4.
+const AWARD_LOOK = {
+  ai: ['robot', '--agent'], fav: ['heart', '--agent'], human: ['hand-heart', '--human'],
+  lines: ['keyboard', '--lane-2'], weekend: ['coffee', '--lane-2'], fixes: ['bandaids', '--lane-2'], streak: ['calendar-check', '--lane-2'],
+  night: ['moon-stars', '--lane-4'], day: ['fire', '--lane-4'], file: ['files', '--lane-4'],
+  early: ['sun-horizon', '--lane-3'], deleted: ['hammer', '--lane-3'], biggest: ['bomb', '--lane-3'],
+};
+
+// Human is the app's human blue, agents follow in order, so a tool keeps its colour on every chart.
+const STAT_COLORS = ['var(--human)', 'var(--agent)', 'var(--lane-2)', 'var(--lane-3)', 'var(--lane-4)', 'var(--ink-tertiary)', 'var(--ink-subtle)'];
+
+function statsPageHTML() {
+  const s = statsView.data;
+  const scope = `<div class="option-row" role="group" aria-label="Scope">${[['protected', 'Protected branch'], ['all', 'All branches']].map(([v, t]) =>
+    `<button class="option${statsView.scope === v ? ' on' : ''}" type="button" aria-pressed="${statsView.scope === v}" data-stats-scope="${v}">${t}</button>`).join('')}</div>`;
+  const head = `<h1>Statistics</h1><p class="lede">${s ? `${s.scope === 'all' ? 'Every local and remote branch' : `Commits on <span class="mono">${esc(s.teamRef)}</span>, the protected branch`} in ${esc(activeTab()?.title || 'this repository')}.${s.truncated ? ' Newest 20,000 commits only.' : ''}` : 'Reading history…'}</p>${scope}`;
+  if (!s) return head;
+  if (!s.commits) return `${head}<p class="lede" style="margin-top:18px">No commits here yet.</p>`;
+
+  const n = (x) => Number(x).toLocaleString();
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const date = (unix) => new Date(unix * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const color = (tool) => STAT_COLORS[Math.max(0, s.weekly.tools.indexOf(tool))] || STAT_COLORS.at(-1);
+  const agentCommits = s.kinds.assisted + s.kinds.agent + s.kinds.mixed;
+
+  // Hero: how much of this history had an AI hand in it, split by tool.
+  const totals = s.weekly.tools.map((t) => [t, s.weekly.totals[t] || 0]);
+  const hero = `<section class="stat-hero">
+    <div class="big">${pct(agentCommits, s.commits)}<small>%</small></div>
+    <div class="what">of ${n(s.commits)} commits had an AI hand in them
+      <small>${agentCommits === s.commits ? 'Every single one. Respect.' : agentCommits === 0 ? 'Pure human. Suspiciously pure.' : `${n(s.commits - agentCommits)} were typed by humans alone.`}</small></div>
+    <div class="split" role="img" aria-label="Commits by tool">${totals.map(([t, v]) => `<i style="width:${(v / s.commits) * 100}%;background:${color(t)}" title="${esc(t)}: ${n(v)}"></i>`).join('')}</div>
+    <div class="legend">${totals.map(([t, v]) => `<span><i style="background:${color(t)}"></i>${t === 'Human' ? '' : aiToolPillIconHTML(t)}${esc(t === 'Human' ? 'No AI' : t)} <b>${n(v)}</b> · ${pct(v, s.commits)}%</span>`).join('')}</div>
+  </section>`;
+
+  const facts = `<div class="list stat-facts">${[
+    settingsRow('git-commit', 'Commits', '', `${n(s.merges)} merges · since ${date(s.first)}`, `<span class="stat-num"><b>${n(s.commits)}</b></span>`),
+    settingsRow('plus', 'Lines', '', `−${n(s.deleted)} removed`, `<span class="stat-num"><b>+${n(s.added)}</b></span>`),
+    settingsRow('user', 'Contributors', '', '', `<span class="stat-num"><b>${n(s.people.length)}</b></span>`),
+    settingsRow('clock', 'Per active day', '', `${n(s.activeDays)} active day${s.activeDays === 1 ? '' : 's'}`, `<span class="stat-num"><b>${s.perActiveDay.toFixed(1)}</b></span>`),
+  ].join('')}</div>`;
+
+  // Only earned titles; no section when there are none.
+  const awardRows = s.awards.map((a) => {
+    const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
+    const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
+    return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
+  }).join('');
+  const awards = awardRows ? `<div class="group-head">Hall of fame<small>Earned, not awarded.</small></div><div class="list">${awardRows}</div>` : '';
+
+  // Agents over time: one stacked bar per week, last 52 weeks.
+  const wk = s.weekly.weeks;
+  const wmax = Math.max(1, ...wk.map((w) => Object.values(w.counts).reduce((x, y) => x + y, 0)));
+  const ww = 10;
+  const stacked = wk.map((w, i) => {
+    let y = 70;
+    return s.weekly.tools.map((t) => {
+      const v = w.counts[t] || 0;
+      if (!v) return '';
+      const h = (v / wmax) * 68;
+      y -= h;
+      return `<rect x="${i * ww}" y="${y.toFixed(1)}" width="${ww - 2}" height="${h.toFixed(1)}" style="fill:${color(t)}"><title>${s.weekly.unit === 'day' ? '' : 'Week of '}${w.week}: ${esc(t)} ${v}</title></rect>`;
+    }).join('');
+  }).join('');
+  const over = s.weekly.tools.length < 2 ? '' : `<div class="stat-chart"><svg viewBox="0 0 ${wk.length * ww} 70" preserveAspectRatio="none" role="img" aria-label="Commits per ${s.weekly.unit} by tool, last ${wk.length} ${s.weekly.unit}s">${stacked}</svg>
+    <div class="axis"><span>${esc(wk[0].week)}</span><span>busiest ${s.weekly.unit} ${wmax}</span><span>${s.weekly.unit === 'day' ? 'today' : 'this week'}</span></div>
+    <div class="legend">${s.weekly.tools.map((t) => `<span><i style="background:${color(t)}"></i>${esc(t === 'Human' ? 'No AI' : t)}</span>`).join('')}</div></div>`;
+
+  const max = Math.max(1, ...s.series.map((d) => d.n));
+  const bw = 6;
+  const bars = s.series.map((d, i) => {
+    const h = d.n ? Math.max(2, Math.round((d.n / max) * 60)) : 1;
+    return `<rect x="${i * bw}" y="${62 - h}" width="${bw - 1.5}" height="${h}" rx="1" class="${d.n ? '' : 'zero'}"><title>${d.day}: ${d.n} commit${d.n === 1 ? '' : 's'}</title></rect>`;
+  }).join('');
+  const daily = `<div class="stat-chart"><svg viewBox="0 0 ${s.series.length * bw} 64" preserveAspectRatio="none" role="img" aria-label="Commits per day, last ${s.series.length} days">${bars}</svg>
+    <div class="axis"><span>${esc(s.series[0].day)}</span><span>busiest day ${max}</span><span>today</span></div></div>`;
+
+  const bar = (v, of) => `<span class="bar"><i style="width:${of ? Math.max(1, Math.round((v / of) * 100)) : 0}%"></i></span>`;
+  const topLines = Math.max(1, ...s.people.map((p) => p.added));
+  const people = s.people.map((p) => settingsRow('user', esc(p.name), `${n(p.commits)} commit${p.commits === 1 ? '' : 's'}${p.withAgent ? ` · ${pct(p.withAgent, p.commits)}% with an agent` : ''}`,
+    bar(p.added, topLines), `<span class="stat-num"><b>+${n(p.added)}</b> −${n(p.deleted)}</span>`)).join('');
+
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const hot = Math.max(1, ...s.heat.flat());
+  const heat = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour">${s.heat.map((row, d) =>
+    `<span class="d">${days[d]}</span>${row.map((v, h) => `<i style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}"></i>`).join('')}`).join('')}
+    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? h : ''}</span>`).join('')}</div>`;
+
+  return `${head}
+    ${hero}${facts}
+    ${awards}
+    ${over ? `<div class="group-head">Agents over time<small>Commits per ${s.weekly.unit}, last ${wk.length} ${s.weekly.unit}s.</small></div>${over}` : ''}
+    <div class="group-head">Commits per day<small>Last ${s.series.length} days.</small></div>${daily}
+    <div class="group-head">Who writes the most code<small>Lines added, merges left out. Two git identities for one person? Merge them with a <span class="mono">.mailmap</span>.</small></div><div class="list">${people}</div>
+    <div class="group-head">When it happens<small>Commits by weekday and hour, your local time.</small></div>${heat}`;
+}
+
 function rerenderAgents() {
   if (!(state.settings.open && state.settings.page === 'agents')) return;
   const top = el.settingsBody.scrollTop;
@@ -4267,6 +4399,7 @@ function openSettings(page = state.settings.page) {
   if (page === 'accounts') { loadIdentity(); loadAccounts(); }
   if (page === 'repositories') loadRepos();
   if (page === 'agents') loadAgents();
+  if (page === 'statistics') loadStats();
   if (page === 'setup') loadSetup(state.settings.setupRoot || state.board?.root);
 }
 
@@ -4288,6 +4421,7 @@ function renderSettings() {
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);
   if (page === 'agents' && state.agents) bindAgents(el.settingsBody);
+  if (page === 'statistics') bindStats(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
   bindPrefs(el.settingsBody);
   bindUpdateAct(el.settingsBody);
@@ -4328,6 +4462,7 @@ function syncSettingsAfterTabSwitch({ afterSelect = true } = {}) {
     if (afterSelect) loadRepos();
     return;
   }
+  if (page === 'statistics') { renderSettings(); if (afterSelect) loadStats(); return; }
   if (page === 'setup') renderSettings();
 }
 
@@ -4340,6 +4475,7 @@ function paletteCommands() {
     { id: 'share', label: 'Share Plenum: copy a link for a friend', run: shareLink, match: ['invite', 'friend', 'colleague', 'recommend'] },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
+    { id: 'stats', label: 'Statistics: commits, authors, agents', run: () => openSettings('statistics'), when: !!state.board, match: ['stats', 'insights', 'contributors', 'activity'] },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
