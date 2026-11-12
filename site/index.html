@@ -7,7 +7,15 @@
 <meta name="description" content="Plenum is a git client for parallel work in teams, on Mac. See every lane against the team.">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<script>document.documentElement.classList.add('js')</script>
+<script>
+(function (c) {
+  c.add('js');
+  // Mac = macOS, not iPhone/iPad (iPadOS in desktop mode reports MacIntel but has touch).
+  var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  var mac = /mac/i.test(p) && !/iPhone|iPad|iPod/i.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1);
+  if (!mac) c.add('not-mac');
+})(document.documentElement.classList);
+</script>
 <style>
   :root {
     --canvas: #010102;
@@ -67,6 +75,12 @@
   .key { font: 600 11px var(--mono); border: 1px solid #bcc3d0; border-radius: 5px; padding: 1px 6px; color: #353943; }
   @media (hover: none) { .key { display: none; } }
   .arch { font-weight: 400; color: #5c6472; }
+  /* Not a Mac: no download, offer to send the link to one. */
+  .send, .macnote { display: none; }
+  .not-mac #dl { display: none; }
+  .not-mac .send { display: inline-flex; border: 0; cursor: pointer; font-family: inherit; }
+  .not-mac .macnote { display: block; }
+  .macnote { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); max-width: 440px; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
   .link { display: none; background: none; border: 0; cursor: pointer; font: inherit; color: var(--ink-muted); font-weight: 500; font-size: 15px; padding: 12px 2px; }
   .js .link { display: inline-flex; align-items: center; gap: 6px; }
@@ -135,9 +149,11 @@
   <p class="sub rev">A git client for parallel work in teams.</p>
   <div class="rev">
     <div class="actions">
+      <button class="btn send" id="send" type="button">Send link to my Mac</button>
       <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
       <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true">⌄</span></button>
     </div>
+    <p class="macnote">Plenum is a Mac app (Apple Silicon). Send yourself the link and open it on your Mac.</p>
     <p class="note"><b>Early-stage beta.</b> Free while it's open. Expect rough edges and frequent updates.</p>
     <div class="req" id="ver"></div>
   </div>
@@ -168,7 +184,16 @@
 
   // Enter downloads, but never steal Enter from a focused link or button.
   addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && e.target === document.body && !e.metaKey && !e.ctrlKey && !e.altKey) $('dl').click();
+    if (e.key === 'Enter' && e.target === document.body && !document.documentElement.classList.contains('not-mac') && !e.metaKey && !e.ctrlKey && !e.altKey) $('dl').click();
+  });
+
+  // Share sheet where there is one (phones, Edge/Chrome on Windows), otherwise a pre-filled email.
+  $('send').addEventListener('click', async function () {
+    var url = location.origin + '/', text = 'Plenum, a git client for parallel work in teams. Open this on your Mac:';
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Plenum', text: text, url: url }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    location.href = 'mailto:?subject=' + encodeURIComponent('Plenum for Mac') + '&body=' + encodeURIComponent(text + '\n' + url);
   });
 
   var why = $('why'), whyb = $('whyb');
