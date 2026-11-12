@@ -64,6 +64,8 @@ const state = {
   remotesOpen: false,
   /** Session expand/collapse for branch path folders (#21). */
   collapsedBranchFolders: new Set(),
+  /** Remote path folders start collapsed (#62); keys here are the ones the user opened. */
+  openRemoteFolders: new Set(),
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
@@ -343,7 +345,7 @@ function updateControlHTML() {
   const busy = updateActionBusy(u);
   const hot = u.status === 'available' || u.status === 'downloaded' || u.status === 'downloading';
   const tip = updateHoverTip(u);
-  return `<button class="btn${hot ? ' primary' : ''}" type="button" data-update-act${busy ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
+  return `<button class="btn${hot ? ' primary' : ''}${busy ? ' busy' : ''}" type="button" data-update-act${busy ? ' disabled' : ''} title="${esc(tip)}">${esc(label)}</button>`;
 }
 
 function applyUpdateState(next) {
@@ -1365,7 +1367,7 @@ function paintPanel() {
     ? renderBranchListHTML(locals, b, selected, refreshing)
     : `<div class="empty-note">None</div>`;
   const remoteBody = remotes.length
-    ? renderBranchListHTML(remotes, b, selected, refreshing)
+    ? renderBranchListHTML(remotes, b, selected, refreshing, true)
     : `<div class="empty-note">None</div>`;
   const vsRef = branchVsRef(b);
   const branchMeta = refreshing
@@ -1457,8 +1459,9 @@ function paintPanel() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const key = btn.dataset.branchFolder;
-      if (state.collapsedBranchFolders.has(key)) state.collapsedBranchFolders.delete(key);
-      else state.collapsedBranchFolders.add(key);
+      const set = key.startsWith('r:') ? state.openRemoteFolders : state.collapsedBranchFolders;
+      if (set.has(key)) set.delete(key);
+      else set.add(key);
       paint();
     });
   });
@@ -1573,7 +1576,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   </button>`;
 }
 
-function renderBranchListHTML(branches, board, selectedLane, refreshing = false) {
+function renderBranchListHTML(branches, board, selectedLane, refreshing = false, remote = false) {
   const { singles, folders } = groupBranchesByPrefix(branches);
   const entries = [
     ...singles.map((s) => ({ kind: 'single', sort: s.label, ...s })),
@@ -1585,8 +1588,9 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false)
       parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane, refreshing));
       continue;
     }
-    const open = !state.collapsedBranchFolders.has(entry.key);
-    parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(entry.key)}" aria-expanded="${open}">
+    const key = remote ? `r:${entry.key}` : entry.key;
+    const open = remote ? state.openRemoteFolders.has(key) : !state.collapsedBranchFolders.has(key);
+    parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(key)}" aria-expanded="${open}">
       <span class="mark">${iconHTML('caret-right', 'sm')}</span>
       <span class="name">${esc(entry.key)}/</span>
     </button>`);
@@ -1629,8 +1633,14 @@ function gitActionsHTML(l) {
 }
 
 const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', windsurf: 'windsurf', custom: 'arrow-square-out' };
-const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed', windsurf: 'Windsurf' }[state.prefs.editor] || 'editor');
-const editorIcon = () => EDITOR_ICON[state.prefs.editor] || 'cursor';
+/** Saved editor, or the first installed one when it isn't on this Mac (mirrors os.openEditor). */
+const effectiveEditor = () => {
+  const p = state.prefs.editor;
+  if (p === 'custom' || !state.editors.length || state.editors.find((e) => e.id === p)?.available) return p;
+  return state.editors.find((e) => e.available && e.id !== 'custom')?.id || p;
+};
+const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed', windsurf: 'Windsurf' }[effectiveEditor()] || 'editor');
+const editorIcon = () => EDITOR_ICON[effectiveEditor()] || 'cursor';
 
 function editorBtnHTML() {
   const n = editorName();
@@ -2121,8 +2131,8 @@ function panelFootHTML(settingsActive = false) {
   return `<div class="panel-foot">
     <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
     <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
-    <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
     ${updateBtn}
+    <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
   </div>`;
 }
 
@@ -2245,13 +2255,7 @@ async function openFeedbackSheet(seed = {}) {
 
   const paintSendLabel = (busy) => {
     sendBtn.replaceChildren();
-    if (busy) {
-      const i = document.createElement('i');
-      i.className = 'spinner btn-spin';
-      i.setAttribute('aria-hidden', 'true');
-      sendBtn.append(i, document.createTextNode('Sending…'));
-      return;
-    }
+    sendBtn.setAttribute('aria-busy', busy ? 'true' : 'false');
     const kbd = document.createElement('kbd');
     kbd.textContent = '⌘↩';
     sendBtn.append(document.createTextNode('Send feedback '), kbd);
@@ -3670,7 +3674,7 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Open with</div>
       <div class="list">
-        ${settingsRow(rowIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, p.editor, 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden.')}
+        ${settingsRow(rowIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, effectiveEditor(), 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden.')}
         ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Plenum launches when Editor is Other app.') : ''}
         ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create also opens that worktree in your editor.')}
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}

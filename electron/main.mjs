@@ -504,7 +504,9 @@ ipcMain.handle('os.openEditor', (_e, target) => {
   const abs = assertPath(target);
   const { editor, editorPath } = getPrefs(prefsDir());
   if (editor === 'custom') return openCustom(editorPath, abs);
-  const e = EDITORS[editor] || EDITORS.cursor;
+  // Saved editor may not be installed (default is Cursor): fall back to the first one that is.
+  const e = (EDITORS[editor] && editorAvailable(EDITORS[editor]) ? EDITORS[editor] : Object.values(EDITORS).find(editorAvailable))
+    || EDITORS[editor] || EDITORS.cursor;
   const cli = e.cli.find((p) => fs.existsSync(p));
   if (cli) launch(cli, ['-r', '--', abs]);
   else launch('open', [...e.open, abs]);

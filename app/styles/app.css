@@ -330,14 +330,29 @@ input, textarea, [contenteditable="true"] {
   pointer-events: none;
 }
 .btn.busy,
-.iconbtn.busy {
+.iconbtn.busy,
+.foot-update.busy {
   position: relative;
   pointer-events: none;
   opacity: 1;
+  color: transparent; /* hides the label; width stays put */
+  --spin: var(--ink);
 }
-/* Spinner is ::after only — zero layout impact on the flex button. */
+.btn.busy > *,
+.iconbtn.busy > *,
+.foot-update.busy > * {
+  opacity: 0;
+}
+.btn.primary.busy,
+.iconbtn.primary.busy,
+.iconbtn.danger.busy,
+.foot-update.busy {
+  --spin: #fff;
+}
+/* One spinner for every busy button: ::after, centered, zero layout impact. */
 .btn.busy::after,
-.iconbtn.busy::after {
+.iconbtn.busy::after,
+.foot-update.busy::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -346,23 +361,12 @@ input, textarea, [contenteditable="true"] {
   height: 14px;
   margin: -7px 0 0 -7px;
   box-sizing: border-box;
-  border: 1.5px solid color-mix(in srgb, currentColor 35%, transparent);
-  border-top-color: currentColor;
+  border: 1.5px solid color-mix(in srgb, var(--spin) 35%, transparent);
+  border-top-color: var(--spin);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   pointer-events: none;
   z-index: 1;
-}
-.iconbtn.busy::after {
-  width: 16px;
-  height: 16px;
-  margin: -8px 0 0 -8px;
-}
-.btn.primary.busy::after,
-.iconbtn.primary.busy::after,
-.iconbtn.danger.busy::after {
-  border-color: color-mix(in srgb, #fff 45%, transparent);
-  border-top-color: #fff;
 }
 /* Inline spinner for non-button loading copy (stash file list, etc.). */
 .btn-spin {
@@ -853,7 +857,7 @@ button.env-link {
   .lane-row .mark { transition: none; }
 }
 
-.body.settings-open {
+.window.app .body.settings-open {
   grid-template-columns: 1fr;
   grid-template-rows: minmax(0, 1fr);
 }
