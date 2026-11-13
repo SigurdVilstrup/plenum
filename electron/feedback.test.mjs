@@ -276,8 +276,29 @@ test('retryUnsentFeedback resends failed reports and stops at the first failure'
   const down = { ok: false, status: 500, json: async () => ({ error: 'db timeout' }) };
   const opts = (res) => ({ endpoint: 'https://example.test/s', fetchImpl: async () => res });
   assert.equal(await retryUnsentFeedback(dir, opts(down)), 0);
-  assert.equal(readFeedbackReport(a).meta.status, 'failed');
+  // Same-millisecond ids sort either way: exactly one was tried before the stop.
+  assert.deepEqual([a, b].map((d) => readFeedbackReport(d).meta.status).sort(), ['failed', 'pending']);
   assert.equal(await retryUnsentFeedback(dir, opts(ok)), 2);
   assert.equal(fs.existsSync(a) || fs.existsSync(b), false); // sent reports leave the queue
   assert.equal(await retryUnsentFeedback(dir, opts(ok)), 0); // already sent
+});
+
+test('a report in flight is not filed twice by the outbox flush (#110-#115)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  await writeFeedbackReport(dir, { comment: 'x', appVersion: '0.0.0', platform: 'darwin', png: tinyPng });
+  const [name] = fs.readdirSync(path.join(dir, 'feedback'));
+  let posts = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetchImpl = async () => {
+    posts++;
+    await gate;
+    return { ok: true, json: async () => ({ issueUrl: 'https://github.com/o/r/issues/1', issueNumber: 1 }) };
+  };
+  const opts = { endpoint: 'https://example.test/s', fetchImpl };
+  const button = sendFeedbackReport(path.join(dir, 'feedback', name), opts);
+  assert.equal(await retryUnsentFeedback(dir, opts), 0);
+  release();
+  await button;
+  assert.equal(posts, 1);
 });

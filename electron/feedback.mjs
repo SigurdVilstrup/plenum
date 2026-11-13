@@ -176,9 +176,43 @@ export function patchFeedbackMeta(dir, patch) {
   return next;
 }
 
-export async function sendFeedbackReport(dir, { endpoint, anonKey, fetchImpl = fetch } = {}) {
-  if (!endpoint) throw new Error('Feedback relay is not configured (PLENUM_FEEDBACK_URL).');
+const SEND_LOCK_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * Claim a report for one sender. The startup/interval outbox flush (every Plenum process shares
+ * the prefs dir) raced the Send button and filed the same note 2-6 times (#110-#115).
+ */
+function claimReport(dir) {
+  const lock = path.join(dir, 'sending.lock');
+  try {
+    fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
+  } catch (e) {
+    if (e.code !== 'EEXIST') throw e;
+    let age = 0;
+    try { age = Date.now() - fs.statSync(lock).mtimeMs; } catch { /* sender just finished */ }
+    if (age < SEND_LOCK_STALE_MS) {
+      const busy = new Error('Report is already being sent');
+      busy.code = 'EBUSY';
+      throw busy;
+    }
+    fs.writeFileSync(lock, String(process.pid)); // stale: a sender died mid-post
+  }
+  return () => fs.rmSync(lock, { force: true });
+}
+
+export async function sendFeedbackReport(dir, opts = {}) {
+  if (!opts.endpoint) throw new Error('Feedback relay is not configured (PLENUM_FEEDBACK_URL).');
+  const release = claimReport(dir);
+  try {
+    return await postReport(dir, opts);
+  } finally {
+    release(); // no-op once a sent report's dir is gone
+  }
+}
+
+async function postReport(dir, { endpoint, anonKey, fetchImpl = fetch }) {
   const { meta, png } = readFeedbackReport(dir);
+  if (meta.status === 'sent') return meta; // another process filed it while we waited
   const payload = buildUploadPayload(meta, png);
   const headers = { 'Content-Type': 'application/json' };
   if (anonKey) {
@@ -241,7 +275,7 @@ export async function retryUnsentFeedback(baseDir, opts = {}) {
       await sendFeedbackReport(dir, opts);
       sent++;
     } catch (e) {
-      if (e.code === 'ENOENT' || e instanceof SyntaxError) continue; // not a report dir
+      if (e.code === 'ENOENT' || e.code === 'EBUSY' || e instanceof SyntaxError) continue; // not a report dir, or in flight
       break;
     }
   }
