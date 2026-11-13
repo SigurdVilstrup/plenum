@@ -8,6 +8,7 @@ import { loadRepoEnv } from './load-env.mjs';
 import { isPathUnderRepos } from './repo-favicon.mjs';
 import { loadStats } from './git/stats.mjs';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch, setBaselines } from './git/board.mjs';
+import { watchRepo, stopWatch, stopAllWatches } from './git/watch.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
 import * as undo from './git/undo.mjs';
@@ -205,7 +206,16 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   updates?.stop();
   supervisor.stopAll();
+  stopAllWatches();
 });
+
+/** #99 push a cheap refresh hint when .git changes under an open tab. */
+function ensureRepoWatch(root) {
+  if (!root || !win) return;
+  watchRepo(root, (changedRoot) => {
+    try { win?.webContents.send('repo.changed', { root: changedRoot }); } catch { /* gone */ }
+  });
+}
 
 function activePath() {
   const { tabs: list, activeId } = tabs.listTabs();
@@ -216,15 +226,24 @@ ipcMain.handle('tabs.list', () => tabs.listTabs());
 ipcMain.handle('tabs.open', async (_e, repoPath) => {
   const board = await loadBoard(expandHome(repoPath));
   const favicons = getPrefs(prefsDir()).tabFavicons !== false;
+  ensureRepoWatch(board.root);
   return { store: tabs.openTab(board.root, board.repoName, { favicons }), board };
 });
 // Select is sync - board loads in the renderer via board.get so rapid switches
 // do not pile up loadBoard work against the wrong active tab.
-ipcMain.handle('tabs.select', (_e, id) => ({ store: tabs.selectTab(id) }));
+ipcMain.handle('tabs.select', (_e, id) => {
+  const store = tabs.selectTab(id);
+  const tab = store.tabs.find((t) => t.id === store.activeId);
+  if (tab?.path) ensureRepoWatch(tab.path);
+  return { store };
+});
 ipcMain.handle('tabs.close', async (_e, id) => {
+  const before = tabs.listTabs().tabs.find((t) => t.id === id);
   const store = tabs.closeTab(id);
+  if (before?.path && !store.tabs.some((t) => t.path === before.path)) stopWatch(before.path);
   const tab = store.tabs.find((t) => t.id === store.activeId);
   const board = tab ? await loadBoard(tab.path) : null;
+  if (tab?.path) ensureRepoWatch(tab.path);
   return { store, board };
 });
 ipcMain.handle('tabs.rename', (_e, id, title, icon) => tabs.renameTab(id, title, icon));
@@ -366,7 +385,11 @@ ipcMain.handle('feedback.send', async (_e, dir) => {
 });
 
 ipcMain.handle('stats.get', (_e, root, scope) => loadStats(root || activePath(), scope));
-ipcMain.handle('board.get', async (_e, root, opts) => loadBoard(root || activePath(), opts || {}));
+ipcMain.handle('board.get', async (_e, root, opts) => {
+  const board = await loadBoard(root || activePath(), opts || {});
+  if (board?.root) ensureRepoWatch(board.root);
+  return board;
+});
 ipcMain.handle('repo.setTeamBranch', async (_e, name, rootArg) => {
   const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');

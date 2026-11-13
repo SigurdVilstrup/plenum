@@ -35,5 +35,10 @@ contextBridge.exposeInMainWorld('plenum', {
     ipcRenderer.on('update', handler);
     return () => ipcRenderer.removeListener('update', handler);
   },
+  onRepoChanged: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    ipcRenderer.on('repo.changed', handler);
+    return () => ipcRenderer.removeListener('repo.changed', handler);
+  },
   setZoom: (f) => webFrame.setZoomFactor(Math.min(1.25, Math.max(0.8, Number(f) || 1))),
 });
