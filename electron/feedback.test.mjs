@@ -13,6 +13,7 @@ import {
   sendCheckin,
   readFeedbackReport,
   retryUnsentFeedback,
+  listUnsentFeedback,
   sendFeedbackReport,
   writeFeedbackReport,
 } from './feedback.mjs';
@@ -276,8 +277,45 @@ test('retryUnsentFeedback resends failed reports and stops at the first failure'
   const down = { ok: false, status: 500, json: async () => ({ error: 'db timeout' }) };
   const opts = (res) => ({ endpoint: 'https://example.test/s', fetchImpl: async () => res });
   assert.equal(await retryUnsentFeedback(dir, opts(down)), 0);
-  assert.equal(readFeedbackReport(a).meta.status, 'failed');
+  // Same-millisecond ids sort either way: exactly one was tried before the stop.
+  assert.deepEqual([a, b].map((d) => readFeedbackReport(d).meta.status).sort(), ['failed', 'pending']);
   assert.equal(await retryUnsentFeedback(dir, opts(ok)), 2);
   assert.equal(fs.existsSync(a) || fs.existsSync(b), false); // sent reports leave the queue
   assert.equal(await retryUnsentFeedback(dir, opts(ok)), 0); // already sent
+});
+
+test('a report in flight is not filed twice by the outbox flush (#110-#115)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  await writeFeedbackReport(dir, { comment: 'x', appVersion: '0.0.0', platform: 'darwin', png: tinyPng });
+  const [name] = fs.readdirSync(path.join(dir, 'feedback'));
+  let posts = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetchImpl = async () => {
+    posts++;
+    await gate;
+    return { ok: true, json: async () => ({ issueUrl: 'https://github.com/o/r/issues/1', issueNumber: 1 }) };
+  };
+  const opts = { endpoint: 'https://example.test/s', fetchImpl };
+  const button = sendFeedbackReport(path.join(dir, 'feedback', name), opts);
+  assert.equal(await retryUnsentFeedback(dir, opts), 0);
+  release();
+  await button;
+  assert.equal(posts, 1);
+});
+
+test('listUnsentFeedback shows waiting reports oldest first, flags expired, hides sent (#104)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const old = await writeFeedbackReport(dir, { comment: 'old one', appVersion: '0', platform: 'darwin', png: tinyPng, createdAt: '2020-01-01T00:00:00Z' });
+  const fresh = await writeFeedbackReport(dir, { comment: 'fresh\nmore', appVersion: '0', platform: 'darwin', png: tinyPng });
+  const sent = await writeFeedbackReport(dir, { comment: 'gone', appVersion: '0', platform: 'darwin', png: tinyPng });
+  patchFeedbackMeta(sent, { status: 'sent' });
+  patchFeedbackMeta(fresh, { status: 'failed', error: 'db timeout' });
+  const list = listUnsentFeedback(dir);
+  assert.deepEqual(list.map((x) => x.comment).sort(), ['fresh\nmore', 'old one']);
+  assert.equal(list.find((x) => x.comment === 'old one').expired, true);
+  assert.equal(list.find((x) => x.comment.startsWith('fresh')).error, 'db timeout');
+  assert.equal('png' in list[0] || 'repoPath' in list[0], false);
+  assert.ok(old);
+  assert.deepEqual(listUnsentFeedback(path.join(dir, 'nope')), []);
 });

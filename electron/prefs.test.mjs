@@ -29,6 +29,8 @@ test('setPrefs accepts chroma', () => {
   assert.equal(setPrefs({ chroma: 'vibrant' }, dir).chroma, 'vibrant');
   assert.equal(getPrefs(dir).chroma, 'vibrant');
   assert.equal(setPrefs({ chroma: 'neon' }, dir).chroma, 'vibrant');
+  // #108 looks
+  for (const look of ['arcade', 'fairytale', 'studio', 'retro', 'bricks']) assert.equal(setPrefs({ chroma: look }, dir).chroma, look);
 });
 
 test('getPrefs strips retired accent and lightPalette', () => {

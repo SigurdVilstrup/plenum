@@ -1460,22 +1460,39 @@ html.feedback-redact .blame-line {
 }
 
 .window.app .section.section-branches {
-  padding: 4px 8px 2px;
+  padding: 6px 8px 2px;
 }
+/* #110 a hairline above Remotes so the two lists read as separate blocks */
 .window.app .section.section-branches + .section.section-branches {
-  border-top: 0;
-  padding-top: 0;
+  border-top: 1px solid var(--hairline);
+  margin-top: 4px;
+  padding-top: 6px;
 }
+/* #107 three columns (caret · name · count): the count no longer wraps under the caret */
 .window.app .panel .branch-toggle {
-  min-height: 24px;
-  padding: 2px 6px 2px 8px;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  min-height: 28px;
+  padding: 3px 6px 3px 8px;
+}
+.window.app .panel .branch-toggle .mark {
+  color: var(--ink);
 }
 .window.app .panel .branch-toggle .name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ink); /* #75 headers scan against the rows below */
+  color: var(--ink); /* #75 / #110 headers stand out when eye-scanning */
+}
+.window.app .panel .branch-toggle .meta {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
 }
 .window.app .branch-list {
   padding: 0 0 4px 4px;
@@ -1583,7 +1600,7 @@ html.feedback-redact .blame-line {
   border: 0;
 }
 
-/* #46 - baseline picker beside the Branches toggle */
+/* #46 / #107 - baseline picker: icon button beside the Branches toggle; native select overlays it */
 .window.app .panel .branch-head {
   display: flex;
   align-items: center;
@@ -1594,31 +1611,45 @@ html.feedback-redact .blame-line {
   min-width: 0;
 }
 .window.app .panel .branch-vs-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: none;
-  max-width: 55%;
-  margin-right: 6px;
+  max-width: 50%;
   min-width: 0;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-tertiary);
+  cursor: pointer;
+}
+.window.app .panel .branch-vs-wrap:hover,
+.window.app .panel .branch-vs-wrap:focus-within {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.window.app .panel .branch-vs-wrap:focus-within {
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.window.app .panel .branch-vs-wrap.is-set {
+  color: var(--primary);
 }
 .window.app .panel .branch-vs-label {
-  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
-  color: var(--ink-tertiary);
+  font-weight: 500;
 }
 .window.app .panel .branch-vs {
-  flex: 1;
-  min-width: 0;
-  max-width: 100%;
-  padding: 2px 6px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--ink-muted);
-  font-family: inherit; /* #79 match the rest of the panel */
-  font-size: 11px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
   cursor: pointer;
+  font-size: 12px;
 }
 /* #69 / #100 branch search — sits in the panel chrome, not a floating field */
 .window.app .panel .branch-search {
@@ -1651,14 +1682,9 @@ html.feedback-redact .blame-line {
   font-size: 12px;
   color: var(--ink);
 }
-.window.app .panel .branch-vs:hover,
-.window.app .panel .branch-vs:focus-visible {
-  border-color: var(--hairline-strong, var(--hairline));
-  color: var(--ink);
-}
 
 .window.app .panel .section-note {
-  padding: 0 12px 4px;
+  padding: 0 12px 4px 32px; /* #110 indent under the title, not the caret */
   font-size: 11px;
   color: var(--ink-tertiary);
 }

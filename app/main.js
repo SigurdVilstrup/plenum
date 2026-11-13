@@ -95,6 +95,7 @@ const state = {
   loadingOlder: false,
   /** Tab ids with a quiet board/branch refresh in flight (#47). */
   refreshingByTab: new Set(),
+  loudRefreshByTab: new Set(), // #116 only an asked-for refresh shows spinners / blocks rows
   /** Bumped on every tab switch so superseded select/load work stops painting. */
   switchSeq: 0,
   pendingGraphScroll: null,
@@ -1105,6 +1106,7 @@ function openCtxMenu(x, y, tab, anchor) {
     dropWarm(tab.id);
     state.opsByTab.delete(tab.id);
     state.refreshingByTab.delete(tab.id);
+    state.loudRefreshByTab.delete(tab.id);
     const before = { ...tab };
     pushTabRestoreUndo(before, `close ${tab.title}`);
     const res = await invoke('tabs.close', tab.id);
@@ -1446,7 +1448,7 @@ function paintPanel() {
   const matches = (br) => !q || br.name.toLowerCase().includes(q);
   const locals = allBranches.filter((br) => !br.remote && matches(br));
   const remotes = allBranches.filter((br) => br.remote && matches(br));
-  const refreshing = state.refreshingByTab.has(state.store.activeId);
+  const refreshing = state.loudRefreshByTab.has(state.store.activeId);
   const localBody = locals.length
     ? renderBranchListHTML(locals, b, selected, refreshing)
     : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
@@ -1588,6 +1590,22 @@ function paintPanel() {
   });
 }
 
+// #117 pinned branches per repo (right-click → Pin to top). Per-viewer convenience, like the baseline pick.
+const BRANCH_PINS_KEY = 'plenum.branchPins';
+
+function branchPins(root) {
+  try { return JSON.parse(localStorage.getItem(BRANCH_PINS_KEY) || '{}')?.[root] || []; } catch { return []; }
+}
+
+function toggleBranchPin(root, name) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(BRANCH_PINS_KEY) || '{}') || {}; } catch { /* fresh */ }
+  const cur = all[root] || [];
+  all[root] = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
+  if (!all[root].length) delete all[root];
+  try { localStorage.setItem(BRANCH_PINS_KEY, JSON.stringify(all)); } catch { /* session only */ }
+}
+
 // #46 - which tip the branch list counts against. '' = each branch's upstream (default).
 const BRANCH_VS_KEY = 'plenum.branchVs';
 
@@ -1621,9 +1639,10 @@ function branchVsSelectHTML(board) {
   const cur = branchVs(board);
   const opt = (value, label) => `<option value="${esc(value)}"${value === cur ? ' selected' : ''}>${esc(label)}</option>`;
   // #79/#80 clear label + body face; baselines also listed under Settings (#101)
-  return `<label class="branch-vs-wrap" title="What ↓↑ on each branch counts against. Add baselines in Settings → Repository.">
-    <span class="branch-vs-label">Compare</span>
-    <select class="select branch-vs" data-branch-vs aria-label="Count branches ahead and behind against">
+  // #107 icon button over a native select: compact header, still keyboard/VoiceOver friendly.
+  return `<label class="branch-vs-wrap${cur ? ' is-set' : ''}" title="↓↑ compare against: ${esc(cur || 'upstream')}. Add baselines in Settings → Repository.">
+    ${iconHTML('arrows-left-right', 'sm')}${cur ? `<span class="branch-vs-label">${esc(cur)}</span>` : ''}
+    <select class="branch-vs" data-branch-vs aria-label="Count branches ahead and behind against">
       ${opt('', 'upstream')}${opt(board.teamBranch, board.teamBranch)}${board.baselines.map((x) => opt(x.name, x.name)).join('')}
     </select>
   </label>`;
@@ -1651,7 +1670,7 @@ function branchMetaHTML(br, board) {
   return `<span class="metas"><span class="meta ${cls}" title="vs ${esc(d.ref)}">${esc(bits.join(' '))}</span></span>`;
 }
 
-function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
+function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinned = false) {
   const where = br.isPrimary
     ? 'primary'
     : br.hasLane
@@ -1675,7 +1694,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   ].filter(Boolean).join(' · ');
   const mark = isCurrent
     ? iconHTML('check-circle', 'sm current')
-    : iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
+    : iconHTML(pinned ? 'push-pin' : br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
   // Keep lane selection clickable while the list refreshes; block checkout targets only.
   const block = refreshing && !br.hasLane;
   const kind = br.remote ? 'remote' : 'local';
@@ -1684,7 +1703,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   const del = canDelete
     ? `<button class="iconbtn branch-del" type="button" data-branch-delete="${esc(br.name)}" title="Delete ${kind} ${esc(br.name)}" aria-label="Delete ${kind} branch ${esc(br.name)}">${iconHTML('x', 'sm')}</button>`
     : '';
-  return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}" data-branch-kind="${kind}">
+  return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}${pinned ? ' pinned' : ''}" data-branch-kind="${kind}">
     <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
       ${mark}
       <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
@@ -1694,12 +1713,17 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
 }
 
 function renderBranchListHTML(branches, board, selectedLane, refreshing = false, remote = false) {
-  const { singles, folders } = groupBranchesByPrefix(branches);
+  // #117 pinned tips sit on top with their full name; the rest keep folders.
+  const pins = branchPins(board.root);
+  const pinned = branches.filter((br) => pins.includes(br.name)).sort((a, b) => pins.indexOf(a.name) - pins.indexOf(b.name));
+  const { singles, folders } = groupBranchesByPrefix(branches.filter((br) => !pins.includes(br.name)));
+  // #117 local: standalone tips first, then folders. Remote: folders first (#63), then tips.
+  const foldersFirst = remote;
   const entries = [
     ...singles.map((s) => ({ kind: 'single', sort: s.label, ...s })),
     ...[...folders.keys()].map((key) => ({ kind: 'folder', sort: key, key, items: folders.get(key) })),
-  ].sort((a, b) => (a.kind === b.kind ? a.sort.localeCompare(b.sort) : a.kind === 'folder' ? -1 : 1)); // #63 folders first, then tips
-  const parts = [];
+  ].sort((a, b) => (a.kind === b.kind ? a.sort.localeCompare(b.sort) : (a.kind === 'folder') === foldersFirst ? -1 : 1));
+  const parts = pinned.map((br) => branchRowHTML(br, br.short || br.name.replace(/^origin\//, ''), board, selectedLane, refreshing, true));
   for (const entry of entries) {
     if (entry.kind === 'single') {
       parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane, refreshing));
@@ -2608,7 +2632,7 @@ function dismissCtxMenus() {
 }
 
 async function updateBranchRow(name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   const tabId = beginOp('branch-update', br.short || br.name);
@@ -2624,7 +2648,7 @@ async function updateBranchRow(name) {
 }
 
 async function pushBranchRow(name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br || br.remote) return;
   const tabId = beginOp('branch-push', br.short || br.name);
@@ -2640,7 +2664,7 @@ async function pushBranchRow(name) {
 }
 
 async function checkoutBranchRow(name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   // Already checked out somewhere → select that worktree (no second checkout).
@@ -2739,7 +2763,7 @@ function openLaneCtxMenu(x, y, lane) {
 }
 
 function openBranchCtxMenu(x, y, name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   const lane = laneByIndex(state.selectedLane);
@@ -2748,6 +2772,8 @@ function openBranchCtxMenu(x, y, name) {
   const { menu, add } = ctxMenuAt(x, y);
   add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
   add('Copy name', () => copyText(br.name, 'branch name'));
+  const root = state.board?.root;
+  add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); });
   if (br.remote) {
     add('Fetch', () => updateBranchRow(br.name));
   } else {
@@ -3232,7 +3258,8 @@ async function paintFilePane(pane) {
   const modes = wip
     ? `${modeBtn('diff', 'Diff')}${modeBtn('read', 'Read')}`
     : `${modeBtn('diff', 'Diff')}${modeBtn('blame', 'Blame')}${modeBtn('history', 'History')}`;
-  const openPath = pane.cwd ? `${pane.cwd}/${pane.path}` : pane.path;
+  // #103 commit files have no cwd: a bare relative path resolved against / in the packaged app.
+  const openPath = `${pane.cwd || state.board?.root}/${pane.path}`;
   el.body.classList.add('with-file-pane');
   el.fileStage.hidden = false;
   el.fileStage.innerHTML = `
@@ -3768,6 +3795,19 @@ const optionGroup = (key, options, cur, { num = false, label = key } = {}) =>
   `<div class="option-row" role="group" aria-label="${esc(label)}" data-pref="${key}"${num ? ' data-num' : ''}>${options.map(([v, text]) =>
     `<button class="option${String(v) === String(cur) ? ' on' : ''}" type="button" aria-pressed="${String(v) === String(cur)}" data-v="${esc(v)}">${text}</button>`).join('')}</div>`;
 
+// #108 looks on the chroma axis. Inspired by familiar styles, named as our own.
+const LOOKS = [
+  ['muted', 'Muted'], ['vibrant', 'Vibrant'], ['arcade', 'Arcade'], ['fairytale', 'Fairytale'],
+  ['studio', 'Studio'], ['retro', 'Retro'], ['bricks', 'Bricks'],
+];
+const themeGridHTML = (cur) => {
+  const mode = document.documentElement.dataset.theme || 'dark';
+  return `<div class="option-row theme-grid" role="group" aria-label="Look" data-pref="chroma">${LOOKS.map(([v, name]) =>
+    `<button class="option theme-card${v === cur ? ' on' : ''}" type="button" aria-pressed="${v === cur}" data-v="${v}" data-theme="${mode}"${v === 'muted' ? '' : ` data-chroma="${v}"`}>
+      <span class="dots"><i style="background:var(--primary)"></i><i style="background:var(--lane-2)"></i><i style="background:var(--lane-3)"></i><i style="background:var(--surface-3)"></i></span>
+      ${name}</button>`).join('')}</div>`;
+};
+
 const selectHTML = (key, options, cur, label) =>
   `<select class="select" data-pref="${key}" aria-label="${esc(label)}">${options.map(([v, t]) =>
     `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
@@ -3862,6 +3902,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">Feedback</div>
       <div class="list">
         ${settingsRow('pencil-simple', 'Feedback prompts', '', 'A rare check-in, and Report on errors', switchHTML('feedbackPrompts', p.feedbackPrompts !== false, 'Feedback prompts'), 'About once a month, and once after an update, a small card asks how Plenum is going. It waits until you have been idle for a while, never covers your work, and fades by itself. Off also hides the Report link on errors. Feedback in the palette always works.')}
+        <div data-feedback-queue style="display: contents"></div>
       </div>
 `;
   },
@@ -3872,8 +3913,9 @@ const SETTINGS_PAGES = {
       <div class="group-head">Theme</div>
       <div class="list">
         ${settingsRow('sun', 'Mode', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System tracks light/dark from macOS. Light and Dark stay put.')}
-        ${settingsRow('sparkle', 'Surfaces', '', 'Muted or vibrant chrome', optionGroup('chroma', [['muted', 'Muted'], ['vibrant', 'Vibrant']], chroma, { label: 'Surfaces' }), 'Four looks total with Mode: dark/light × muted/vibrant. Lavender stays the brand; this only shifts how saturated the chrome is.')}
       </div>
+      <div class="group-head">Look<small>Every look has a light and a dark side; Mode picks which.</small></div>
+      ${themeGridHTML(chroma)}
       <div class="group-head">Preview<small>Sample data. Follows the settings above.</small></div>
       <div class="theme-preview" inert aria-hidden="true">
         <div class="graph"><div class="rows"></div></div>
@@ -4507,6 +4549,7 @@ function renderSettings() {
   if (page === 'agents' && state.agents) bindAgents(el.settingsBody);
   if (page === 'statistics') bindStats(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
+  if (page === 'general') paintFeedbackQueue(el.settingsBody.querySelector('[data-feedback-queue]'));
   bindPrefs(el.settingsBody);
   bindUpdateAct(el.settingsBody);
   bindUpdateAct(el.settingsNav);
@@ -4515,6 +4558,35 @@ function renderSettings() {
   el.settingsNav.querySelector('[data-settings]')?.addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
     b.addEventListener('click', () => openSettings(b.dataset.page)));
+}
+
+/** #104 unsent feedback (the local outbox main retries on launch and every 15 min). */
+async function paintFeedbackQueue(box) {
+  if (!box) return;
+  let items = [];
+  try { items = await invoke('feedback.queue'); } catch { return; }
+  if (!box.isConnected) return;
+  const when = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  const live = items.filter((x) => !x.expired).length;
+  const head = settingsRow('stack', 'Unsent reports', '', items.length
+    ? `${items.length} waiting${live < items.length ? ` · ${items.length - live} too old to resend` : ''}`
+    : 'Nothing waiting. Everything you sent reached us.',
+  live ? `<button class="btn" type="button" data-feedback-retry>${iconHTML('arrows-clockwise', 'sm')}Send now</button>` : '',
+  'Reports that could not reach the server stay on this Mac and retry on launch and every 15 minutes, for up to 14 days.');
+  const rows = items.map((x) => `<div class="list-row compact feedback-queue-row" title="${esc(x.error || '')}">
+      ${iconHTML(x.expired ? 'clock' : x.status === 'failed' ? 'warning-circle' : 'circle-dashed', 'sm')}
+      <div class="name">${esc(x.comment.split('\n')[0] || '(no text)')}<small>${esc(when(x.createdAt))}${x.expired ? ' · too old to resend' : x.error ? ` · ${esc(x.error)}` : ''}</small></div>
+    </div>`).join('');
+  box.innerHTML = head + rows;
+  box.querySelector('[data-feedback-retry]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const { sent, left } = await invoke('feedback.retry');
+      toast(sent ? `Sent ${sent} report${sent === 1 ? '' : 's'}${left ? `, ${left} still waiting` : ''}.` : 'Still can’t reach the feedback server.', sent ? 'ok' : 'bad');
+    } catch { /* toasted */ }
+    paintFeedbackQueue(box);
+  });
 }
 
 /**
@@ -4577,7 +4649,7 @@ function paletteCommands() {
     { id: 'editor', label: `Open in ${editorName()}`, run: () => handleAction('editor', lane), when: !!lane },
     { id: 'terminal', label: 'Open in terminal', run: () => invoke('os.openTerminal', lane.path).catch(() => {}), when: !!lane },
     { id: 'warm', label: 'Tab warm time…', run: openWarmSheet },
-    { id: 'refresh', label: 'Refresh board', run: refresh, when: !!state.board },
+    { id: 'refresh', label: 'Refresh board', run: () => refresh({ loud: true }), when: !!state.board },
   ];
   if (state.board) {
     for (const l of state.board.lanes) {
@@ -4782,14 +4854,18 @@ async function selectTab(id) {
 }
 
 const lastFetchAt = new Map(); // root → ms
-async function refresh() {
+/** #116 background by default (focus, .git watch, tab switch): no spinners, rows stay usable. */
+async function refresh({ loud = false } = {}) {
   const tabId = state.store.activeId;
   const root = state.board?.root;
   if (!root || !tabId) return;
   if (state.refreshingByTab.has(tabId)) return;
   const limit = state.historyLimit || 120;
   state.refreshingByTab.add(tabId);
-  if (state.store.activeId === tabId) paintPanel();
+  if (loud) {
+    state.loudRefreshByTab.add(tabId);
+    if (state.store.activeId === tabId) paintPanel();
+  }
   let board = null;
   try {
     // #81 / #99 fetch origin at most every 15s so ↓ pull counts track the real remote
@@ -4799,9 +4875,10 @@ async function refresh() {
   } catch { /* toasted */ }
   finally {
     state.refreshingByTab.delete(tabId);
+    state.loudRefreshByTab.delete(tabId);
   }
   if (board) settleBoard(tabId, root, board);
-  else if (state.store.activeId === tabId) paintPanel();
+  else if (loud && state.store.activeId === tabId) paintPanel();
 }
 
 async function loadOlderHistory() {

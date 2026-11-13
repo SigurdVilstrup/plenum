@@ -26,6 +26,7 @@ import {
   sanitizeReporterEmail,
   sendFeedbackReport,
   retryUnsentFeedback,
+  listUnsentFeedback,
   sendCheckin,
 } from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
@@ -366,6 +367,12 @@ const relayOpts = () => ({
   anonKey: brandEnv('SUPABASE_ANON_KEY'),
 });
 
+ipcMain.handle('feedback.queue', () => listUnsentFeedback(prefsDir()));
+ipcMain.handle('feedback.retry', async () => {
+  const sent = await retryUnsentFeedback(prefsDir(), relayOpts());
+  return { sent, left: listUnsentFeedback(prefsDir()).length };
+});
+
 ipcMain.handle('feedback.send', async (_e, dir) => {
   const root = path.resolve(prefsDir(), 'feedback');
   const reportDir = path.resolve(String(dir || ''));
@@ -489,8 +496,17 @@ const EDITORS = {
   },
 };
 
+/** #109 CLI shims get hijacked (Cursor's "Install 'code' command" points `code` at Cursor.app): only trust one that resolves into this editor's own bundle. */
+function editorCli(e) {
+  return e.cli.find((p) => {
+    let real;
+    try { real = fs.realpathSync(p); } catch { return false; }
+    return !real.includes('.app/') || e.apps.some((a) => real.startsWith(`${a}/`));
+  });
+}
+
 function editorAvailable(e) {
-  return e.cli.some((p) => fs.existsSync(p)) || e.apps.some((p) => fs.existsSync(p));
+  return Boolean(editorCli(e)) || e.apps.some((p) => fs.existsSync(p));
 }
 
 function listEditors() {
@@ -541,12 +557,14 @@ function openCustom(tool, abs) {
 
 ipcMain.handle('os.openEditor', (_e, target) => {
   const abs = assertPath(target);
+  // #103 a file from an old commit may be gone: say so instead of opening a blank buffer.
+  if (!fs.existsSync(abs)) throw new Error(`${path.basename(abs)} isn't in the working tree (deleted or moved since).`);
   const { editor, editorPath } = getPrefs(prefsDir());
   if (editor === 'custom') return openCustom(editorPath, abs);
   // Saved editor may not be installed (default is Cursor): fall back to the first one that is.
   const e = (EDITORS[editor] && editorAvailable(EDITORS[editor]) ? EDITORS[editor] : Object.values(EDITORS).find(editorAvailable))
     || EDITORS[editor] || EDITORS.cursor;
-  const cli = e.cli.find((p) => fs.existsSync(p));
+  const cli = editorCli(e);
   if (cli) launch(cli, ['-r', '--', abs]);
   else launch('open', [...e.open, abs]);
 });

@@ -61,7 +61,7 @@ function clampTtl(ms) {
 
 const ENUMS = {
   theme: ['system', 'light', 'dark'],
-  chroma: ['muted', 'vibrant'],
+  chroma: ['muted', 'vibrant', 'arcade', 'fairytale', 'studio', 'retro', 'bricks'],
   fontPack: ['system', 'inter-jetbrains', 'ibm-plex'],
   editor: ['cursor', 'vscode', 'zed', 'windsurf', 'custom'],
   terminal: ['terminal', 'iterm', 'custom'],

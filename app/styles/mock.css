@@ -175,6 +175,146 @@ html[data-font='ibm-plex'] {
   --scrim: rgba(16, 18, 26, 0.4);
 }
 
+/* #108 Themes beyond muted/vibrant. Each has light + dark; Mode still picks which.
+   Loosely inspired by familiar looks, named and coloured as our own. */
+
+/* Arcade - candy red on clean white, rounded and playful. */
+[data-theme='light'][data-chroma='arcade'] {
+  --canvas: #fbfbfc; --surface-1: #f3f3f5; --surface-2: #ebebef; --surface-3: #e0e0e6;
+  --hairline: #d6d6de; --hairline-strong: #babac6;
+  --ink: #15151c; --ink-muted: #3a3a46; --ink-subtle: #5f5f6e; --ink-tertiary: #8a8a98;
+  --primary: #d9343a; --primary-hover: #b8262c; --on-primary: #ffffff; --primary-bg: rgba(217, 52, 58, 0.1);
+  --lane-0: #a3a3b0; --lane-1: #d9343a; --lane-2: #2f7fd1; --lane-3: #3aa655; --lane-4: #e6a412;
+  --radius-sm: 9px; --radius-md: 12px; --radius-lg: 18px;
+}
+[data-theme='dark'][data-chroma='arcade'] {
+  --canvas: #19191d; --surface-1: #222227; --surface-2: #2b2b31; --surface-3: #35353d;
+  --hairline: #43434d; --hairline-strong: #5a5a66;
+  --ink: #fafafb; --ink-muted: #dcdce2; --ink-subtle: #b0b0bc; --ink-tertiary: #8e8e9a;
+  --primary: #ef4a4f; --primary-hover: #ff6a6e; --on-primary: #ffffff; --primary-bg: rgba(239, 74, 79, 0.16);
+  --lane-0: #565662; --lane-1: #ef4a4f; --lane-2: #4a98e8; --lane-3: #4cbc68; --lane-4: #f2b630;
+  --radius-sm: 9px; --radius-md: 12px; --radius-lg: 18px;
+}
+
+/* Fairytale - midnight blue and storybook gold. */
+[data-theme='light'][data-chroma='fairytale'] {
+  --canvas: #f7f6fb; --surface-1: #eeedf7; --surface-2: #e5e4f2; --surface-3: #d9d8ec;
+  --hairline: #cfcde4; --hairline-strong: #b4b1d2;
+  --ink: #141535; --ink-muted: #34365e; --ink-subtle: #5a5c85; --ink-tertiary: #8587ab;
+  --primary: #2f45b0; --primary-hover: #233591; --on-primary: #ffffff; --primary-bg: rgba(47, 69, 176, 0.1);
+  --lane-0: #a4a6c4; --lane-1: #2f45b0; --lane-2: #b8892a; --lane-3: #b0508a; --lane-4: #3d8f9c;
+  --warning: #9a6e00;
+}
+[data-theme='dark'][data-chroma='fairytale'] {
+  --canvas: #12142e; --surface-1: #1a1d3c; --surface-2: #22264a; --surface-3: #2c3159;
+  --hairline: #3a4070; --hairline-strong: #525a8e;
+  --ink: #f8f6ff; --ink-muted: #dcdaf2; --ink-subtle: #b1afd2; --ink-tertiary: #8e8db4;
+  --primary: #e2b85a; --primary-hover: #f0cc7a; --on-primary: #1a1530; --primary-bg: rgba(226, 184, 90, 0.16);
+  --lane-0: #4a4f7a; --lane-1: #e2b85a; --lane-2: #7f9cff; --lane-3: #e07ab4; --lane-4: #6cc5d1;
+}
+
+/* Studio - quiet aluminium greys, one clear blue, soft corners. */
+[data-theme='light'][data-chroma='studio'] {
+  --canvas: #ffffff; --surface-1: #f5f5f7; --surface-2: #ececef; --surface-3: #e2e2e6;
+  --hairline: #dcdce0; --hairline-strong: #c4c4ca;
+  --ink: #1d1d1f; --ink-muted: #3c3c41; --ink-subtle: #6e6e73; --ink-tertiary: #8e8e93;
+  --primary: #1a73e0; --primary-hover: #155fba; --on-primary: #ffffff; --primary-bg: rgba(26, 115, 224, 0.1);
+  --lane-0: #aeaeb2; --lane-1: #1a73e0; --lane-2: #34a35a; --lane-3: #e0457b; --lane-4: #9a5fd6;
+  --radius-sm: 7px; --radius-md: 10px; --radius-lg: 14px;
+}
+[data-theme='dark'][data-chroma='studio'] {
+  --canvas: #1c1c1e; --surface-1: #232325; --surface-2: #2c2c2e; --surface-3: #3a3a3c;
+  --hairline: #3f3f42; --hairline-strong: #58585c;
+  --ink: #f5f5f7; --ink-muted: #d1d1d6; --ink-subtle: #a1a1a6; --ink-tertiary: #8a8a8f;
+  --primary: #2f8cff; --primary-hover: #5aa4ff; --on-primary: #ffffff; --primary-bg: rgba(47, 140, 255, 0.16);
+  --lane-0: #5a5a5e; --lane-1: #2f8cff; --lane-2: #3ec46d; --lane-3: #ff5f8f; --lane-4: #b77cf0;
+  --radius-sm: 7px; --radius-md: 10px; --radius-lg: 14px;
+}
+
+/* Retro - late-90s desktop: grey panels, navy titles, square bevelled controls. */
+[data-theme='light'][data-chroma='retro'] {
+  --canvas: #d4d0c8; --surface-1: #c8c4bc; --surface-2: #dcd9d2; --surface-3: #bdb9b0;
+  --hairline: #a19d95; --hairline-strong: #807c74;
+  --ink: #000000; --ink-muted: #1e1e1e; --ink-subtle: #404040; --ink-tertiary: #5c5c5c;
+  --primary: #0f2a8a; --primary-hover: #1b3db0; --on-primary: #ffffff; --primary-bg: rgba(15, 42, 138, 0.14);
+  --lane-0: #7a776f; --lane-1: #0f2a8a; --lane-2: #0a7f7f; --lane-3: #8a0f5a; --lane-4: #7f6a00;
+  --success: #0a6e1e; --warning: #7f6a00; --danger: #a00000;
+  --radius-sm: 0; --radius-md: 0; --radius-lg: 2px;
+  --bevel: inset -1px -1px 0 #6b675f, inset 1px 1px 0 #ffffff;
+}
+[data-theme='dark'][data-chroma='retro'] {
+  --canvas: #1f2a2a; --surface-1: #263333; --surface-2: #2f3d3d; --surface-3: #3a4a4a;
+  --hairline: #4c5f5f; --hairline-strong: #678080;
+  --ink: #f0f0e8; --ink-muted: #d6d6cc; --ink-subtle: #a8ada4; --ink-tertiary: #889088;
+  --primary: #12a3a3; --primary-hover: #2cc0c0; --on-primary: #001414; --primary-bg: rgba(18, 163, 163, 0.18);
+  --lane-0: #566a6a; --lane-1: #12a3a3; --lane-2: #c0c0c0; --lane-3: #e05aa8; --lane-4: #e0c040;
+  --radius-sm: 0; --radius-md: 0; --radius-lg: 2px;
+  --bevel: inset -1px -1px 0 #0d1414, inset 1px 1px 0 #5f7777;
+}
+[data-chroma='retro'] .btn,
+[data-chroma='retro'] .option,
+[data-chroma='retro'] .iconbtn.framed {
+  box-shadow: var(--bevel);
+}
+
+/* Bricks - toy-box primaries: red, yellow, blue on warm white. */
+[data-theme='light'][data-chroma='bricks'] {
+  --canvas: #fdfbf6; --surface-1: #f6f2e8; --surface-2: #efe9dc; --surface-3: #e6dfcf;
+  --hairline: #ddd4c1; --hairline-strong: #c4b89f;
+  --ink: #1a1712; --ink-muted: #3d372d; --ink-subtle: #655c4d; --ink-tertiary: #8e8473;
+  --primary: #cf2a2a; --primary-hover: #ad1f1f; --on-primary: #ffffff; --primary-bg: rgba(207, 42, 42, 0.1);
+  --lane-0: #b0a690; --lane-1: #cf2a2a; --lane-2: #1f5fc4; --lane-3: #e8a800; --lane-4: #2a9a45;
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px;
+}
+[data-theme='dark'][data-chroma='bricks'] {
+  --canvas: #1a1814; --surface-1: #23201b; --surface-2: #2d2a23; --surface-3: #38342c;
+  --hairline: #4a453a; --hairline-strong: #645d4e;
+  --ink: #fbf8f0; --ink-muted: #e0dacb; --ink-subtle: #b6ae9c; --ink-tertiary: #938b7a;
+  --primary: #f5c21b; --primary-hover: #ffd54a; --on-primary: #1a1712; --primary-bg: rgba(245, 194, 27, 0.16);
+  --lane-0: #5c5649; --lane-1: #f5c21b; --lane-2: #e04040; --lane-3: #4a86e8; --lane-4: #3fb35c;
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px;
+}
+
+/* #108 picker cards: each card carries its own data-theme/data-chroma, so the rules above paint it. */
+.option-row.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  margin: 4px 0 18px;
+}
+.theme-grid .theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: none;
+}
+.theme-grid .theme-card:hover {
+  border-color: var(--hairline-strong);
+}
+.theme-grid .theme-card.on {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.theme-grid .theme-card .dots {
+  display: flex;
+  gap: 4px;
+}
+.theme-grid .theme-card .dots i {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 15%, transparent);
+}
+
 * {
   box-sizing: border-box;
 }
