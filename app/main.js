@@ -3889,6 +3889,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">Feedback</div>
       <div class="list">
         ${settingsRow('pencil-simple', 'Feedback prompts', '', 'A rare check-in, and Report on errors', switchHTML('feedbackPrompts', p.feedbackPrompts !== false, 'Feedback prompts'), 'About once a month, and once after an update, a small card asks how Plenum is going. It waits until you have been idle for a while, never covers your work, and fades by itself. Off also hides the Report link on errors. Feedback in the palette always works.')}
+        <div data-feedback-queue style="display: contents"></div>
       </div>
 `;
   },
@@ -4534,6 +4535,7 @@ function renderSettings() {
   if (page === 'agents' && state.agents) bindAgents(el.settingsBody);
   if (page === 'statistics') bindStats(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
+  if (page === 'general') paintFeedbackQueue(el.settingsBody.querySelector('[data-feedback-queue]'));
   bindPrefs(el.settingsBody);
   bindUpdateAct(el.settingsBody);
   bindUpdateAct(el.settingsNav);
@@ -4542,6 +4544,35 @@ function renderSettings() {
   el.settingsNav.querySelector('[data-settings]')?.addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
     b.addEventListener('click', () => openSettings(b.dataset.page)));
+}
+
+/** #104 unsent feedback (the local outbox main retries on launch and every 15 min). */
+async function paintFeedbackQueue(box) {
+  if (!box) return;
+  let items = [];
+  try { items = await invoke('feedback.queue'); } catch { return; }
+  if (!box.isConnected) return;
+  const when = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  const live = items.filter((x) => !x.expired).length;
+  const head = settingsRow('stack', 'Unsent reports', '', items.length
+    ? `${items.length} waiting${live < items.length ? ` · ${items.length - live} too old to resend` : ''}`
+    : 'Nothing waiting. Everything you sent reached us.',
+  live ? `<button class="btn" type="button" data-feedback-retry>${iconHTML('arrows-clockwise', 'sm')}Send now</button>` : '',
+  'Reports that could not reach the server stay on this Mac and retry on launch and every 15 minutes, for up to 14 days.');
+  const rows = items.map((x) => `<div class="list-row compact feedback-queue-row" title="${esc(x.error || '')}">
+      ${iconHTML(x.expired ? 'clock' : x.status === 'failed' ? 'warning-circle' : 'circle-dashed', 'sm')}
+      <div class="name">${esc(x.comment.split('\n')[0] || '(no text)')}<small>${esc(when(x.createdAt))}${x.expired ? ' · too old to resend' : x.error ? ` · ${esc(x.error)}` : ''}</small></div>
+    </div>`).join('');
+  box.innerHTML = head + rows;
+  box.querySelector('[data-feedback-retry]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const { sent, left } = await invoke('feedback.retry');
+      toast(sent ? `Sent ${sent} report${sent === 1 ? '' : 's'}${left ? `, ${left} still waiting` : ''}.` : 'Still can’t reach the feedback server.', sent ? 'ok' : 'bad');
+    } catch { /* toasted */ }
+    paintFeedbackQueue(box);
+  });
 }
 
 /**

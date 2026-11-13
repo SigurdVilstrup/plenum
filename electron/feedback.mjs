@@ -256,6 +256,28 @@ async function postReport(dir, { endpoint, anonKey, fetchImpl = fetch }) {
 
 const RETRY_MAX_AGE_MS = 14 * 24 * 3600 * 1000;
 
+/** #104 the local outbox, oldest first, for Settings. Text only - no screenshots or paths leave main. */
+export function listUnsentFeedback(baseDir) {
+  const root = path.resolve(baseDir, 'feedback');
+  let names;
+  try { names = fs.readdirSync(root).sort(); } catch { return []; }
+  const out = [];
+  for (const name of names) {
+    let meta;
+    try { meta = JSON.parse(fs.readFileSync(path.join(root, name, 'meta.json'), 'utf8')); } catch { continue; }
+    if (meta.status === 'sent') continue;
+    out.push({
+      id: name,
+      comment: String(meta.comment || '').slice(0, 200),
+      createdAt: meta.createdAt,
+      status: meta.status,
+      error: meta.error || null,
+      expired: Date.now() - Date.parse(meta.createdAt) > RETRY_MAX_AGE_MS,
+    });
+  }
+  return out;
+}
+
 /**
  * Local outbox: resend reports that never made it (relay down, offline). Oldest first,
  * stops at the first failure so an outage costs one request. Returns how many went out.

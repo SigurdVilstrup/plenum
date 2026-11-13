@@ -26,6 +26,7 @@ import {
   sanitizeReporterEmail,
   sendFeedbackReport,
   retryUnsentFeedback,
+  listUnsentFeedback,
   sendCheckin,
 } from './feedback.mjs';
 import { readBuildInfo } from './build-info.mjs';
@@ -364,6 +365,12 @@ ipcMain.handle('feedback.checkin', (_e, payload) => sendCheckin(payload, feedbac
 const relayOpts = () => ({
   endpoint: brandEnv('FEEDBACK_URL', DEFAULT_FEEDBACK_URL),
   anonKey: brandEnv('SUPABASE_ANON_KEY'),
+});
+
+ipcMain.handle('feedback.queue', () => listUnsentFeedback(prefsDir()));
+ipcMain.handle('feedback.retry', async () => {
+  const sent = await retryUnsentFeedback(prefsDir(), relayOpts());
+  return { sent, left: listUnsentFeedback(prefsDir()).length };
 });
 
 ipcMain.handle('feedback.send', async (_e, dir) => {
