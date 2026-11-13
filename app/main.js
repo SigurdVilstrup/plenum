@@ -95,6 +95,7 @@ const state = {
   loadingOlder: false,
   /** Tab ids with a quiet board/branch refresh in flight (#47). */
   refreshingByTab: new Set(),
+  loudRefreshByTab: new Set(), // #116 only an asked-for refresh shows spinners / blocks rows
   /** Bumped on every tab switch so superseded select/load work stops painting. */
   switchSeq: 0,
   pendingGraphScroll: null,
@@ -1105,6 +1106,7 @@ function openCtxMenu(x, y, tab, anchor) {
     dropWarm(tab.id);
     state.opsByTab.delete(tab.id);
     state.refreshingByTab.delete(tab.id);
+    state.loudRefreshByTab.delete(tab.id);
     const before = { ...tab };
     pushTabRestoreUndo(before, `close ${tab.title}`);
     const res = await invoke('tabs.close', tab.id);
@@ -1446,7 +1448,7 @@ function paintPanel() {
   const matches = (br) => !q || br.name.toLowerCase().includes(q);
   const locals = allBranches.filter((br) => !br.remote && matches(br));
   const remotes = allBranches.filter((br) => br.remote && matches(br));
-  const refreshing = state.refreshingByTab.has(state.store.activeId);
+  const refreshing = state.loudRefreshByTab.has(state.store.activeId);
   const localBody = locals.length
     ? renderBranchListHTML(locals, b, selected, refreshing)
     : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
@@ -2630,7 +2632,7 @@ function dismissCtxMenus() {
 }
 
 async function updateBranchRow(name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   const tabId = beginOp('branch-update', br.short || br.name);
@@ -2646,7 +2648,7 @@ async function updateBranchRow(name) {
 }
 
 async function pushBranchRow(name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br || br.remote) return;
   const tabId = beginOp('branch-push', br.short || br.name);
@@ -2662,7 +2664,7 @@ async function pushBranchRow(name) {
 }
 
 async function checkoutBranchRow(name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   // Already checked out somewhere → select that worktree (no second checkout).
@@ -2761,7 +2763,7 @@ function openLaneCtxMenu(x, y, lane) {
 }
 
 function openBranchCtxMenu(x, y, name) {
-  if (state.refreshingByTab.has(state.store.activeId)) return;
+  if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br) return;
   const lane = laneByIndex(state.selectedLane);
@@ -4601,7 +4603,7 @@ function paletteCommands() {
     { id: 'editor', label: `Open in ${editorName()}`, run: () => handleAction('editor', lane), when: !!lane },
     { id: 'terminal', label: 'Open in terminal', run: () => invoke('os.openTerminal', lane.path).catch(() => {}), when: !!lane },
     { id: 'warm', label: 'Tab warm time…', run: openWarmSheet },
-    { id: 'refresh', label: 'Refresh board', run: refresh, when: !!state.board },
+    { id: 'refresh', label: 'Refresh board', run: () => refresh({ loud: true }), when: !!state.board },
   ];
   if (state.board) {
     for (const l of state.board.lanes) {
@@ -4806,14 +4808,18 @@ async function selectTab(id) {
 }
 
 const lastFetchAt = new Map(); // root → ms
-async function refresh() {
+/** #116 background by default (focus, .git watch, tab switch): no spinners, rows stay usable. */
+async function refresh({ loud = false } = {}) {
   const tabId = state.store.activeId;
   const root = state.board?.root;
   if (!root || !tabId) return;
   if (state.refreshingByTab.has(tabId)) return;
   const limit = state.historyLimit || 120;
   state.refreshingByTab.add(tabId);
-  if (state.store.activeId === tabId) paintPanel();
+  if (loud) {
+    state.loudRefreshByTab.add(tabId);
+    if (state.store.activeId === tabId) paintPanel();
+  }
   let board = null;
   try {
     // #81 / #99 fetch origin at most every 15s so ↓ pull counts track the real remote
@@ -4823,9 +4829,10 @@ async function refresh() {
   } catch { /* toasted */ }
   finally {
     state.refreshingByTab.delete(tabId);
+    state.loudRefreshByTab.delete(tabId);
   }
   if (board) settleBoard(tabId, root, board);
-  else if (state.store.activeId === tabId) paintPanel();
+  else if (loud && state.store.activeId === tabId) paintPanel();
 }
 
 async function loadOlderHistory() {
