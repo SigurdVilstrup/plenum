@@ -3258,7 +3258,8 @@ async function paintFilePane(pane) {
   const modes = wip
     ? `${modeBtn('diff', 'Diff')}${modeBtn('read', 'Read')}`
     : `${modeBtn('diff', 'Diff')}${modeBtn('blame', 'Blame')}${modeBtn('history', 'History')}`;
-  const openPath = pane.cwd ? `${pane.cwd}/${pane.path}` : pane.path;
+  // #103 commit files have no cwd: a bare relative path resolved against / in the packaged app.
+  const openPath = `${pane.cwd || state.board?.root}/${pane.path}`;
   el.body.classList.add('with-file-pane');
   el.fileStage.hidden = false;
   el.fileStage.innerHTML = `

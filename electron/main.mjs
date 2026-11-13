@@ -550,6 +550,8 @@ function openCustom(tool, abs) {
 
 ipcMain.handle('os.openEditor', (_e, target) => {
   const abs = assertPath(target);
+  // #103 a file from an old commit may be gone: say so instead of opening a blank buffer.
+  if (!fs.existsSync(abs)) throw new Error(`${path.basename(abs)} isn't in the working tree (deleted or moved since).`);
   const { editor, editorPath } = getPrefs(prefsDir());
   if (editor === 'custom') return openCustom(editorPath, abs);
   // Saved editor may not be installed (default is Cursor): fall back to the first one that is.
