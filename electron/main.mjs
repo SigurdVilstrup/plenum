@@ -489,8 +489,17 @@ const EDITORS = {
   },
 };
 
+/** #109 CLI shims get hijacked (Cursor's "Install 'code' command" points `code` at Cursor.app): only trust one that resolves into this editor's own bundle. */
+function editorCli(e) {
+  return e.cli.find((p) => {
+    let real;
+    try { real = fs.realpathSync(p); } catch { return false; }
+    return !real.includes('.app/') || e.apps.some((a) => real.startsWith(`${a}/`));
+  });
+}
+
 function editorAvailable(e) {
-  return e.cli.some((p) => fs.existsSync(p)) || e.apps.some((p) => fs.existsSync(p));
+  return Boolean(editorCli(e)) || e.apps.some((p) => fs.existsSync(p));
 }
 
 function listEditors() {
@@ -546,7 +555,7 @@ ipcMain.handle('os.openEditor', (_e, target) => {
   // Saved editor may not be installed (default is Cursor): fall back to the first one that is.
   const e = (EDITORS[editor] && editorAvailable(EDITORS[editor]) ? EDITORS[editor] : Object.values(EDITORS).find(editorAvailable))
     || EDITORS[editor] || EDITORS.cursor;
-  const cli = e.cli.find((p) => fs.existsSync(p));
+  const cli = editorCli(e);
   if (cli) launch(cli, ['-r', '--', abs]);
   else launch('open', [...e.open, abs]);
 });
