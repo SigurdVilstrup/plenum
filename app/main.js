@@ -1588,6 +1588,22 @@ function paintPanel() {
   });
 }
 
+// #117 pinned branches per repo (right-click → Pin to top). Per-viewer convenience, like the baseline pick.
+const BRANCH_PINS_KEY = 'plenum.branchPins';
+
+function branchPins(root) {
+  try { return JSON.parse(localStorage.getItem(BRANCH_PINS_KEY) || '{}')?.[root] || []; } catch { return []; }
+}
+
+function toggleBranchPin(root, name) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(BRANCH_PINS_KEY) || '{}') || {}; } catch { /* fresh */ }
+  const cur = all[root] || [];
+  all[root] = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
+  if (!all[root].length) delete all[root];
+  try { localStorage.setItem(BRANCH_PINS_KEY, JSON.stringify(all)); } catch { /* session only */ }
+}
+
 // #46 - which tip the branch list counts against. '' = each branch's upstream (default).
 const BRANCH_VS_KEY = 'plenum.branchVs';
 
@@ -1621,9 +1637,10 @@ function branchVsSelectHTML(board) {
   const cur = branchVs(board);
   const opt = (value, label) => `<option value="${esc(value)}"${value === cur ? ' selected' : ''}>${esc(label)}</option>`;
   // #79/#80 clear label + body face; baselines also listed under Settings (#101)
-  return `<label class="branch-vs-wrap" title="What ↓↑ on each branch counts against. Add baselines in Settings → Repository.">
-    <span class="branch-vs-label">Compare</span>
-    <select class="select branch-vs" data-branch-vs aria-label="Count branches ahead and behind against">
+  // #107 icon button over a native select: compact header, still keyboard/VoiceOver friendly.
+  return `<label class="branch-vs-wrap${cur ? ' is-set' : ''}" title="↓↑ compare against: ${esc(cur || 'upstream')}. Add baselines in Settings → Repository.">
+    ${iconHTML('arrows-left-right', 'sm')}${cur ? `<span class="branch-vs-label">${esc(cur)}</span>` : ''}
+    <select class="branch-vs" data-branch-vs aria-label="Count branches ahead and behind against">
       ${opt('', 'upstream')}${opt(board.teamBranch, board.teamBranch)}${board.baselines.map((x) => opt(x.name, x.name)).join('')}
     </select>
   </label>`;
@@ -1651,7 +1668,7 @@ function branchMetaHTML(br, board) {
   return `<span class="metas"><span class="meta ${cls}" title="vs ${esc(d.ref)}">${esc(bits.join(' '))}</span></span>`;
 }
 
-function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
+function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinned = false) {
   const where = br.isPrimary
     ? 'primary'
     : br.hasLane
@@ -1675,7 +1692,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   ].filter(Boolean).join(' · ');
   const mark = isCurrent
     ? iconHTML('check-circle', 'sm current')
-    : iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
+    : iconHTML(pinned ? 'push-pin' : br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
   // Keep lane selection clickable while the list refreshes; block checkout targets only.
   const block = refreshing && !br.hasLane;
   const kind = br.remote ? 'remote' : 'local';
@@ -1684,7 +1701,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
   const del = canDelete
     ? `<button class="iconbtn branch-del" type="button" data-branch-delete="${esc(br.name)}" title="Delete ${kind} ${esc(br.name)}" aria-label="Delete ${kind} branch ${esc(br.name)}">${iconHTML('x', 'sm')}</button>`
     : '';
-  return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}" data-branch-kind="${kind}">
+  return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}${pinned ? ' pinned' : ''}" data-branch-kind="${kind}">
     <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
       ${mark}
       <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
@@ -1694,12 +1711,17 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
 }
 
 function renderBranchListHTML(branches, board, selectedLane, refreshing = false, remote = false) {
-  const { singles, folders } = groupBranchesByPrefix(branches);
+  // #117 pinned tips sit on top with their full name; the rest keep folders.
+  const pins = branchPins(board.root);
+  const pinned = branches.filter((br) => pins.includes(br.name)).sort((a, b) => pins.indexOf(a.name) - pins.indexOf(b.name));
+  const { singles, folders } = groupBranchesByPrefix(branches.filter((br) => !pins.includes(br.name)));
+  // #117 local: standalone tips first, then folders. Remote: folders first (#63), then tips.
+  const foldersFirst = remote;
   const entries = [
     ...singles.map((s) => ({ kind: 'single', sort: s.label, ...s })),
     ...[...folders.keys()].map((key) => ({ kind: 'folder', sort: key, key, items: folders.get(key) })),
-  ].sort((a, b) => (a.kind === b.kind ? a.sort.localeCompare(b.sort) : a.kind === 'folder' ? -1 : 1)); // #63 folders first, then tips
-  const parts = [];
+  ].sort((a, b) => (a.kind === b.kind ? a.sort.localeCompare(b.sort) : (a.kind === 'folder') === foldersFirst ? -1 : 1));
+  const parts = pinned.map((br) => branchRowHTML(br, br.short || br.name.replace(/^origin\//, ''), board, selectedLane, refreshing, true));
   for (const entry of entries) {
     if (entry.kind === 'single') {
       parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane, refreshing));
@@ -2748,6 +2770,8 @@ function openBranchCtxMenu(x, y, name) {
   const { menu, add } = ctxMenuAt(x, y);
   add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
   add('Copy name', () => copyText(br.name, 'branch name'));
+  const root = state.board?.root;
+  add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); });
   if (br.remote) {
     add('Fetch', () => updateBranchRow(br.name));
   } else {
