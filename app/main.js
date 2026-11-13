@@ -3795,6 +3795,19 @@ const optionGroup = (key, options, cur, { num = false, label = key } = {}) =>
   `<div class="option-row" role="group" aria-label="${esc(label)}" data-pref="${key}"${num ? ' data-num' : ''}>${options.map(([v, text]) =>
     `<button class="option${String(v) === String(cur) ? ' on' : ''}" type="button" aria-pressed="${String(v) === String(cur)}" data-v="${esc(v)}">${text}</button>`).join('')}</div>`;
 
+// #108 looks on the chroma axis. Inspired by familiar styles, named as our own.
+const LOOKS = [
+  ['muted', 'Muted'], ['vibrant', 'Vibrant'], ['arcade', 'Arcade'], ['fairytale', 'Fairytale'],
+  ['studio', 'Studio'], ['retro', 'Retro'], ['bricks', 'Bricks'],
+];
+const themeGridHTML = (cur) => {
+  const mode = document.documentElement.dataset.theme || 'dark';
+  return `<div class="option-row theme-grid" role="group" aria-label="Look" data-pref="chroma">${LOOKS.map(([v, name]) =>
+    `<button class="option theme-card${v === cur ? ' on' : ''}" type="button" aria-pressed="${v === cur}" data-v="${v}" data-theme="${mode}"${v === 'muted' ? '' : ` data-chroma="${v}"`}>
+      <span class="dots"><i style="background:var(--primary)"></i><i style="background:var(--lane-2)"></i><i style="background:var(--lane-3)"></i><i style="background:var(--surface-3)"></i></span>
+      ${name}</button>`).join('')}</div>`;
+};
+
 const selectHTML = (key, options, cur, label) =>
   `<select class="select" data-pref="${key}" aria-label="${esc(label)}">${options.map(([v, t]) =>
     `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
@@ -3900,8 +3913,9 @@ const SETTINGS_PAGES = {
       <div class="group-head">Theme</div>
       <div class="list">
         ${settingsRow('sun', 'Mode', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System tracks light/dark from macOS. Light and Dark stay put.')}
-        ${settingsRow('sparkle', 'Surfaces', '', 'Muted or vibrant chrome', optionGroup('chroma', [['muted', 'Muted'], ['vibrant', 'Vibrant']], chroma, { label: 'Surfaces' }), 'Four looks total with Mode: dark/light × muted/vibrant. Lavender stays the brand; this only shifts how saturated the chrome is.')}
       </div>
+      <div class="group-head">Look<small>Every look has a light and a dark side; Mode picks which.</small></div>
+      ${themeGridHTML(chroma)}
       <div class="group-head">Preview<small>Sample data. Follows the settings above.</small></div>
       <div class="theme-preview" inert aria-hidden="true">
         <div class="graph"><div class="rows"></div></div>
