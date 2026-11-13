@@ -1394,7 +1394,7 @@ function paintPanel() {
     <div class="lane-block${primarySelected ? ' selected' : ''}">
       <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0">
         <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
-        <span class="lane-main"><span class="name" title="${esc(primary.name)}">${esc(primary.name)}</span><span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span></span>
+        <span class="lane-main"><span class="name" title="${esc(primary.name)}">${esc(primary.name)}</span><span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>${laneAgentsHTML(primary)}</span>
       </button>
       ${primarySelected ? laneRunHTML(primary) : ''}
     </div>
@@ -1419,7 +1419,7 @@ function paintPanel() {
     const isSelected = l.index === selected;
     return `<div class="lane-block${isSelected ? ' selected' : ''}">
       <button class="lane-row${enter}${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
-        ${mark}<span class="lane-main"><span class="name">${esc(l.name)}</span>${meta}</span>${folder}
+        ${mark}<span class="lane-main"><span class="name">${esc(l.name)}</span>${meta}${laneAgentsHTML(l)}</span>${folder}
       </button>
       ${isSelected ? laneRunHTML(l) : ''}
     </div>`;
@@ -1757,6 +1757,15 @@ const editorIcon = () => EDITOR_ICON[effectiveEditor()] || 'arrow-square-out';
 function editorBtnHTML() {
   const n = editorName();
   return `<button class="iconbtn framed primary" type="button" data-act="editor" title="Open in ${n}" aria-label="Open in ${n}">${iconHTML(editorIcon())}</button>`;
+}
+
+/** #89 agent CLIs with a session open in this lane (from board.lanes[].agents). */
+function laneAgentsHTML(l) {
+  const names = l.agents || [];
+  if (!names.length) return '';
+  const who = names.join(', ');
+  const icons = names.map((n) => aiToolPillIconHTML(n) || iconHTML('robot', 'sm')).join('');
+  return `<span class="lane-agents" title="${esc(who)} ${names.length > 1 ? 'are' : 'is'} open in this lane">${icons}</span>`;
 }
 
 function laneSetupLink() {

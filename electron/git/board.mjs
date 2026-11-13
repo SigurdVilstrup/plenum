@@ -6,6 +6,7 @@ import { git, gitOk } from './run.mjs';
 import { loadManifest } from '../lane/manifest.mjs';
 import { laneStatus } from '../lane/status.mjs';
 import { getProc, getLastTest } from '../lane/supervisor.mjs';
+import { runningAgents, agentsInLane } from '../lane/agents.mjs';
 import { assignColumns } from './graph-columns.mjs';
 import { BASELINE_KEY, LEGACY_TEAM_BRANCH_KEY, TEAM_BRANCH_KEY, manifestPath } from '../paths.mjs';
 import { probeOrigin } from './remote-health.mjs';
@@ -635,6 +636,8 @@ export async function loadBoard(repoPath, { historyLimit = 120, fetch = false } 
     manifest = await loadManifest(manifestPath(trees[0].path));
   } catch { /* bad lane.yaml → not runnable */ }
 
+  const agents = await runningAgents();
+  const treePaths = trees.map((t) => t.path);
   const lanes = [];
   for (let index = 0; index < trees.length; index++) {
     const tree = trees[index];
@@ -680,6 +683,7 @@ export async function loadBoard(repoPath, { historyLimit = 120, fetch = false } 
       authorName: tip?.name ?? '',
       head: tree.head,
       alert,
+      agents: agentsInLane(tree.path, agents, treePaths),
       ...laneStatus(manifest, index, getProc(top, index), getLastTest(top, index)),
     });
   }

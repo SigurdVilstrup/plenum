@@ -1301,6 +1301,8 @@ html.feedback-redact .blame-line {
   column-gap: 6px;
   min-height: 22px;
   padding: 1px 6px 1px 8px;
+  /* #63 leave the branch-del gutter (24px + 2px gap) so folder and branch rows share a right edge */
+  width: calc(100% - 26px);
   color: var(--ink-subtle);
 }
 .window.app .panel .branch-folder .name {
@@ -1315,7 +1317,8 @@ html.feedback-redact .blame-line {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-left: 10px;
+  /* #63 caret (14px) + gap (6px): child icons line up under the folder name */
+  padding-left: 20px;
 }
 .window.app .panel .branch-row.current .icon.current,
 .window.app .panel .branch-row.current .name {
@@ -1775,3 +1778,23 @@ html.feedback-redact .blame-line {
   .searchbtn.tour-pulse { animation: none; }
 }
 .tour-card [hidden] { display: none !important; }
+
+/* #89 agent CLIs open in a lane: small brand marks after the lane meta */
+.window.app .panel .lane-agents {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  color: var(--ink-tertiary);
+}
+.window.app .panel .lane-agents .ai-pill-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-1);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hairline) 80%, transparent);
+}
+.window.app .panel .lane-agents .ai-pill-icon.dark { background: #24292f; }
+.window.app .panel .lane-agents .ai-pill-icon img { width: 100%; height: 100%; object-fit: cover; }
