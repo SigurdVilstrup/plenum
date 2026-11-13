@@ -131,6 +131,7 @@ const el = {
   sheetLayer: document.getElementById('sheet-layer'),
   toast: document.getElementById('toast'),
   appVersion: document.getElementById('app-version'),
+  appBeta: document.getElementById('app-beta'),
   searchbtn: document.querySelector('.titlebar .searchbtn'),
   titlebar: document.querySelector('.titlebar'),
 };
@@ -277,13 +278,18 @@ function formatCommitAt(iso) {
   });
 }
 
+function betaMarkHTML(inline = false) {
+  return `<span class="beta-mark${inline ? ' inline' : ''}" title="Plenum is in beta">BETA</span>`;
+}
+
 function versionDetailHTML() {
   const { version, commit, committedAt } = state.appInfo;
   const ver = esc(version || '…');
-  if (!commit) return `<span class="mono version-line">${ver}</span>`;
+  const beta = betaMarkHTML(true);
+  if (!commit) return `<span class="mono version-line">${ver}${beta}</span>`;
   const when = formatCommitAt(committedAt);
   const rest = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
-  return `<span class="mono version-line">${ver} · ${rest}</span>`;
+  return `<span class="mono version-line">${ver}${beta} · ${rest}</span>`;
 }
 
 /** Release notes are one commit header per line ("- subject"). */
@@ -429,10 +435,12 @@ function paintVersion() {
     el.appVersion.hidden = true;
     el.appVersion.textContent = '';
     el.appVersion.removeAttribute('title');
+    if (el.appBeta) el.appBeta.hidden = true;
     return;
   }
   el.appVersion.hidden = false;
   el.appVersion.textContent = version;
+  if (el.appBeta) el.appBeta.hidden = false;
   const when = formatCommitAt(committedAt);
   el.appVersion.title = commit
     ? (when ? `${commit} · ${when}` : commit)
@@ -636,7 +644,7 @@ async function pasteIntoApp(clip) {
 }
 
 const isEditable = (n) => Boolean(n?.matches?.('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button])'));
-api.onEdit((cmd, text) => {
+api?.onEdit((cmd, text) => {
   const editable = isEditable(document.activeElement);
   if (cmd === 'undo') return editable ? api.invoke('edit.native', 'undo') : undoLast();
   if (cmd === 'copy') return editable || window.getSelection()?.toString() ? api.invoke('edit.native', 'copy') : copyFocused();
@@ -3976,7 +3984,7 @@ const SETTINGS_PAGES = {
     const btn = (label, attr, primary = false) => `<button class="btn${primary ? ' primary' : ''}" type="button" ${attr}>${label}</button>`;
     const note = (body) => `<div class="agents-note">${body}</div>`;
     const { launcher } = a;
-    const cmd = settingsRow('terminal-window', 'plenum', esc(state.appInfo.version || '…'), `<span class="mono">${esc(launcher.shown || launcher.path)}</span>`,
+    const cmd = settingsRow('terminal-window', 'plenum', `${esc(state.appInfo.version || '…')} ${betaMarkHTML(true)}`, `<span class="mono">${esc(launcher.shown || launcher.path)}</span>`,
       launcher.onPath ? status('on', 'On your PATH') : btn('Add to PATH', 'data-agent-link'),
       "Lets you type plenum in your own terminal. Agents don't need this.")
       + (!launcher.onPath && agentsView.linkCmd
@@ -4322,6 +4330,18 @@ function rerenderAgents() {
 // Configs change outside Plenum, so refetch on every open; the old data stays up meanwhile.
 async function loadAgents() {
   seedActiveRepoBoard();
+  // Vite-only: enough stub to render the Command row (version + BETA).
+  if (!api) {
+    if (!state.agents) {
+      state.agents = {
+        settings: { version: 1, run: true, create: true, remove: 'allow', writeSetup: 'never' },
+        launcher: { path: '~/.plenum/bin/plenum', shown: '~/.plenum/bin/plenum', onPath: true, linkPath: '/usr/local/bin/plenum' },
+        clients: [],
+      };
+    }
+    rerenderAgents();
+    return;
+  }
   for (const t of state.store.tabs) {
     api.invoke('board.get', t.path).then((b) => { state.repoBoards.set(t.path, b); rerenderAgents(); }, () => {});
   }
@@ -4937,7 +4957,7 @@ function nudgeTick() {
 
 async function startNudges() {
   const version = state.appInfo?.version;
-  if (!version) return; // dev runs have no version to compare
+  if (!version || !api) return; // Electron-only; Vite preview has no nudge bridge
   const next = noteLaunch(state.prefs.nudge, version, Date.now());
   if (next !== state.prefs.nudge) await saveQuietPrefs({ nudge: next });
   if (!state.prefs.nudge?.pathAskedAt) {
@@ -4947,25 +4967,32 @@ async function startNudges() {
 }
 
 async function boot() {
-  try {
-    state.prefs = await invoke('prefs.get');
-    applyPrefs();
-  } catch { /* defaults */ }
-  try {
-    const v = await invoke('app.version');
-    state.appInfo = (v && typeof v === 'object')
-      ? {
-          version: String(v.version || ''),
-          commit: String(v.commit || ''),
-          committedAt: String(v.committedAt || ''),
-        }
-      : { version: String(v || ''), commit: '', committedAt: '' };
-  } catch {
-    state.appInfo = { version: '', commit: '', committedAt: '' };
+  if (api) {
+    try {
+      state.prefs = await invoke('prefs.get');
+      applyPrefs();
+    } catch { /* defaults */ }
+    try {
+      const v = await invoke('app.version');
+      state.appInfo = (v && typeof v === 'object')
+        ? {
+            version: String(v.version || ''),
+            commit: String(v.commit || ''),
+            committedAt: String(v.committedAt || ''),
+          }
+        : { version: String(v || ''), commit: '', committedAt: '' };
+    } catch {
+      state.appInfo = { version: '', commit: '', committedAt: '' };
+    }
+  } else {
+    // Vite-only: keep a version so BETA never stands alone in the title bar.
+    state.appInfo = { version: '0.2.14', commit: '', committedAt: '' };
   }
   paintVersion();
-  startNudges();
   try {
+    await startNudges();
+  } catch { /* preview has no prefs / agents bridge */ }
+  if (api) try {
     const u = await invoke('app.update.state');
     if (u) state.update = u;
   } catch { /* updater optional */ }

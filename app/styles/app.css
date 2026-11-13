@@ -76,6 +76,31 @@ input, textarea, [contenteditable="true"] {
   -webkit-app-region: drag;
 }
 
+.beta-mark {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-tertiary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+}
+
+.beta-mark[hidden] {
+  display: none;
+}
+
+.beta-mark.inline {
+  display: inline-block;
+  margin-left: 0.35em;
+  padding: 2px 4px;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  vertical-align: 1px;
+}
+
 .window.app .titlebar .tabstrip {
   flex: 1 1 auto;
   min-width: 0;
