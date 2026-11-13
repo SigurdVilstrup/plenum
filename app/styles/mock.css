@@ -549,13 +549,22 @@ a.iconbtn,
   padding-bottom: 1px;
 }
 
-.tab.renaming input {
-  width: 110px;
-  border: 0;
-  border-bottom: 1px solid var(--primary);
-  background: transparent;
-  padding: 0 0 1px;
+.tab.renaming input,
+.tab.renaming .input {
+  width: 140px;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 2px 8px;
   color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.tab.renaming .input:focus {
+  outline: none;
+  border-color: var(--primary);
 }
 
 .tab.renaming .icon {
@@ -1241,7 +1250,7 @@ a.iconbtn,
 .lane-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 16px 1fr auto;
+  grid-template-columns: 16px minmax(0, 1fr);
   column-gap: 8px;
   align-items: center;
   padding: 6px 6px 6px 8px;
@@ -1262,7 +1271,17 @@ a.iconbtn,
   color: var(--ink);
 }
 
+/* #84 name gets the row; meta sits beside without crushing to "f…" */
+.lane-row .lane-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .lane-row .name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 500;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -1281,10 +1300,12 @@ a.iconbtn,
   margin-top: 1px;
 }
 
-.lane-row .meta {
+.lane-row .meta,
+.lane-row .metas {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  flex: 0 0 auto;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--ink-subtle);
@@ -1292,9 +1313,11 @@ a.iconbtn,
 
 .lane-row .meta.bad {
   color: var(--danger);
+  font-weight: 600;
 }
 .lane-row .meta.warn {
   color: var(--warning);
+  font-weight: 600;
 }
 .lane-row .meta.ok {
   color: var(--success);
@@ -1442,6 +1465,14 @@ a.iconbtn,
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+/* #95 keep Settings · Account · Update clustered; Feedback stays right */
+.panel-foot .foot-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .panel-foot .iconbtn {
@@ -1872,15 +1903,18 @@ a.navitem.back {
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 56px;
-  padding: 0 16px;
+  min-height: 56px;
+  height: auto;
+  padding: 8px 16px;
 }
 
 .lane-head .title {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(42%, 320px);
 }
 
 .lane-head .title .icon {
@@ -1893,6 +1927,9 @@ a.navitem.back {
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .lane-head .path {
@@ -1900,6 +1937,9 @@ a.navitem.back {
   font-size: 11px;
   color: var(--ink-tertiary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .facts {
@@ -1907,6 +1947,7 @@ a.navitem.back {
   align-items: center;
   gap: 12px;
   margin-left: 4px;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--ink-subtle);
@@ -1942,8 +1983,10 @@ a.navitem.back {
 .lane-head .actions {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
@@ -2575,6 +2618,18 @@ a.navitem {
 
 .list-row .detail .mono {
   font-size: 11px;
+}
+
+/* #91 version · commit · date stay on one row */
+.list-row .detail .version-line {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.35em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .status {

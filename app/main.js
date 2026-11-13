@@ -227,6 +227,8 @@ function toast(msg, kind = '', { undo = false, link = null, action = null } = {}
 }
 
 let loadingTimer = null;
+let loadingShownAt = 0;
+const LOADING_MIN_MS = 900; // #86 hold skeleton briefly so cold switches don't flash
 function setLoading(on, title = 'Opening repository…', path = '', { immediate = false } = {}) {
   state.loading = on;
   clearTimeout(loadingTimer);
@@ -236,14 +238,26 @@ function setLoading(on, title = 'Opening repository…', path = '', { immediate 
     el.empty.hidden = true;
     const show = () => {
       if (!state.loading || state.settings.open) return;
+      loadingShownAt = Date.now();
       el.loading.hidden = false;
       el.panel.hidden = true;
       el.main.hidden = true;
+      el.laneHead.hidden = true;
+      el.changes.hidden = true;
     };
     if (immediate) show();
     else loadingTimer = setTimeout(show, 150);
   } else {
-    el.loading.hidden = true;
+    const hide = () => {
+      if (state.loading) return;
+      el.loading.hidden = true;
+    };
+    const shownFor = loadingShownAt ? Date.now() - loadingShownAt : LOADING_MIN_MS;
+    if (!el.loading.hidden && shownFor < LOADING_MIN_MS) {
+      loadingTimer = setTimeout(hide, LOADING_MIN_MS - shownFor);
+    } else {
+      hide();
+    }
   }
 }
 
@@ -266,10 +280,10 @@ function formatCommitAt(iso) {
 function versionDetailHTML() {
   const { version, commit, committedAt } = state.appInfo;
   const ver = esc(version || '…');
-  if (!commit) return `<span class="mono">${ver}</span>`;
+  if (!commit) return `<span class="mono version-line">${ver}</span>`;
   const when = formatCommitAt(committedAt);
   const rest = when ? `${esc(commit)} · ${esc(when)}` : esc(commit);
-  return `<span class="mono">${ver} · ${rest}</span>`;
+  return `<span class="mono version-line">${ver} · ${rest}</span>`;
 }
 
 /** Release notes are one commit header per line ("- subject"). */
@@ -1158,8 +1172,11 @@ function openRename(tab, anchor) {
     paintIcons();
   };
   const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'input';
   input.value = tab.title;
   input.setAttribute('aria-label', 'Repository display name');
+  input.spellcheck = false;
   wrap.appendChild(previewGlyph());
   wrap.appendChild(input);
 
@@ -1252,22 +1269,30 @@ function openRename(tab, anchor) {
     document.removeEventListener('mousedown', off);
     pop.remove();
     if (!commit) {
-      paintTabs();
+      wrap.replaceWith(btn);
       return;
     }
+    const nextTitle = input.value.trim() || tab.title;
+    // Optimistic: put the real tab back immediately so rename doesn't stutter (#85).
+    const titleNode = btn.querySelector('.tab-title');
+    if (titleNode) titleNode.textContent = nextTitle;
+    wrap.replaceWith(btn);
     try {
       let iconArg;
       if (chosen === 'image') iconArg = undefined; // already applied via tabs.setImage
       else if (chosen === 'auto') iconArg = tab.iconManual ? 'auto' : undefined;
       else if (chosen !== (tab.icon || 'folder-simple') || !tab.iconManual || tab.favicon) iconArg = chosen;
-      const store = await invoke('tabs.rename', tab.id, input.value, iconArg);
+      const store = await invoke('tabs.rename', tab.id, nextTitle, iconArg);
       applyStore(store);
       if (tabLook(store.tabs.find((t) => t.id === tab.id)) !== tabLook(tab)) {
         pushTabRestoreUndo({ ...tab }, 'rename tab');
         toast('Renamed tab', 'ok', { undo: true });
       }
-    } catch { /* toasted */ }
-    paintTabs();
+      // Rebuild only when glyph/look changed; title already matches the strip.
+      if (iconArg != null) paintTabs();
+    } catch {
+      paintTabs();
+    }
   };
   const off = (ev) => {
     if (wrap.contains(ev.target) || pop.contains(ev.target)) return;
@@ -1369,8 +1394,7 @@ function paintPanel() {
     <div class="lane-block${primarySelected ? ' selected' : ''}">
       <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0">
         <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
-        <span class="name">${esc(primary.name)}</span>
-        <span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>
+        <span class="lane-main"><span class="name" title="${esc(primary.name)}">${esc(primary.name)}</span><span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span></span>
       </button>
       ${primarySelected ? laneRunHTML(primary) : ''}
     </div>
@@ -1385,16 +1409,17 @@ function paintPanel() {
     if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working: uncommitted changes.${runTitle}"><i></i></span>`;
     else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove: merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
     else mark = `<span class="mark unmerged${flash}${run}" title="Not merged yet.${runTitle}"><i></i></span>`;
+    // #82 any behind reads as warn/bad so it doesn't wash out next to the name
     const meta = l.readiness === 'safe'
       ? `<span class="meta ok">merged</span>`
       : l.behind > 0
-        ? `<span class="meta ${l.behind >= 3 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind} behind</span>`
+        ? `<span class="meta ${l.behind >= 2 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind} behind</span>`
         : `<span class="meta"></span>`;
     const folder = l.folder ? `<span class="folder">${esc(l.folder)}</span>` : '';
     const isSelected = l.index === selected;
     return `<div class="lane-block${isSelected ? ' selected' : ''}">
-      <button class="lane-row${enter}${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}">
-        ${mark}<span class="name">${esc(l.name)}</span>${meta}${folder}
+      <button class="lane-row${enter}${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
+        ${mark}<span class="lane-main"><span class="name">${esc(l.name)}</span>${meta}</span>${folder}
       </button>
       ${isSelected ? laneRunHTML(l) : ''}
     </div>`;
@@ -1439,7 +1464,7 @@ function paintPanel() {
     </div>`;
   }
   html += `<div class="section branch-search">
-    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Search local and remote branches" aria-label="Search local and remote branches" spellcheck="false" autocomplete="off" /></label>
+    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Filter branches" aria-label="Filter local and remote branches" spellcheck="false" autocomplete="off" /></label>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
     <div class="branch-head">
@@ -1450,6 +1475,7 @@ function paintPanel() {
     </button>
     ${branchVsSelectHTML(b)}
     </div>
+    <div class="section-note">Local tips on this Mac</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
@@ -1458,6 +1484,7 @@ function paintPanel() {
       <span class="name">Remotes</span>
       <span class="meta">${remoteMeta}</span>
     </button>
+    <div class="section-note">On the remote only — no local checkout of the same name</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
       remotes.length
         ? remoteBody
@@ -1543,6 +1570,14 @@ function paintPanel() {
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
     });
   });
+  el.panel.querySelectorAll('[data-branch-delete]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const br = branchByName(btn.dataset.branchDelete);
+      if (br) openDeleteBranchSheet(br);
+    });
+  });
 }
 
 // #46 - which tip the branch list counts against. '' = each branch's upstream (default).
@@ -1576,10 +1611,14 @@ function branchVsRef(board) {
 function branchVsSelectHTML(board) {
   if (!board?.baselines?.length) return '';
   const cur = branchVs(board);
-  const opt = (value, label) => `<option value="${esc(value)}"${value === cur ? ' selected' : ''}>vs ${esc(label)}</option>`;
-  return `<select class="select branch-vs" data-branch-vs aria-label="Count branches ahead and behind against" title="What ↓↑ on each branch counts against. Add baselines in Settings → Repository.">
-    ${opt('', 'upstream')}${opt(board.teamBranch, board.teamBranch)}${board.baselines.map((x) => opt(x.name, x.name)).join('')}
-  </select>`;
+  const opt = (value, label) => `<option value="${esc(value)}"${value === cur ? ' selected' : ''}>${esc(label)}</option>`;
+  // #79/#80 clear label + body face; baselines also listed under Settings (#101)
+  return `<label class="branch-vs-wrap" title="What ↓↑ on each branch counts against. Add baselines in Settings → Repository.">
+    <span class="branch-vs-label">Compare</span>
+    <select class="select branch-vs" data-branch-vs aria-label="Count branches ahead and behind against">
+      ${opt('', 'upstream')}${opt(board.teamBranch, board.teamBranch)}${board.baselines.map((x) => opt(x.name, x.name)).join('')}
+    </select>
+  </label>`;
 }
 
 /** { behind, ahead, ref } vs the chosen baseline (or upstream); null when there is nothing to compare to. */
@@ -1631,11 +1670,19 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false) {
     : iconHTML(br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
   // Keep lane selection clickable while the list refreshes; block checkout targets only.
   const block = refreshing && !br.hasLane;
-  return `<button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
-    ${mark}
-    <span class="name">${esc(label)}</span>
-    ${branchMetaHTML(br, board)}
-  </button>`;
+  const kind = br.remote ? 'remote' : 'local';
+  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
+  // #90 visible delete (context menu still works); kind lives on the wrap for styling/copy
+  const del = canDelete
+    ? `<button class="iconbtn branch-del" type="button" data-branch-delete="${esc(br.name)}" title="Delete ${kind} ${esc(br.name)}" aria-label="Delete ${kind} branch ${esc(br.name)}">${iconHTML('x', 'sm')}</button>`
+    : '';
+  return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}" data-branch-kind="${kind}">
+    <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
+      ${mark}
+      <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
+    </button>
+    ${del}
+  </div>`;
 }
 
 function renderBranchListHTML(branches, board, selectedLane, refreshing = false, remote = false) {
@@ -1657,7 +1704,8 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false,
       <span class="name">${esc(entry.key)}/</span>
     </button>`);
     if (open) {
-      parts.push(`<div class="branch-folder-kids">${entry.items.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane, refreshing)).join('')}</div>`);
+      const kids = [...entry.items].sort((a, b) => a.label.localeCompare(b.label));
+      parts.push(`<div class="branch-folder-kids">${kids.map(({ br, label }) => branchRowHTML(br, label, board, selectedLane, refreshing)).join('')}</div>`);
     }
   }
   return parts.join('');
@@ -1704,7 +1752,7 @@ const effectiveEditor = () => {
   return state.editors.find((e) => e.available && e.id !== 'custom')?.id || p;
 };
 const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed', windsurf: 'Windsurf' }[effectiveEditor()] || 'editor');
-const editorIcon = () => EDITOR_ICON[effectiveEditor()] || 'cursor';
+const editorIcon = () => EDITOR_ICON[effectiveEditor()] || 'arrow-square-out';
 
 function editorBtnHTML() {
   const n = editorName();
@@ -1778,11 +1826,10 @@ function paintHeader() {
       </div>
     </div>`;
   } else {
-    const behind = l.readiness === 'safe'
+    // #94 skip behind/up-to-date direction chrome on lanes — keep dirty + authorship only
+    const merged = l.readiness === 'safe'
       ? `<span class="fact ok">${iconHTML('check-circle', 'sm')}<strong>merged</strong> into ${esc(b.teamBranch)}</span>`
-      : l.behind > 0
-        ? `<span class="fact ${l.behind >= 5 ? 'bad' : 'warn'}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${l.behind} behind</strong> ${esc(b.teamBranch)}${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`
-        : `<span class="fact">${iconHTML('cloud-arrow-down', 'sm')}<strong>up to date</strong>${l.ahead ? `, ${l.ahead} ahead` : ''}</span>`;
+      : '';
     const dirty = l.dirty
       ? `<span class="fact warn">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
       : '';
@@ -1793,9 +1840,9 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML('tree-structure')}
-        <div><h1>${esc(l.name)}</h1><div class="path">${esc(l.folder || l.displayPath || l.path)}</div></div>
+        <div><h1 title="${esc(l.name)}">${esc(l.name)}</h1><div class="path" title="${esc(l.folder || l.displayPath || l.path)}">${esc(l.folder || l.displayPath || l.path)}</div></div>
       </div>
-      <div class="facts">${behind}${dirty}${pill}</div>
+      <div class="facts">${merged}${dirty}${pill}</div>
       <div class="actions">
         ${remove}${gitActionsHTML(l)}
         <span class="env-sep"></span>
@@ -2190,9 +2237,11 @@ function panelFootHTML(settingsActive = false) {
       </button>`
     : '';
   return `<div class="panel-foot">
-    <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
-    <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
-    ${updateBtn}
+    <div class="foot-start">
+      <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
+      <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
+      ${updateBtn}
+    </div>
     <button class="foot-link" type="button" data-feedback title="Feedback" aria-label="Feedback">${iconHTML('pencil-simple')}<span>Feedback</span></button>
   </div>`;
 }
@@ -3881,7 +3930,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
         ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
-        ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b?.baselines?.length ? b.baselines.map((x) => `<span class="mono">${esc(x.ref)}</span>`).join(', ') : 'None. The branch list counts against upstream.', b ? baselinesControlHTML(b, root, t.title) : '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Branches header. Stored as local git config plenum.baseline.')}
+        ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b ? baselinesControlHTML(b, root, t.title) : 'Open a repository first.', '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Branches header. Stored as local git config plenum.baseline.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'This repo only. Relative paths sit under the checkout; absolute paths are fine.')}
         ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared = one instance for every lane; snapshot seeds a copy before Run.')}
@@ -4052,7 +4101,7 @@ function teamBranchControlHTML(board, root, title) {
   return `<select class="select mono" data-team-root="${esc(root)}" aria-label="Protected branch for ${esc(title)}">${opts.join('')}</select>`;
 }
 
-/** Removable baselines + an Add select of the remaining branch names (#46). */
+/** Removable baselines as a one-per-line list + Add select (#46, #101). */
 function baselinesControlHTML(board, root, title) {
   const cur = (board.baselines || []).map((x) => x.name);
   const names = new Set();
@@ -4060,11 +4109,19 @@ function baselinesControlHTML(board, root, title) {
     const short = br.short || String(br.name || '').replace(/^origin\//, '');
     if (short && short !== board.teamBranch && !cur.includes(short)) names.add(short);
   }
-  const chips = cur.map((n) => (
-    `<button class="btn mono" type="button" data-baseline-remove="${esc(n)}" data-baseline-root="${esc(root)}" title="Stop comparing against ${esc(n)}" aria-label="Remove baseline ${esc(n)}">${esc(n)}${iconHTML('x', 'sm')}</button>`
-  )).join('');
+  const rows = cur.length
+    ? `<ul class="baseline-list">${cur.map((n) => (
+      `<li class="baseline-row">
+        <span class="mono">${esc(n)}</span>
+        <button class="iconbtn" type="button" data-baseline-remove="${esc(n)}" data-baseline-root="${esc(root)}" title="Stop comparing against ${esc(n)}" aria-label="Remove baseline ${esc(n)}">${iconHTML('x', 'sm')}</button>
+      </li>`
+    )).join('')}</ul>`
+    : `<div class="baseline-empty">No comparison tips yet. Add long-lived tips like demo or staging.</div>`;
   const opts = [...names].sort((a, b) => a.localeCompare(b)).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  return `<span class="row-actions">${chips}<select class="select mono" data-baseline-add="${esc(root)}" aria-label="Add comparison baseline for ${esc(title)}"${opts ? '' : ' disabled'}><option value="">Add…</option>${opts}</select></span>`;
+  return `<div class="baseline-control">
+    ${rows}
+    <select class="select mono" data-baseline-add="${esc(root)}" aria-label="Add comparison baseline for ${esc(title)}"${opts ? '' : ' disabled'}><option value="">Add comparable branch…</option>${opts}</select>
+  </div>`;
 }
 
 function bindRepos(root) {
@@ -4706,8 +4763,8 @@ async function refresh() {
   if (state.store.activeId === tabId) paintPanel();
   let board = null;
   try {
-    // #81 fetch origin at most every 30s so ↓ pull counts track the real remote
-    const fetch = Date.now() - (lastFetchAt.get(root) || 0) > 30000;
+    // #81 / #99 fetch origin at most every 15s so ↓ pull counts track the real remote
+    const fetch = Date.now() - (lastFetchAt.get(root) || 0) > 15000;
     if (fetch) lastFetchAt.set(root, Date.now());
     board = await invoke('board.get', root, { historyLimit: limit, fetch });
   } catch { /* toasted */ }
@@ -4905,6 +4962,13 @@ async function boot() {
   } catch { /* updater optional */ }
   if (typeof api?.onUpdate === 'function') {
     api.onUpdate((u) => applyUpdateState(u));
+  }
+  // #99 refresh as soon as .git changes under the open repo
+  if (typeof api?.onRepoChanged === 'function') {
+    api.onRepoChanged((payload) => {
+      if (!payload?.root || payload.root !== state.board?.root) return;
+      refresh().catch(() => {});
+    });
   }
   if (typeof ResizeObserver !== 'undefined' && el.titlebar) {
     const ro = new ResizeObserver(() => syncSearchCollapse());
