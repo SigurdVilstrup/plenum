@@ -18,6 +18,7 @@ const ALLOWED = new Set([
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',
   'prefs.get', 'prefs.set', 'git.identity.get', 'git.identity.set',
   'feedback.capture', 'feedback.save', 'feedback.send', 'feedback.checkin', 'feedback.queue', 'feedback.retry',
+  'github.star',
   'app.version', 'app.update.state', 'app.update.check', 'app.update.download',
   'app.update.install', 'app.update.act',
   'os.editors', 'os.diffMergeTools',

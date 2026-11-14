@@ -94,7 +94,7 @@ function sanitize(partial) {
     else if (k === 'nudge') {
       if (!v || typeof v !== 'object') continue;
       const o = {};
-      for (const f of ['firstSeenAt', 'lastShownAt', 'checkinAt', 'updatedAt', 'pathAskedAt']) {
+      for (const f of ['firstSeenAt', 'lastShownAt', 'checkinAt', 'updatedAt', 'pathAskedAt', 'starAskedAt']) {
         if (v[f] === null || Number.isFinite(v[f])) o[f] = v[f];
       }
       if (typeof v.seenVersion === 'string') o.seenVersion = v.seenVersion.slice(0, 40);

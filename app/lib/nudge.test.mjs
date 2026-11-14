@@ -30,9 +30,10 @@ test('pending update ask expires', () => {
   assert.equal(pickNudge(base(n)), null);
 });
 
-test('check-in: not in the first days, then roughly monthly, and prompts keep a gap', () => {
+test('check-in: not in the first week, then roughly monthly, and prompts keep a gap', () => {
   assert.equal(pickNudge(base({ firstSeenAt: T - 2 * DAY })), null);
-  assert.equal(pickNudge(base({ firstSeenAt: T - 6 * DAY })), 'checkin');
+  assert.equal(pickNudge(base({ firstSeenAt: T - 6 * DAY })), null);
+  assert.equal(pickNudge(base({ firstSeenAt: T - 8 * DAY })), 'checkin');
   assert.equal(pickNudge(base({ firstSeenAt: T - 90 * DAY, checkinAt: T - 10 * DAY })), null);
   assert.equal(pickNudge(base({ firstSeenAt: T - 90 * DAY, checkinAt: T - 31 * DAY })), 'checkin');
   assert.equal(pickNudge(base({ firstSeenAt: T - 90 * DAY, lastShownAt: T - DAY })), null);

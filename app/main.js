@@ -3901,7 +3901,7 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Feedback</div>
       <div class="list">
-        ${settingsRow('pencil-simple', 'Feedback prompts', '', 'A rare check-in, and Report on errors', switchHTML('feedbackPrompts', p.feedbackPrompts !== false, 'Feedback prompts'), 'About once a month, and once after an update, a small card asks how Plenum is going. It waits until you have been idle for a while, never covers your work, and fades by itself. Off also hides the Report link on errors. Feedback in the palette always works.')}
+        ${settingsRow('pencil-simple', 'Feedback prompts', '', 'A rare check-in, and Report on errors', switchHTML('feedbackPrompts', p.feedbackPrompts !== false, 'Feedback prompts'), 'After about a week, then roughly monthly and once after an update, a small card asks how Plenum is going. Good may ask for a GitHub star once; Not great asks what is off. It waits until you have been idle, never covers your work, and fades by itself. Off also hides the Report link on errors. Feedback in the palette always works.')}
         <div data-feedback-queue style="display: contents"></div>
       </div>
 `;
@@ -4972,6 +4972,73 @@ function showPathNudge() {
   nudgeFade = setTimeout(hideNudge, 30_000);
 }
 
+async function markStarAsked() {
+  const now = Date.now();
+  await saveQuietPrefs({ nudge: { ...(state.prefs.nudge || {}), starAskedAt: now } });
+}
+
+function armNudgeFade(card, onFade) {
+  clearTimeout(nudgeFade);
+  nudgeFade = setTimeout(() => {
+    hideNudge();
+    onFade?.();
+  }, 30_000);
+  card.querySelector('[data-nudge-x]')?.addEventListener('click', () => {
+    hideNudge();
+    onFade?.();
+  }, { once: true });
+}
+
+function showStarAsk(card) {
+  const head = card.querySelector('.nudge-head');
+  head.innerHTML = `<div><strong>Glad it’s working.</strong>
+      <p class="nudge-sub">A star on GitHub helps a lot.</p></div>
+      <button class="iconbtn" type="button" data-nudge-x aria-label="Dismiss" title="Dismiss">${iconHTML('x', 'sm')}</button>`;
+  const body = card.querySelector('.nudge-body');
+  body.innerHTML = `<button class="btn primary" type="button" data-nudge-star>${iconHTML('github-logo', 'sm')} Star on GitHub</button>
+      <button class="nudge-off" type="button" data-nudge-later>Not now</button>`;
+  const done = () => { markStarAsked().catch(() => {}); };
+  armNudgeFade(card, done);
+  card.querySelector('[data-nudge-later]').addEventListener('click', () => { hideNudge(); done(); });
+  card.querySelector('[data-nudge-star]').addEventListener('click', async () => {
+    const btn = card.querySelector('[data-nudge-star]');
+    btn.disabled = true;
+    clearTimeout(nudgeFade);
+    try {
+      const res = await invoke('github.star');
+      await markStarAsked();
+      hideNudge();
+      toast(res?.via === 'gh' ? 'Starred. Thanks.' : 'Opened GitHub. Thanks if you star it.', 'ok');
+    } catch {
+      btn.disabled = false;
+      armNudgeFade(card, done);
+    }
+  });
+}
+
+function showDownAsk(card, kind) {
+  const head = card.querySelector('.nudge-head');
+  head.innerHTML = `<strong>Sorry about that. What’s off?</strong>
+      <button class="iconbtn" type="button" data-nudge-x aria-label="Dismiss" title="Dismiss">${iconHTML('x', 'sm')}</button>`;
+  const body = card.querySelector('.nudge-body');
+  body.innerHTML = `<input class="input" type="text" maxlength="500" placeholder="What’s not working?" aria-label="What’s not working" />
+      <button class="btn primary" type="button" data-nudge-send>Send</button>`;
+  armNudgeFade(card);
+  const input = body.querySelector('input');
+  const send = async (comment) => {
+    const btn = body.querySelector('[data-nudge-send]');
+    btn.disabled = true;
+    try {
+      await invoke('feedback.checkin', { rating: 'down', context: kind, comment });
+      hideNudge();
+      toast('Thanks.', 'ok');
+    } catch { btn.disabled = false; /* invoke already toasted */ }
+  };
+  body.querySelector('[data-nudge-send]').addEventListener('click', () => send(input.value));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(input.value); } });
+  input.focus();
+}
+
 function showNudge(kind) {
   if (kind === 'path') return showPathNudge();
   const v = state.appInfo?.version;
@@ -4991,35 +5058,34 @@ function showNudge(kind) {
       <button class="nudge-off" type="button" data-nudge-off title="Settings → General turns them back on">Stop asking</button>
     </div>`;
   (document.querySelector('.window.app') || document.body).appendChild(card);
-  card.querySelector('[data-nudge-x]').addEventListener('click', hideNudge);
+  armNudgeFade(card);
   card.querySelector('[data-nudge-off]').addEventListener('click', async () => {
     hideNudge();
     await saveQuietPrefs({ feedbackPrompts: false });
     toast('Prompts off. Settings → General turns them back on.');
   });
-  card.querySelectorAll('[data-rate]').forEach((b) => b.addEventListener('click', () => {
+  card.querySelectorAll('[data-rate]').forEach((b) => b.addEventListener('click', async () => {
     clearTimeout(nudgeFade);
     const rating = b.dataset.rate;
-    card.querySelector('.nudge-head strong').textContent = rating === 'up' ? 'Glad to hear it.' : 'Sorry about that.';
-    const body = card.querySelector('.nudge-body');
-    body.innerHTML = `<input class="input" type="text" maxlength="500" placeholder="Anything to add? (optional)" aria-label="Anything to add" />
-      <button class="btn primary" type="button" data-nudge-send>Send</button>`;
-    const input = body.querySelector('input');
-    const send = async (comment) => {
-      const btn = body.querySelector('[data-nudge-send]');
-      btn.disabled = true;
+    card.querySelectorAll('[data-rate], [data-nudge-off]').forEach((el) => { el.disabled = true; });
+    if (rating === 'up') {
       try {
-        await invoke('feedback.checkin', { rating, context: kind, comment });
+        await invoke('feedback.checkin', { rating: 'up', context: kind, comment: '' });
+      } catch {
+        card.querySelectorAll('[data-rate], [data-nudge-off]').forEach((el) => { el.disabled = false; });
+        armNudgeFade(card);
+        return;
+      }
+      if (state.prefs.nudge?.starAskedAt) {
         hideNudge();
         toast('Thanks.', 'ok');
-      } catch { btn.disabled = false; /* invoke already toasted */ }
-    };
-    body.querySelector('[data-nudge-send]').addEventListener('click', () => send(input.value));
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(input.value); } });
-    input.focus();
+        return;
+      }
+      showStarAsk(card);
+      return;
+    }
+    showDownAsk(card, kind);
   }));
-  // Ignoring it is an answer: it fades on its own.
-  nudgeFade = setTimeout(hideNudge, 30_000);
 }
 
 function nudgeTick() {

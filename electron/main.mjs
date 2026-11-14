@@ -35,6 +35,7 @@ import { createUpdater } from './updates.mjs';
 import { ensureLauncher, launcherPath, pathStatus, linkOnPath } from './agents/launcher.mjs';
 import { agentsHome, getAgentSettings, setAgentSettings } from './agents/settings.mjs';
 import { listClients, previewAdd, addClient, removeClient } from './agents/clients.mjs';
+import { starPlenumRepo } from './github-star.mjs';
 
 loadRepoEnv();
 
@@ -461,6 +462,11 @@ ipcMain.handle('os.openExternal', (_e, url) => {
   }
   return shell.openExternal(parsed.href);
 });
+
+/** Try `gh api` to star the public repo; fall back to opening GitHub in the browser. */
+ipcMain.handle('github.star', () => starPlenumRepo({
+  openExternal: (url) => shell.openExternal(url),
+}));
 
 const home = process.env.HOME || '';
 const EDITORS = {

@@ -10,7 +10,7 @@ export const NUDGE = {
   checkinSessionMs: 20 * MIN,
   pathSessionMs: 2 * MIN,  // app open this long before the one-time PATH hint
   gapMs: 3 * DAY,          // between any two prompts
-  checkinAfterMs: 5 * DAY, // first check-in, from first launch
+  checkinAfterMs: 7 * DAY, // first check-in, from first launch (~a week)
   checkinEveryMs: 30 * DAY,
   pendingMs: 7 * DAY,      // an unanswered post-update ask expires
 };
