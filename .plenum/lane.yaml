@@ -1,0 +1,9 @@
+version: 1
+setup: "npm install"
+run: "npm run dev"
+test: "npm test"
+env:
+  copy:
+ports:
+  offset: 100
+  expose:

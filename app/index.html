@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws://localhost:5173 http://localhost:5173; img-src 'self' data: plenum-img: https://www.gravatar.com https://secure.gravatar.com" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plenum</title>
+    <link rel="icon" href="./app-icon-16.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles/mock.css" />
+    <link rel="stylesheet" href="./styles/app.css" />
+  </head>
+  <body class="app-shell">
+    <div class="window app">
+      <header class="titlebar">
+        <div class="traffic spacer" aria-hidden="true"></div>
+        <nav class="tabstrip" id="tabstrip" aria-label="Open repositories">
+          <button class="tab-scroll prev" type="button" id="tab-scroll-prev" hidden aria-label="Scroll tabs left">
+            <svg class="icon sm flip" aria-hidden="true"><use href="#i-caret-right"></use></svg>
+          </button>
+          <div class="tabstrip-viewport" id="tabstrip-viewport">
+            <div class="tabstrip-scroll" id="tabstrip-scroll"></div>
+            <div class="tabstrip-edge left" id="tabstrip-edge-left" hidden aria-hidden="true"></div>
+            <div class="tabstrip-edge right" id="tabstrip-edge-right" hidden aria-hidden="true"></div>
+          </div>
+          <button class="tab-scroll add" type="button" id="tab-add" aria-label="Add repository">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-plus"></use></svg>
+          </button>
+          <button class="tab-scroll next" type="button" id="tab-scroll-next" hidden aria-label="Scroll tabs right">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-caret-right"></use></svg>
+          </button>
+        </nav>
+        <div class="title-actions">
+          <button class="searchbtn" type="button" data-palette-open title="Jump to a lane, branch, file, or command">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-magnifying-glass"></use></svg>
+            <span>Jump to lane, branch, file…</span>
+            <kbd>⌘P</kbd>
+          </button>
+          <div class="brand">
+            <div class="appmark" aria-label="Plenum">
+              <svg aria-hidden="true"><use href="#i-plenum"></use></svg>
+            </div>
+            <div class="app-version mono muted" id="app-version" hidden></div>
+            <span class="beta-mark" id="app-beta" title="Plenum is in beta" hidden>BETA</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="body" id="body">
+        <div class="loading-screen is-skeleton" id="loading" hidden>
+          <div class="loading-card">
+            <svg class="loading-logo" viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+              <path d="M12.50,6.00 L11.24,6.29 L9.98,6.97 L8.91,8.13 L8.23,10.27 L8.23,12.01 L8.91,14.05 L9.88,15.22 L11.63,16.09 L12.99,16.28 L30.74,16.19 L32.58,16.57 L33.55,17.16 L53.54,17.16 L51.50,16.38 L41.22,16.38 L38.99,15.60 L37.63,14.44 L36.75,12.99 L36.17,9.78 L35.40,8.13 L34.33,7.07 L32.49,6.19 L31.42,6.00 Z"/>
+              <path d="M10.07,15.31 L11.04,15.90 L12.99,16.28 L30.74,16.19 L32.00,16.38 L33.75,17.25 L34.72,18.22 L35.49,19.68 L35.78,21.04 L35.69,22.88 L35.20,24.24 L34.13,25.60 L32.68,26.47 L31.81,26.66 L12.99,26.66 L11.63,26.96 L10.17,27.83 L37.72,27.83 L38.99,26.96 L40.73,26.47 L51.60,26.47 L53.05,26.08 L54.22,25.31 L55.28,23.85 L55.67,22.69 L55.77,20.84 L55.09,18.71 L53.44,17.06 L51.50,16.38 L41.22,16.38 L39.76,15.99 L38.60,15.31 Z"/>
+              <path d="M33.55,25.99 L31.81,26.66 L12.99,26.66 L11.92,26.86 L9.98,27.93 L9.01,29.09 L8.23,31.32 L8.43,33.75 L9.01,35.01 L9.88,35.98 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.39,37.43 L33.65,38.21 L53.63,38.21 L52.57,37.63 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.31,36.46 L37.14,35.49 L36.27,34.23 L35.78,32.58 L35.88,30.74 L36.56,29.09 L37.63,27.83 L39.47,26.76 L40.73,26.47 L51.60,26.47 L53.15,25.99 Z"/>
+              <path d="M10.46,36.37 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.10,37.34 L33.84,38.31 L35.10,39.86 L35.69,41.41 L35.78,43.54 L35.40,45.00 L34.52,46.36 L33.55,47.13 L32.00,47.72 L12.31,47.81 L11.24,48.10 L10.27,48.69 L38.01,48.69 L39.28,47.91 L40.83,47.52 L51.79,47.52 L53.83,46.75 L54.99,45.49 L55.67,43.84 L55.67,41.31 L54.90,39.47 L53.25,37.92 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.21,36.37 Z"/>
+              <path d="M33.94,46.84 L32.78,47.52 L31.13,47.81 L11.82,47.91 L9.98,48.88 L8.72,50.53 L8.23,52.47 L8.52,54.80 L9.10,55.96 L10.27,57.13 L11.63,57.81 L12.60,58.00 L31.13,58.00 L32.10,57.81 L33.26,57.32 L34.72,56.06 L35.59,54.41 L36.27,50.82 L37.04,49.56 L38.50,48.30 L40.83,47.52 L51.79,47.52 L53.63,46.84 Z"/>
+            </svg>
+            <p id="loading-title">Opening repository…</p>
+            <p class="mono muted" id="loading-path"></p>
+            <div class="loading-skeleton" aria-hidden="true">
+              <div class="sk h18 w60"></div>
+              <div class="sk w80"></div>
+              <div class="sk w40"></div>
+              <div class="sk w80"></div>
+              <div class="sk w60"></div>
+            </div>
+          </div>
+        </div>
+        <div class="empty-screen" id="empty">
+          <img class="empty-logo" src="./plenum-icon.svg" width="56" height="56" alt="" />
+          <p>Open a repository to see its lanes.</p>
+          <button class="btn primary" type="button" id="open-repo">Open Repository…</button>
+          <p class="muted">New here? <button class="linkbtn" type="button" data-tour>Quick start</button> · stuck anywhere, press <kbd>⌘P</kbd></p>
+        </div>
+        <header class="board-toolbar lane-head" id="lane-head" aria-label="Selected lane" hidden></header>
+        <aside class="panel" id="panel" aria-label="Lanes" hidden></aside>
+        <main class="main" id="main" hidden>
+          <section class="graph" aria-label="Commit graph">
+            <div class="graph-cols" aria-hidden="true">
+              <span>Graph</span><span title="Author"></span><span>Commit</span><span>SHA</span><span>When</span>
+            </div>
+            <div class="rows" id="rows" role="table" aria-label="Commits, newest first"></div>
+          </section>
+          <section class="file-stage" id="file-stage" aria-label="File view" hidden></section>
+        </main>
+        <aside class="changes" id="changes" aria-label="Changed files" hidden></aside>
+        <div class="settings" id="settings" hidden>
+          <nav class="settings-nav" id="settings-nav" aria-label="Settings sections"></nav>
+          <section class="settings-body" id="settings-body"></section>
+        </div>
+      </div>
+
+      <div class="palette-layer" id="palette-layer" role="dialog" aria-label="Command palette" hidden>
+        <div class="palette">
+          <div class="search">
+            <svg class="icon" aria-hidden="true"><use href="#i-magnifying-glass"></use></svg>
+            <input type="text" id="palette-input" placeholder="Lane, branch, file, repo, or command" aria-label="Search" />
+            <kbd>esc</kbd>
+          </div>
+          <div class="results" id="palette-results"></div>
+          <div class="foot">
+            <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>⌘P</kbd> toggles</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-layer" id="sheet-layer"></div>
+      <div class="toast" id="toast" hidden></div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

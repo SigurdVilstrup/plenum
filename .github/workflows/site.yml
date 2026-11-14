@@ -1,0 +1,27 @@
+name: Site
+
+# Uploads site/ to the plenum.sh web root. Never touches updates/ (the app's update feed):
+# the action only syncs files it has uploaded itself, tracked in a state file on the server.
+on:
+  push:
+    branches: [main]
+    paths: ['site/**']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: FTP upload to plenum.sh
+        uses: SamKirkland/FTP-Deploy-Action@a51268f67f6605236975928ae28b0f7e9971d50a # v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./site/
+          # Folder served at https://plenum.sh/ (the parent of updates/), trailing slash.
+          server-dir: ${{ secrets.FTP_SITE_DIR }}
+          dangerous-clean-slate: false

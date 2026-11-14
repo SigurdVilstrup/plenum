@@ -1,0 +1,13 @@
+# Plenum feedback relay. Project region: eu-central-1 (Frankfurt).
+
+[project]
+id = "plenum"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[functions.submit-feedback]
+verify_jwt = false

@@ -1,0 +1,6 @@
+version: 1
+run: npm start
+ports:
+  offset: 100
+  expose:
+    web: 5001

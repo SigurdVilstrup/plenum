@@ -1,0 +1,18 @@
+.DS_Store
+.build/
+.swiftpm/
+node_modules/
+dist/
+release/
+tmp/
+.worktrees/
+*.log
+
+# Local secrets / machine config (see .env.example).
+.env
+.env.local
+
+# Stamped on build/dev — not source of truth in git.
+electron/build-info.json
+
+supabase/.temp/

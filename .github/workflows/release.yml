@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags, for the release notes
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Release notes = commit headers since the previous tag
+        run: |
+          set -euo pipefail
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          # electron-builder picks build/release-notes.md up and writes it into latest-mac.yml.
+          git log -30 --no-merges --format='- %s' ${prev:+"$prev..${GITHUB_REF_NAME}"} \
+            | grep -Ev '^- v?[0-9]+\.[0-9]+\.[0-9]+$' > build/release-notes.md || true
+          cat build/release-notes.md
+
+      - name: Write App Store Connect API key
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          KEY_DIR="${RUNNER_TEMP}/private_keys"
+          mkdir -p "$KEY_DIR"
+          # notarytool expects a path to the .p8, not the PEM contents.
+          KEY_PATH="${KEY_DIR}/AuthKey_${APPLE_API_KEY_ID}.p8"
+          # Secret holds the .p8 PEM; notarytool needs a filesystem path.
+          printenv APPLE_API_KEY > "$KEY_PATH"
+          echo "APPLE_API_KEY=${KEY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Build Mac DMG + updater zip (signed + notarized)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        # Emits dmg/zip/blockmap + latest-mac.yml (generic feed → https://plenum.sh/updates/).
+        # APPLE_API_KEY is the file path from the previous step (GITHUB_ENV).
+        run: npm run build && npx electron-builder --mac --publish never
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Stage public update feed
+        run: |
+          set -euo pipefail
+          mkdir -p release-ftp
+          cp release/latest-mac.yml release-ftp/
+          cp release/*.zip release-ftp/
+          cp release/*.blockmap release-ftp/ 2>/dev/null || true
+          # Stable first-install name for the landing “Download” link.
+          dmg=$(ls release/*.dmg | head -1)
+          cp "$dmg" release-ftp/Plenum.dmg
+          cp "$dmg" "release-ftp/$(basename "$dmg")"
+          ls -la release-ftp
+
+      - name: FTP upload to plenum.sh/updates
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./release-ftp/
+          # e.g. public_html/updates/ — must be the dir served at https://plenum.sh/updates/
+          server-dir: ${{ secrets.FTP_UPDATES_DIR }}
+          dangerous-clean-slate: false
