@@ -2175,7 +2175,7 @@ function openWarmSheet() {
   });
 }
 
-let feedbackDraft = { comment: '', target: null, credit: false };
+let feedbackDraft = { comment: '', target: null, credit: false, viaGh: false };
 
 /** Effective git email for optional feedback credit (local override, else global). */
 function feedbackCreditEmail() {
@@ -2245,7 +2245,7 @@ function startFeedbackPick() {
     e.stopPropagation();
     const node = hitAt(e.clientX, e.clientY);
     stopFeedbackPick();
-    const creditSeed = { credit: !!feedbackDraft.credit };
+    const creditSeed = { credit: !!feedbackDraft.credit, viaGh: !!feedbackDraft.viaGh };
     if (!node) {
       openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target, ...creditSeed });
       return;
@@ -2376,9 +2376,12 @@ async function captureFeedbackPreview(target) {
 
 async function openFeedbackSheet(seed = {}) {
   const email = await ensureFeedbackIdentity();
+  let ghAvailable = false;
+  try { ghAvailable = !!(await invoke('feedback.ghAvailable')); } catch { ghAvailable = false; }
   const target = seed.target || null;
   const comment = seed.comment ?? '';
   const creditOn = !!seed.credit && !!email;
+  const viaGh = !!seed.viaGh && ghAvailable;
   const chip = target?.label
     ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
     : `<span class="feedback-target-chip muted">No element selected</span>`;
@@ -2389,8 +2392,18 @@ async function openFeedbackSheet(seed = {}) {
   const creditHint = email
     ? ''
     : `<p class="feedback-credit-hint">Add an email in Settings → Accounts first.</p>`;
+  const pathRow = ghAvailable
+    ? `<div class="field">
+        <span>Create as</span>
+        <div class="option-row" role="group" aria-label="How to create the issue">
+          <button class="option${!viaGh ? ' on' : ''}" type="button" aria-pressed="${!viaGh}" data-feedback-via="relay">Plenum (default)</button>
+          <button class="option${viaGh ? ' on' : ''}" type="button" aria-pressed="${viaGh}" data-feedback-via="gh">Your GitHub CLI</button>
+        </div>
+        <p class="feedback-credit-hint">GitHub CLI posts the public issue as you. The screenshot stays on this Mac.</p>
+      </div>`
+    : '';
   openSheet(`
-    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
+    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore data-via="${viaGh ? 'gh' : 'relay'}">
       <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
       <h1 id="feedback-title">What’s broken?</h1>
       <label class="field">Comment<textarea name="comment" rows="3" required autofocus placeholder="What happened?">${esc(comment)}</textarea></label>
@@ -2418,7 +2431,8 @@ async function openFeedbackSheet(seed = {}) {
         </label>
         ${creditHint}
       </div>
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Goes to the Plenum team. Your <code>repoPath</code> stays on this Mac.</span></p>
+      ${pathRow}
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
         <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>⌘↩</kbd></button>
@@ -2449,6 +2463,16 @@ async function openFeedbackSheet(seed = {}) {
     paintSendLabel(on);
   };
 
+  form.querySelectorAll('[data-feedback-via]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.feedbackVia;
+    form.dataset.via = v;
+    form.querySelectorAll('[data-feedback-via]').forEach((x) => {
+      const on = x.dataset.feedbackVia === v;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }));
+
   const refreshPreview = async () => {
     try {
       const b64 = await captureFeedbackPreview(target);
@@ -2467,6 +2491,21 @@ async function openFeedbackSheet(seed = {}) {
   if (!previewSrc) refreshPreview();
   else feedbackPreviewPng = previewSrc;
 
+  const toastSent = (sent) => {
+    const link = sent?.issueUrl
+      ? { url: sent.issueUrl, label: sent.issueNumber != null ? `#${sent.issueNumber}` : 'Open issue' }
+      : null;
+    if (sent?.via === 'gh') {
+      toast('Opened as a public GitHub issue. Thanks.', 'ok', { link });
+      return;
+    }
+    if (sent?.screenshot === false) {
+      toast('Sent, but the screenshot didn’t upload. Thanks.', 'ok', { link });
+      return;
+    }
+    toast('Sent. Thanks.', 'ok', { link });
+  };
+
   const send = async () => {
     if (sendBtn.disabled) return;
     const text = ta.value.trim();
@@ -2479,11 +2518,13 @@ async function openFeedbackSheet(seed = {}) {
       toast('Add an email in Settings → Accounts, or leave credit off.', 'bad');
       return;
     }
+    const useGh = form.dataset.via === 'gh';
     const draft = {
       comment: text,
       target,
       credit: wantCredit,
       pngBase64: feedbackPreviewPng,
+      viaGh: useGh,
     };
     setSendBusy(true);
     try {
@@ -2496,17 +2537,21 @@ async function openFeedbackSheet(seed = {}) {
         pngBase64,
       });
       try {
-        const sent = await invoke('feedback.send', dir);
+        const sent = await invoke(useGh ? 'feedback.sendViaGh' : 'feedback.send', dir);
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast(sent?.screenshot === false ? 'Sent, but the screenshot didn’t upload. Thanks.' : 'Sent. Thanks.', 'ok');
-      } catch {
-        // Saved locally; main retries unsent reports on launch and every 15 min.
+        toastSent(sent);
+      } catch (e) {
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
+        if (useGh) {
+          toast(e.message || 'Couldn’t create the GitHub issue. Try Plenum send, or check `gh auth status`.', 'bad');
+        } else {
+          // Saved locally; main retries unsent reports on launch and every 15 min.
+          toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
+        }
       }
     } catch (e) {
       setSendBusy(false);
@@ -2521,6 +2566,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target,
       credit: !!credit?.checked,
+      viaGh: form.dataset.via === 'gh',
     };
     feedbackPreviewPng = null;
     closeSheet();
@@ -2532,6 +2578,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target: null,
       credit: !!credit?.checked,
+      viaGh: form.dataset.via === 'gh',
     });
   });
   ta.focus();
@@ -4241,6 +4288,9 @@ async function loadStats() {
   statsView.root = tab.path;
   statsView.loading = true;
   if (statsView.data?.root !== tab.path) statsView.data = null;
+  if (!state.identity) {
+    try { state.identity = await invoke('git.identity.get'); } catch { /* leave prior */ }
+  }
   rerenderStats();
   try {
     const data = await invoke('stats.get', tab.path, statsView.scope);
@@ -4263,6 +4313,12 @@ function bindStats(root) {
     statsView.scope = b.dataset.statsScope;
     loadStats();
   }));
+  root.querySelectorAll('[data-stats-fame]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.statsFame;
+    if ((state.prefs.statsFame || 'mine') === v) return;
+    setPref({ statsFame: v });
+    rerenderStats();
+  }));
 }
 
 // Award id -> [icon, token colour]. Only design-system colours: agent, human, lane 2-4.
@@ -4275,6 +4331,28 @@ const AWARD_LOOK = {
 
 // Human is the app's human blue, agents follow in order, so a tool keeps its colour on every chart.
 const STAT_COLORS = ['var(--human)', 'var(--agent)', 'var(--lane-2)', 'var(--lane-3)', 'var(--lane-4)', 'var(--ink-tertiary)', 'var(--ink-subtle)'];
+
+function statsIdentity() {
+  const id = state.identity;
+  if (!id) return { name: '', email: '' };
+  const local = id.local?.email || id.local?.name ? id.local : null;
+  const pick = local || id.global || {};
+  return { name: String(pick.name || '').trim(), email: String(pick.email || '').trim().toLowerCase() };
+}
+
+function awardIsMine(a, me) {
+  if (a.scope === 'repo') return false;
+  const email = String(a.email || '').trim().toLowerCase();
+  if (me.email && email && email === me.email) return true;
+  if (me.name && a.who && a.who === me.name) return true;
+  return false;
+}
+
+function awardRowHTML(a) {
+  const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
+  const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
+  return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
+}
 
 function statsPageHTML() {
   const s = statsView.data;
@@ -4307,13 +4385,23 @@ function statsPageHTML() {
     settingsRow('clock', 'Per active day', '', `${n(s.activeDays)} active day${s.activeDays === 1 ? '' : 's'}`, `<span class="stat-num"><b>${s.perActiveDay.toFixed(1)}</b></span>`),
   ].join('')}</div>`;
 
-  // Only earned titles; no section when there are none.
-  const awardRows = s.awards.map((a) => {
-    const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
-    const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
-    return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
-  }).join('');
-  const awards = awardRows ? `<div class="group-head">Hall of fame<small>Earned, not awarded.</small></div><div class="list">${awardRows}</div>` : '';
+  // Hall of fame: yours + repo by default; everyone is opt-in (#106).
+  const fameMode = state.prefs.statsFame === 'all' ? 'all' : 'mine';
+  const me = statsIdentity();
+  const mine = s.awards.filter((a) => awardIsMine(a, me));
+  const repoAwards = s.awards.filter((a) => a.scope === 'repo');
+  const others = s.awards.filter((a) => a.scope === 'person' && !awardIsMine(a, me));
+  const fameToggle = `<div class="option-row" role="group" aria-label="Hall of fame">${[['mine', 'Yours + repo'], ['all', 'Everyone']].map(([v, t]) =>
+    `<button class="option${fameMode === v ? ' on' : ''}" type="button" aria-pressed="${fameMode === v}" data-stats-fame="${v}">${t}</button>`).join('')}</div>`;
+  const block = (title, detail, list) => list.length
+    ? `<div class="group-head">${title}<small>${detail}</small></div><div class="list">${list.map(awardRowHTML).join('')}</div>`
+    : '';
+  const awards = (mine.length || repoAwards.length || (fameMode === 'all' && others.length))
+    ? `${fameToggle}
+      ${block('Your titles', me.email || me.name ? `Matched to ${esc(me.email || me.name)}.` : 'Set a git email in Accounts to claim titles.', mine)}
+      ${block('The repo', 'About the history, not a person.', repoAwards)}
+      ${fameMode === 'all' ? block('Everyone else', 'Competitive titles across contributors.', others) : ''}`
+    : `<div class="group-head">Hall of fame<small>Nothing earned yet on this history.</small></div>${fameToggle}`;
 
   // Agents over time: one stacked bar per week, last 52 weeks.
   const wk = s.weekly.weeks;
@@ -4349,9 +4437,21 @@ function statsPageHTML() {
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const hot = Math.max(1, ...s.heat.flat());
-  const heat = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour">${s.heat.map((row, d) =>
-    `<span class="d">${days[d]}</span>${row.map((v, h) => `<i style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}"></i>`).join('')}`).join('')}
-    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? h : ''}</span>`).join('')}</div>`;
+  const peak = s.heatPeak;
+  const peakLabel = peak
+    ? `${days[peak.day]} ${String(peak.hour).padStart(2, '0')}:00`
+    : '';
+  const heatRead = peak
+    ? `<p class="stat-heat-read">Peak slot <b>${peakLabel}</b> · ${n(peak.n)} commit${peak.n === 1 ? '' : 's'}. Darker cells are busier; outlined cell is the peak.</p>`
+    : `<p class="stat-heat-read">No commits on this history yet.</p>`;
+  const heatGrid = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour${peak ? `, peak ${peakLabel}` : ''}">${s.heat.map((row, d) =>
+    `<span class="d">${days[d]}</span>${row.map((v, h) => {
+      const isPeak = peak && peak.day === d && peak.hour === h;
+      return `<i class="${isPeak ? 'peak' : ''}" style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}${isPeak ? ' · peak' : ''}"></i>`;
+    }).join('')}`).join('')}
+    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? String(h).padStart(2, '0') : ''}</span>`).join('')}</div>`;
+  const heatLegend = `<div class="stat-heat-legend" aria-hidden="true"><span>Quiet</span><span class="scale">${[0.05, 0.25, 0.5, 0.75, 1].map((a) => `<i style="--a:${a}"></i>`).join('')}</span><span>Busy</span></div>`;
+  const heat = `<div class="stat-heat-wrap">${heatRead}${heatGrid}${heatLegend}</div>`;
 
   return `${head}
     ${hero}${facts}
@@ -4359,7 +4459,7 @@ function statsPageHTML() {
     ${over ? `<div class="group-head">Agents over time<small>Commits per ${s.weekly.unit}, last ${wk.length} ${s.weekly.unit}s.</small></div>${over}` : ''}
     <div class="group-head">Commits per day<small>Last ${s.series.length} days.</small></div>${daily}
     <div class="group-head">Who writes the most code<small>Lines added, merges left out. Two git identities for one person? Merge them with a <span class="mono">.mailmap</span>.</small></div><div class="list">${people}</div>
-    <div class="group-head">When it happens<small>Commits by weekday and hour, your local time.</small></div>${heat}`;
+    <div class="group-head">When it happens<small>Weekday × hour in your local time — denser cells mean more commits.</small></div>${heat}`;
 }
 
 function rerenderAgents() {
@@ -4730,6 +4830,7 @@ document.addEventListener('keydown', (e) => {
         comment: feedbackDraft.comment,
         target: feedbackDraft.target,
         credit: !!feedbackDraft.credit,
+        viaGh: !!feedbackDraft.viaGh,
       });
       return;
     }

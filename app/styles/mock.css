@@ -3422,9 +3422,16 @@ a.btn {
 .bar i { display: block; height: 100%; border-radius: 3px; background: var(--ink-subtle); }
 .stat-num { min-width: 120px; text-align: right; color: var(--ink-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stat-num b { color: var(--ink); font-weight: 500; }
-.stat-heat { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 3px; align-items: center; border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--surface-1); padding: 12px 14px; }
+.stat-heat-wrap { border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--surface-1); padding: 12px 14px; }
+.stat-heat-read { margin: 0 0 10px; color: var(--ink-subtle); font-size: 12px; line-height: 1.4; }
+.stat-heat-read b { color: var(--ink); font-weight: 500; }
+.stat-heat { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 3px; align-items: center; }
 .stat-heat i { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink-subtle) calc(var(--a) * 100%), var(--hairline)); }
-.stat-heat .d, .stat-heat .h { color: var(--ink-tertiary); font-size: 10px; }
+.stat-heat i.peak { outline: 1px solid var(--primary); outline-offset: 0; background: color-mix(in srgb, var(--primary) calc(40% + var(--a) * 60%), var(--hairline)); }
+.stat-heat .d, .stat-heat .h { color: var(--ink-tertiary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.stat-heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink-tertiary); font-size: 11px; }
+.stat-heat-legend .scale { display: inline-grid; grid-template-columns: repeat(5, 10px); gap: 2px; }
+.stat-heat-legend .scale i { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink-subtle) calc(var(--a) * 100%), var(--hairline)); }
 .list-row .name .ai-pill-icon { margin-right: 6px; vertical-align: -2px; }
 .list-row .quip { display: block; margin-top: 1px; color: var(--ink-tertiary); font-style: italic; }
 

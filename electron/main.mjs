@@ -25,6 +25,8 @@ import {
   collectFeedbackEnv,
   sanitizeReporterEmail,
   sendFeedbackReport,
+  sendFeedbackViaGh,
+  ghFeedbackAvailable,
   retryUnsentFeedback,
   listUnsentFeedback,
   sendCheckin,
@@ -374,7 +376,7 @@ ipcMain.handle('feedback.retry', async () => {
   return { sent, left: listUnsentFeedback(prefsDir()).length };
 });
 
-ipcMain.handle('feedback.send', async (_e, dir) => {
+function assertFeedbackDir(dir) {
   const root = path.resolve(prefsDir(), 'feedback');
   const reportDir = path.resolve(String(dir || ''));
   if (reportDir !== root && !reportDir.startsWith(root + path.sep)) {
@@ -383,12 +385,31 @@ ipcMain.handle('feedback.send', async (_e, dir) => {
   if (!fs.existsSync(path.join(reportDir, 'meta.json')) || !fs.existsSync(path.join(reportDir, 'window.png'))) {
     throw new Error('bad report path');
   }
+  return reportDir;
+}
+
+ipcMain.handle('feedback.ghAvailable', () => ghFeedbackAvailable());
+
+ipcMain.handle('feedback.send', async (_e, dir) => {
+  const reportDir = assertFeedbackDir(dir);
   const meta = await sendFeedbackReport(reportDir, relayOpts());
   return {
     dir: reportDir,
     screenshot: meta.screenshot !== false,
     issueUrl: meta.issueUrl,
     issueNumber: meta.issueNumber,
+  };
+});
+
+ipcMain.handle('feedback.sendViaGh', async (_e, dir) => {
+  const reportDir = assertFeedbackDir(dir);
+  const meta = await sendFeedbackViaGh(reportDir);
+  return {
+    dir: reportDir,
+    screenshot: false,
+    issueUrl: meta.issueUrl,
+    issueNumber: meta.issueNumber,
+    via: 'gh',
   };
 });
 

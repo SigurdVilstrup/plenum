@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { computeStats, loadStats } from './stats.mjs';
+import { computeStats, heatPeak, loadStats } from './stats.mjs';
 
 const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime() / 1000;
 const c = (name, email, when, subject, files, body = '') => ({
@@ -32,7 +32,11 @@ test('computeStats: people, agents, days, heatmap', () => {
   assert.equal(s.series.at(-1).day, '2026-11-12');
   assert.equal(s.longestStreak, 3); // 10, 11, 12 Nov
   assert.equal(s.heat[3][9], 1); // Thu 12 Nov 09:00
+  assert.deepEqual(s.heatPeak, { day: 1, hour: 22, n: 1 }); // tied at 1: first cell in scan order (Tue 22:00)
   assert.deepEqual(s.awards.map((a) => a.id), ['lines', 'streak']); // four small commits earn only 105 lines and a 3-day streak
+  assert.equal(s.awards.find((a) => a.id === 'lines').scope, 'person');
+  assert.equal(s.awards.find((a) => a.id === 'streak').scope, 'repo');
+  assert.equal(s.awards.find((a) => a.id === 'lines').email, 'a@x.com');
   assert.deepEqual(s.weekly.tools, ['Human', 'Claude']);
   assert.equal(s.weekly.unit, 'day'); // 12 days of history
   assert.equal(s.weekly.weeks.length, 14); // never fewer than two weeks of axis
@@ -57,6 +61,16 @@ test('awards: need two people and a real margin, then name the winner', () => {
   assert.equal(award(crowd, 'early'), undefined); // nobody committed before 09:00
   assert.equal(award(many('Ada', 6, 23, 'fix: solo'), 'night'), undefined); // nobody to beat
   assert.equal(award(many('Ada', 6, 23, 'fix: solo'), 'file').who, null); // repo-wide still shows
+  assert.equal(award(crowd, 'file').scope, 'repo');
+  assert.equal(award(crowd, 'night').scope, 'person');
+});
+
+test('heatPeak: empty and ties pick the first cell', () => {
+  assert.equal(heatPeak(Array.from({ length: 7 }, () => Array(24).fill(0))), null);
+  const heat = Array.from({ length: 7 }, () => Array(24).fill(0));
+  heat[1][3] = 2;
+  heat[5][10] = 2;
+  assert.deepEqual(heatPeak(heat), { day: 1, hour: 3, n: 2 });
 });
 
 test('computeStats: old history buckets by week and keeps 90 days', () => {
