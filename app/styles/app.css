@@ -1,10 +1,10 @@
-/* Hallmark · checked: 2026-11-09 · genre: modern-minimal (inferred) · shape: app screen · theme: Plenum (planning/DESIGN.md, locked)
+/* Hallmark · checked: 2026-11-09 · genre: modern-minimal (inferred) · shape: app screen · theme: Plenum (docs/design.md, locked)
  * floor: 47a left open, the real Electron titlebar and tab strip, not a drawn window · fixed: 6 (20, 34, 48 shadows and traffic lights, 54 eyebrow on two sheets, 63 neutral status dot, 6 link focus)
  * reflex left open: 38iii and 64 on the board, outside Settings, guards reject a waiver
  * built: the project · redesign: polish · v2.0.0 */
-/* Hallmark · waive 24b · padding 6px 10px, gap 14px · DESIGN.md locks 13px body and 30px rows, so the paddings in mock.css keep their density */
+/* Hallmark · waive 24b · padding 6px 10px, gap 14px · docs/design.md locks 13px body and 30px rows */
 
-/* Live app chrome on top of mock.css */
+/* Live app chrome on top of styles/mock.css (base board stylesheet) */
 
 html, body {
   height: 100%;
