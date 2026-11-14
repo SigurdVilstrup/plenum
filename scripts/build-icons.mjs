@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-/** Rebuild build/icon.icns (+ png) from planning/assets/app-icon-1024.png */
+/** Rebuild build/icon.icns (+ png) from branding/app-icon-1024.png */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const src = path.join(root, 'planning/assets/app-icon-1024.png');
+const src = path.join(root, 'branding/app-icon-1024.png');
 const outDir = path.join(root, 'build');
 const iconset = path.join(outDir, 'icon.iconset');
 

@@ -1,8 +1,10 @@
 # Plenum
 
-Mac git client for parallel work. Phase one: board, lanes (worktrees), commit / push / pull / rebase / merge, conflict walk. Phase two: runnable lanes — `.plenum/lane.yaml`, Run / Stop / Test with port offsets, doctor, CLI, and local MCP.
+Mac git client for parallel work. Open a repo, see every **lane** (git worktree) on one board, and move commits with Commit / Push / Pull / Rebase / Merge — including a conflict walk. Feature lanes can also **run**: check in a `.plenum/lane.yaml`, then Run / Stop / Test with port offsets, or drive the same verbs from the CLI and a local MCP server.
 
-## Run
+Download signed builds from [plenum.sh](https://plenum.sh). Updates come from the public feed at [plenum.sh/updates](https://plenum.sh/updates/) — no GitHub token required.
+
+## Develop
 
 ```bash
 npm install
@@ -10,9 +12,11 @@ npm run smoke:init          # disposable repo at tmp/smoke-repo
 PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev
 ```
 
-Or open any repo from the empty screen / ⌘K.
+Or open any repo from the empty screen / ⌘K. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for tests, packing, and a short manual QA walk.
 
-Hand-write a minimal manifest to try Run on a feature lane:
+### Lane manifest
+
+Hand-write a minimal manifest (or use Settings → Repositories → Lane setup → Write):
 
 ```yaml
 # .plenum/lane.yaml
@@ -25,55 +29,44 @@ ports:
     web: 8000
 ```
 
-Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Lane setup lives under Settings (`⌘,`) → Repositories → the repo (not a dialog); Write saves `.plenum/lane.yaml`. Create copies `env.copy` and runs `setup` when present. Drift gates Run when shared migrations are pending. Palette: Quick start, Tab warm time…
+Primary never starts. Lane 1 gets `web` on `8100` (`8000 + 100`). Create copies `env.copy` and runs `setup` when present. Drift gates Run when shared migrations are pending.
 
 ## Scripts
 
 | Script | What |
 | --- | --- |
-| `npm run dev` | Vite HMR + Electron (Dock uses Plenum icon) |
+| `npm run dev` | Vite HMR + Electron |
 | `npm test` | Board, lane supervisor, doctor, CLI, MCP |
 | `npm run smoke:init` | Fresh multi-worktree fixture with a local bare remote |
 | `npm start` | Production build + Electron |
 | `npm run pack` | Unsigned `Plenum.app` in `release/mac*` |
 | `npm run dist` | Same + `.dmg` + updater `.zip` / `latest-mac.yml` |
-| `npm run icons` | Rebuild `build/icon.icns` from `planning/assets/app-icon-1024.png` |
+| `npm run icons` | Rebuild `build/icon.icns` from `branding/app-icon-1024.png` |
 | `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
 
-### Mac app
-
-Before `npm run pack`, bump with `npm run version:patch` (or `minor` / `major`). That updates `package.json` and tags `v*`.
-
 ```bash
-npm run pack          # → release/mac/Plenum.app (or mac-arm64)
+npm run pack
 open release/mac*/Plenum.app
-# optional: drag into /Applications
 ```
 
-Icon masters live in `planning/assets/app-icon*.svg` / `app-icon-1024.png`. Local `npm run pack` / `dist` stay unsigned; GitHub Releases are Developer ID–signed and notarized.
+Local pack/dist stay unsigned; GitHub Releases are Developer ID–signed and notarized. Maintainer notes for the update feed: [`docs/updates-feed.md`](docs/updates-feed.md).
 
-### In-app updates (T3 pattern)
-
-Packaged builds use `electron-updater` against the **public** feed at [`https://plenum.sh/updates/`](https://plenum.sh/updates/). Anyone can update — no GitHub token. The app checks in the background; you click to download, then again to install & restart.
-
-CI FTPs those files on each `v*` tag (see `docs/updates-feed.md`). Secrets: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_UPDATES_DIR`.
-
-- Disable: `PLENUM_DISABLE_AUTO_UPDATE=1`
+- Disable auto-update: `PLENUM_DISABLE_AUTO_UPDATE=1`
 - Override feed: `PLENUM_UPDATE_FEED_URL=https://…/updates/`
-- UI dogfood without files yet: put a newer semver in `~/.plenum/mock-update` (e.g. `0.2.7`)
 
-## Layout
+## CLI and MCP
 
-- `app/` — renderer (lifted from `planning/mocks`)
-- `electron/` — main process, git ops, lane supervisor, tabs, MCP
-- `bin/plenum.mjs` — CLI + `plenum mcp` (stdio)
-- `planning/` — product, design, mocks
+```bash
+plenum doctor [path]
+plenum create <name> [path]
+plenum up <lane> [path]      # primary (0) is protected
+plenum status --json [path]
+plenum test <lane> [path]
+plenum down <lane> [path]
+plenum remove <lane> [path]
+```
 
-## Agents
-
-Settings → Agents → Add wires Cursor, Claude Code or Codex to Plenum (`repo.doctor`, `lane.create|up|down|test|status|remove`). Restart the tool afterwards. Plenum writes `~/.plenum/bin/plenum` on launch; it runs the bundled CLI, so no Node or `PATH` setup.
-
-Any other MCP client, by hand (use the absolute path):
+Settings → Agents → Add wires Cursor, Claude Code, or Codex to Plenum. The app writes `~/.plenum/bin/plenum` on launch (bundled CLI, no Node/`PATH` setup). Any other MCP client:
 
 ```json
 {
@@ -86,4 +79,17 @@ Any other MCP client, by hand (use the absolute path):
 }
 ```
 
-Defaults: agents can start/stop/test and create lanes; remove is Allow, writing `.plenum/lane.yaml` is Never. Change them under What agents may do (`~/.plenum/agents.json`); they bind MCP calls, not the `plenum` CLI. Agents never get `force`, and only write a manifest in a repo that has none.
+Defaults: agents can start/stop/test and create lanes; remove is Allow; writing `.plenum/lane.yaml` is Never. Change them under What agents may do (`~/.plenum/agents.json`). Agents never get `force`.
+
+## Layout
+
+- `app/` — renderer
+- `electron/` — main process, git ops, lane supervisor, tabs, MCP
+- `bin/plenum.mjs` — CLI + `plenum mcp` (stdio)
+- `branding/` — icon masters
+- `site/` — landing page (plenum.sh)
+- `.agents/` — shared agent skills ([`AGENTS.md`](AGENTS.md))
+
+## License
+
+[MIT](LICENSE)
