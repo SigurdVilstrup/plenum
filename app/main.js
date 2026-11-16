@@ -1939,7 +1939,7 @@ async function handleAction(act, lane, url) {
     if (act === 'openUrl') return invoke('os.openExternal', url);
     if (act === 'commit') return openCommitSheet(lane);
     if (act === 'push') {
-      return runGit('lane.push', lane.index, `Pushed ${lane.name} to origin`, 'push');
+      return pushLaneTip(lane);
     }
     if (act === 'pull') {
       return runGit('lane.pull', lane.index, `Pulled ${lane.name} from origin`, 'pull');
@@ -2000,12 +2000,12 @@ function setActionBusy(act, on) {
   });
 }
 
-async function runGit(channel, laneIndex, okMsg, act, undo) {
+async function runGit(channel, laneIndex, okMsg, act, undo, extra) {
   const tabId = beginOp(act);
   if (!tabId) return;
   const root = state.board?.root;
   try {
-    const board = await invoke(channel, ...pin(laneIndex));
+    const board = await invoke(channel, ...pin(laneIndex, ...(extra === undefined ? [] : [extra])));
     if (undo) pushUndo(undo.label, tabId, undo.run);
     if (settleBoard(tabId, root, board)) {
       state.flashMarks.add(laneIndex);
@@ -2014,6 +2014,61 @@ async function runGit(channel, laneIndex, okMsg, act, undo) {
   } finally {
     endOp(tabId, act);
   }
+}
+
+function isPushRejected(err) {
+  const msg = err?.message || String(err || '');
+  return err?.code === 'PUSH_REJECTED' || /non-fast-forward|rejected by origin|Force push/i.test(msg);
+}
+
+async function pushLaneTip(lane, { force } = {}) {
+  try {
+    await runGit(
+      'lane.push',
+      lane.index,
+      force === 'force'
+        ? `Force-pushed ${lane.name} to origin`
+        : force === 'lease'
+          ? `Force-pushed ${lane.name} (with lease) to origin`
+          : `Pushed ${lane.name} to origin`,
+      'push',
+      undefined,
+      force ? { force } : undefined,
+    );
+  } catch (e) {
+    if (!force && isPushRejected(e)) openForcePushSheet({ kind: 'lane', lane });
+  }
+}
+
+function openForcePushSheet({ kind, lane, branch }) {
+  const label = kind === 'branch' ? (branch?.short || branch?.name) : lane?.name;
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="force-push-title">
+      <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Force push</div>
+      <h1 id="force-push-title">${esc(label || 'origin')}</h1>
+      <p>Origin rejected a normal push (non-fast-forward). Prefer lease when you just rebased; plain force overwrites whatever is on the remote tip.</p>
+      <div class="list">
+        <label class="list-row compact choice">
+          <input type="radio" name="force" value="lease" checked />
+          <div class="name">Force with lease<small><span class="mono">--force-with-lease</span> — refuses if someone else moved the remote tip.</small></div>
+        </label>
+        <label class="list-row compact choice">
+          <input type="radio" name="force" value="force" />
+          <div class="name">Force<small><span class="mono">--force</span> — overwrites the remote tip. Destructive.</small></div>
+        </label>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn danger" type="submit">${iconHTML('arrow-up', 'sm')}Force push</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode = el.sheetLayer.querySelector('input[name=force]:checked')?.value || 'lease';
+    closeSheet();
+    if (kind === 'branch') await pushBranchRow(branch.name, { force: mode });
+    else if (lane) await pushLaneTip(lane, { force: mode });
+  });
 }
 
 async function runUp(lane, { force = false } = {}) {
@@ -2679,7 +2734,7 @@ async function updateBranchRow(name) {
   finally { endOp(tabId, 'branch-update'); }
 }
 
-async function pushBranchRow(name) {
+async function pushBranchRow(name, { force } = {}) {
   if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br || br.remote) return;
@@ -2687,12 +2742,20 @@ async function pushBranchRow(name) {
   if (!tabId) return;
   const root = state.board?.root;
   try {
-    const board = await invoke('branch.push', ...pin({ branch: br.name }));
+    const payload = force ? { branch: br.name, force } : { branch: br.name };
+    const board = await invoke('branch.push', ...pin(payload));
     if (settleBoard(tabId, root, board)) {
-      toast(`Pushed ${br.short || br.name} to origin`, 'ok');
+      const tip = br.short || br.name;
+      toast(
+        force === 'force' ? `Force-pushed ${tip} to origin`
+          : force === 'lease' ? `Force-pushed ${tip} (with lease) to origin`
+            : `Pushed ${tip} to origin`,
+        'ok',
+      );
     }
-  } catch { /* toasted */ }
-  finally { endOp(tabId, 'branch-push'); }
+  } catch (e) {
+    if (!force && isPushRejected(e)) openForcePushSheet({ kind: 'branch', branch: br });
+  } finally { endOp(tabId, 'branch-push'); }
 }
 
 async function checkoutBranchRow(name) {
@@ -2784,6 +2847,7 @@ function openLaneCtxMenu(x, y, lane) {
   if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'));
   add('Pull from remote', () => handleAction('pull', lane));
   if (lane.unpushed) add('Push to remote', () => handleAction('push', lane));
+  add('Force push…', () => openForcePushSheet({ kind: 'lane', lane }));
   if (!lane.isPrimary) {
     if (lane.running) add('Stop', () => handleAction('down', lane));
     else if (lane.runnable && lane.readiness !== 'safe') add('Run', () => handleAction('up', lane));
@@ -2817,7 +2881,10 @@ function openBranchCtxMenu(x, y, name) {
       }
       updateBranchRow(br.name);
     });
-    if (!br.hasLane) add('Push to remote', () => pushBranchRow(br.name));
+    if (!br.hasLane) {
+      add('Push to remote', () => pushBranchRow(br.name));
+      add('Force push…', () => openForcePushSheet({ kind: 'branch', branch: br }));
+    }
   }
   if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
   if (canRename) add('Rename…', () => openRenameBranchSheet(br));
@@ -4040,12 +4107,14 @@ const SETTINGS_PAGES = {
       <p class="lede">Why a second checkout can’t start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing hits disk until Write.</p>
       <div class="cols">
         <div><div class="col-head">What the repo does today</div>${findings}</div>
-        <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
+        <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span>${s && !s.loading && !s.canAccept ? '<small> — add a <span class="mono">run:</span> line to enable Write</small>' : ''}</div>
+          <textarea class="setup-yaml mono" data-setup-yaml spellcheck="false" aria-label="Proposed lane.yaml"${s?.loading ? ' disabled' : ''}>${esc(s?.proposedYaml || '')}</textarea>
+        </div>
       </div>
-      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
+      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>. Edit the YAML before Write if the guess is wrong.</span>
         <div class="row-end">
           <button class="btn" type="button" data-copy-doctor title="Copy a plenum doctor command for this repo">Copy CLI</button>
-          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
+          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run: line in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
         </div>
       </div>`;
   },
@@ -4135,13 +4204,31 @@ async function loadSetup(root) {
   if (state.settings.open && state.settings.page === 'setup') renderSettings();
 }
 
+function setupYamlHasRun(text) {
+  return /^run:\s*\S+/m.test(String(text || ''));
+}
+
 function bindSetup(root) {
   const s = state.setup;
   root.querySelector('[data-crumb]')?.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); });
   root.querySelector('[data-copy-doctor]')?.addEventListener('click', () => {
     navigator.clipboard.writeText(`plenum doctor '${String(s.root).replace(/'/g, `'\\''`)}'`).then(() => toast('Copied', 'ok'), () => {});
   });
-  root.querySelector('[data-write]')?.addEventListener('click', async () => {
+  const yaml = root.querySelector('[data-setup-yaml]');
+  const writeBtn = root.querySelector('[data-write]');
+  const syncWrite = () => {
+    if (!s || !writeBtn) return;
+    const text = yaml?.value ?? s.proposedYaml ?? '';
+    s.proposedYaml = text;
+    const ok = setupYamlHasRun(text);
+    s.canAccept = ok;
+    writeBtn.disabled = !ok;
+    writeBtn.title = ok ? '' : 'Needs a run: line in the proposal';
+  };
+  yaml?.addEventListener('input', syncWrite);
+  writeBtn?.addEventListener('click', async () => {
+    syncWrite();
+    if (!s.canAccept) return;
     try {
       const board = await invoke('repo.acceptManifest', s.proposedYaml, s.root);
       state.repoBoards.delete(s.root);

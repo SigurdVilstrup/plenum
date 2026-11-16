@@ -108,7 +108,43 @@ test('doctor canAccept false when no run script', async () => {
     const { proposed, canAccept, findings } = await doctor(root);
     assert.equal(proposed.run, undefined);
     assert.equal(canAccept, false);
-    assert.ok(findings.some((f) => /Accept disabled/i.test(f)));
+    assert.ok(findings.some((f) => /no run command yet/i.test(f)));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor proposes make run when Makefile has run: and no package script', async () => {
+  const root = fixtureRepo({
+    scripts: { lint: 'eslint .' },
+    compose: false,
+    makefile: true,
+    apphost: false,
+    envFile: null,
+  });
+  try {
+    const { proposed, canAccept, findings } = await doctor(root);
+    assert.equal(proposed.run, 'make run');
+    assert.equal(canAccept, true);
+    assert.ok(findings.some((f) => /Makefile run/i.test(f)));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor explains aspire apphost without inventing a run command', async () => {
+  const root = fixtureRepo({
+    scripts: { lint: 'eslint .' },
+    compose: false,
+    makefile: false,
+    apphost: true,
+    envFile: null,
+  });
+  try {
+    const { proposed, canAccept, findings } = await doctor(root);
+    assert.equal(proposed.run, undefined);
+    assert.equal(canAccept, false);
+    assert.ok(findings.some((f) => /apphost\.mts/i.test(f) && /add a run:/i.test(f)));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
