@@ -1485,7 +1485,6 @@ function paintPanel() {
     </button>
     ${branchVsSelectHTML(b)}
     </div>
-    <div class="section-note">Local tips on this Mac</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
@@ -1494,7 +1493,6 @@ function paintPanel() {
       <span class="name">Remotes</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="section-note">On the remote only — no local checkout of the same name</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
       remotes.length
         ? remoteBody
@@ -1578,14 +1576,6 @@ function paintPanel() {
       e.preventDefault();
       e.stopPropagation();
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
-    });
-  });
-  el.panel.querySelectorAll('[data-branch-delete]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const br = branchByName(btn.dataset.branchDelete);
-      if (br) openDeleteBranchSheet(br);
     });
   });
 }
@@ -1698,17 +1688,12 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
   // Keep lane selection clickable while the list refreshes; block checkout targets only.
   const block = refreshing && !br.hasLane;
   const kind = br.remote ? 'remote' : 'local';
-  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
-  // #90 visible delete (context menu still works); kind lives on the wrap for styling/copy
-  const del = canDelete
-    ? `<button class="iconbtn branch-del" type="button" data-branch-delete="${esc(br.name)}" title="Delete ${kind} ${esc(br.name)}" aria-label="Delete ${kind} branch ${esc(br.name)}">${iconHTML('x', 'sm')}</button>`
-    : '';
+  // #126 delete is right-click only (context menu); kind stays on the wrap for styling/copy
   return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}${pinned ? ' pinned' : ''}" data-branch-kind="${kind}">
     <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
       ${mark}
       <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
     </button>
-    ${del}
   </div>`;
 }
 
