@@ -2048,16 +2048,25 @@ a.navitem.back {
   padding: 8px 16px;
 }
 
+/* #129 long branch titles must ellipsize inside the cap — never paint over facts */
 .lane-head .title {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(42%, 320px);
+  max-width: min(36%, 280px);
+  overflow: hidden;
+}
+
+.lane-head .title > div {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
 }
 
 .lane-head .title .icon {
+  flex: 0 0 auto;
   color: var(--lane-1);
 }
 
@@ -2098,6 +2107,7 @@ a.navitem.back {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex-shrink: 0;
   white-space: nowrap;
 }
 

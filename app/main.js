@@ -1833,7 +1833,7 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title" title="Primary checkout · ${esc(l.displayPath || l.path)}">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
-        <h1>${esc(l.name)}</h1>
+        <h1 title="${esc(l.name)}">${esc(l.name)}</h1>
       </div>
       <div class="facts">
         ${l.onTeamBranch ? '' : `<span class="fact bad">${iconHTML('shield-check', 'sm')}<strong>not on</strong> ${esc(b.teamBranch)}</span>`}
