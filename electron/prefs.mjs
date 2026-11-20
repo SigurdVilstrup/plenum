@@ -27,6 +27,7 @@ export function defaultPrefs() {
     gravatar: true,
     tourDone: false,
     feedbackPrompts: true,
+    statsFame: 'mine',
     nudge: {},
     warmTabTtlMs: 120_000,
     credentialHosts: [],
@@ -67,6 +68,7 @@ const ENUMS = {
   terminal: ['terminal', 'iterm', 'custom'],
   diffTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
   mergeTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
+  statsFame: ['mine', 'all'],
 };
 const ABS_PATHS = ['editorPath', 'terminalPath', 'cloneDefaultPath', 'diffToolPath', 'mergeToolPath'];
 const BOOLS = ['openLaneInEditor', 'reopenTabs', 'tabFavicons', 'gravatar', 'tourDone', 'feedbackPrompts'];

@@ -213,20 +213,26 @@ export async function revertLaneChanges(root, laneIndex, paths) {
   return loadBoard(root);
 }
 
-/** Primary uses a normal push; lanes may force-with-lease after rebase. */
-export async function pushLane(root, laneIndex) {
+/**
+ * Push the lane tip to origin.
+ * @param {'lease'|'force'|false|undefined} [opts.force]
+ *   - undefined/false: primary = normal push; other lanes = --force-with-lease (post-rebase)
+ *   - 'lease': always --force-with-lease
+ *   - 'force' / true: --force (overwrites remote tip)
+ */
+export async function pushLane(root, laneIndex, opts = {}) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
-  if (lane.isPrimary) {
-    await git(['push', '-u', 'origin', 'HEAD'], lane.path).catch(async (e) => {
-      await git(['push'], lane.path).catch(() => { throw e; });
-    });
-    return loadBoard(root);
-  }
+  const mode = normalizeForcePush(opts?.force);
+  const flags = forcePushFlags(mode, { defaultLease: !lane.isPrimary });
   try {
-    await git(['push', '--force-with-lease', '-u', 'origin', 'HEAD'], lane.path);
+    await git(['push', ...flags, '-u', 'origin', 'HEAD'], lane.path);
   } catch (e) {
-    await git(['push', '--force-with-lease'], lane.path).catch(() => { throw e; });
+    try {
+      await git(['push', ...flags], lane.path);
+    } catch {
+      throw annotatePushReject(e, lane.branch || 'HEAD');
+    }
   }
   return loadBoard(root);
 }
@@ -348,23 +354,46 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
 }
 
 /** Push a local tip to origin (no checkout required). Sets upstream on first push. */
-export async function pushBranchToRemote(root, { branch } = {}) {
+export async function pushBranchToRemote(root, { branch, force } = {}) {
   const board = await loadBoard(root);
   const name = assertBranchName(branch);
   if (name.startsWith('origin/')) throw new Error('That tip is already on origin. Nothing to push.');
   if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
     throw new Error(`Local branch ${name} not found.`);
   }
+  const mode = normalizeForcePush(force);
+  const flags = forcePushFlags(mode, { defaultLease: false });
   try {
-    await git(['push', '-u', 'origin', name], board.root);
+    await git(['push', ...flags, '-u', 'origin', name], board.root);
   } catch (e) {
-    const msg = e?.message || String(e);
-    if (/non-fast-forward|rejected/i.test(msg)) {
-      throw new Error(`${name} was rejected by origin. Pull or rebase first.`);
-    }
-    throw e;
+    throw annotatePushReject(e, name);
   }
   return loadBoard(root);
+}
+
+function normalizeForcePush(force) {
+  if (force === true || force === 'force') return 'force';
+  if (force === 'lease') return 'lease';
+  return null;
+}
+
+function forcePushFlags(mode, { defaultLease = false } = {}) {
+  if (mode === 'force') return ['--force'];
+  if (mode === 'lease' || (!mode && defaultLease)) return ['--force-with-lease'];
+  return [];
+}
+
+function annotatePushReject(err, name) {
+  const msg = err?.message || String(err);
+  if (/non-fast-forward|rejected|stale info|failed to push|fetch first/i.test(msg)) {
+    const e = new Error(
+      `${name} was rejected by origin (non-fast-forward). Pull or rebase, or use Force push…`,
+    );
+    e.code = 'PUSH_REJECTED';
+    e.cause = err;
+    return e;
+  }
+  return err;
 }
 
 /** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate. */

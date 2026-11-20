@@ -2,8 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { createFeedbackIssueViaGh, ghFeedbackAvailable } from './github-feedback.mjs';
 
 const require = createRequire(import.meta.url);
+
+export { ghFeedbackAvailable };
 
 // #5e6ad2 ≈ --primary; fill 25%, border stronger
 const HL_R = 0x5e;
@@ -207,6 +210,34 @@ export async function sendFeedbackReport(dir, opts = {}) {
     return await postReport(dir, opts);
   } finally {
     release(); // no-op once a sent report's dir is gone
+  }
+}
+
+/** Create the public issue as the signed-in `gh` user; never hits the Plenum relay. */
+export async function sendFeedbackViaGh(dir, opts = {}) {
+  const release = claimReport(dir);
+  try {
+    const { meta } = readFeedbackReport(dir);
+    if (meta.status === 'sent') return meta;
+    const { issueUrl, issueNumber } = await createFeedbackIssueViaGh(meta, opts);
+    const sentMeta = patchFeedbackMeta(dir, {
+      status: 'sent',
+      issueUrl,
+      issueNumber,
+      sentAt: new Date().toISOString(),
+      screenshot: false,
+      via: 'gh',
+      error: null,
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+    return sentMeta;
+  } catch (e) {
+    try {
+      patchFeedbackMeta(dir, { status: 'failed', error: String(e.message || e) });
+    } catch { /* dir may be mid-delete */ }
+    throw e;
+  } finally {
+    release();
   }
 }
 

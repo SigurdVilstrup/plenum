@@ -1270,6 +1270,23 @@ html.feedback-redact .blame-line {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* #128 thin lanes scrollbar — hairline thumb, no chunky OS chrome */
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+.window.app .panel-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.window.app .panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.window.app .panel-scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 3px;
+}
+.window.app .panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-tertiary);
 }
 .window.app .panel .panel-foot {
   flex-shrink: 0;
@@ -1334,8 +1351,7 @@ html.feedback-redact .blame-line {
   column-gap: 6px;
   min-height: 22px;
   padding: 1px 6px 1px 8px;
-  /* #63 leave the branch-del gutter (24px + 2px gap) so folder and branch rows share a right edge */
-  width: calc(100% - 26px);
+  width: 100%;
   color: var(--ink-subtle);
 }
 .window.app .panel .branch-folder .name {
@@ -1691,12 +1707,6 @@ html.feedback-redact .blame-line {
   color: var(--ink);
 }
 
-.window.app .panel .section-note {
-  padding: 0 12px 4px 32px; /* #110 indent under the title, not the caret */
-  font-size: 11px;
-  color: var(--ink-tertiary);
-}
-
 .window.app .panel .branch-row-wrap {
   display: flex;
   align-items: center;
@@ -1706,20 +1716,6 @@ html.feedback-redact .blame-line {
 .window.app .panel .branch-row-wrap .branch-row {
   flex: 1;
   min-width: 0;
-}
-.window.app .panel .branch-row-wrap .branch-del {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  opacity: 0;
-  color: var(--ink-tertiary);
-}
-.window.app .panel .branch-row-wrap:hover .branch-del,
-.window.app .panel .branch-row-wrap:focus-within .branch-del {
-  opacity: 1;
-}
-.window.app .panel .branch-row-wrap .branch-del:hover {
-  color: var(--danger);
 }
 
 .list-row .detail .baseline-control {

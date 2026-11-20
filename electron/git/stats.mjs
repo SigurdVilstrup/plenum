@@ -126,6 +126,7 @@ export function computeStats(commits, { merges = 0, now = Date.now(), days = 90 
     last: commits.length ? last : null,
     series,
     heat,
+    heatPeak: heatPeak(heat),
     kinds,
     people: top(people, 12, (p) => p.added + p.deleted),
     tools: top(tools, 12, (t) => t.commits),
@@ -134,43 +135,62 @@ export function computeStats(commits, { merges = 0, now = Date.now(), days = 90 
   };
 }
 
+/** Busiest weekday×hour cell, or null when the grid is empty. */
+export function heatPeak(heat) {
+  let day = 0;
+  let hour = 0;
+  let n = 0;
+  for (let d = 0; d < heat.length; d++) {
+    for (let h = 0; h < heat[d].length; h++) {
+      if (heat[d][h] > n) {
+        n = heat[d][h];
+        day = d;
+        hour = h;
+      }
+    }
+  }
+  return n > 0 ? { day, hour, n } : null;
+}
+
 /** Minimum to earn a title. Below it nothing shows, so a quiet repo gets no trophies. */
 export const AWARD_MIN = { ai: 3, lines: 100, night: 3, early: 3, weekend: 3, deleted: 100, fixes: 3, human: 3, biggest: 500, fav: 3, day: 5, streak: 3, file: 5 };
 
 /**
- * Cheeky titles, each { id, title, who|null, stat, quip }. Only earned ones are returned.
- * "Most X" titles need at least two people to compete; repo-wide ones need only enough history.
+ * Cheeky titles, each { id, title, who|null, stat, quip, scope: 'person'|'repo' }.
+ * Person titles need two people to compete; repo titles need only enough history.
  */
 function awards(people, { perDay, files, biggest, ranked, commits, longest }) {
   const out = [];
   const n = (x) => Number(x).toLocaleString();
-  const give = (id, title, p, stat, quip) => out.push({ id, title, who: p?.name ?? null, stat, quip });
+  const give = (id, title, p, stat, quip, scope = 'person') =>
+    out.push({ id, title, who: p?.name ?? null, email: p?.email ?? null, stat, quip, scope });
   const best = (id, by) => {
     const p = people.reduce((b, x) => (!b || by(x) > by(b) ? x : b), null);
     return p && by(p) >= AWARD_MIN[id] ? p : null;
   };
 
+  // Person titles name a winner; repo titles are about the history, not a person.
   if (people.length > 1) {
     let p = best('ai', (x) => x.withAgent);
-    if (p) give('ai', 'Most AI-assisted', p, `${n(p.withAgent)} commits with an agent`, 'Has technically met a keyboard.');
-    if ((p = best('lines', (x) => x.added))) give('lines', 'Line machine', p, `+${n(p.added)} lines`, 'Quantity has a quality all its own.');
-    if ((p = best('night', (x) => x.night))) give('night', 'Night owl', p, `${n(p.night)} commits between 22:00 and 05:00`, 'Sleep is just a merge conflict you haven’t resolved.');
-    if ((p = best('early', (x) => x.early))) give('early', 'Early bird', p, `${n(p.early)} commits before 09:00`, 'Pushed before coffee. Brave.');
-    if ((p = best('weekend', (x) => x.weekend))) give('weekend', 'Weekend warrior', p, `${n(p.weekend)} commits on a weekend`, 'The repo does not know what a day off is.');
-    if ((p = best('deleted', (x) => x.deleted))) give('deleted', 'Demolition crew', p, `−${n(p.deleted)} lines`, 'The best code is the code you deleted.');
-    if ((p = best('fixes', (x) => x.fixes))) give('fixes', 'Fix-it', p, `${n(p.fixes)} fix commits`, 'Breaks things, fixes things. Net zero, strong vibes.');
-    if ((p = best('human', (x) => x.humanOnly))) give('human', 'Artisanal', p, `${n(p.humanOnly)} commits with no AI`, 'Small-batch, hand-typed, probably slower.');
+    if (p) give('ai', 'Most AI-assisted', p, `${n(p.withAgent)} commits with an agent`, 'Has technically met a keyboard.', 'person');
+    if ((p = best('lines', (x) => x.added))) give('lines', 'Line machine', p, `+${n(p.added)} lines`, 'Quantity has a quality all its own.', 'person');
+    if ((p = best('night', (x) => x.night))) give('night', 'Night owl', p, `${n(p.night)} commits between 22:00 and 05:00`, 'Sleep is just a merge conflict you haven’t resolved.', 'person');
+    if ((p = best('early', (x) => x.early))) give('early', 'Early bird', p, `${n(p.early)} commits before 09:00`, 'Pushed before coffee. Brave.', 'person');
+    if ((p = best('weekend', (x) => x.weekend))) give('weekend', 'Weekend warrior', p, `${n(p.weekend)} commits on a weekend`, 'The repo does not know what a day off is.', 'person');
+    if ((p = best('deleted', (x) => x.deleted))) give('deleted', 'Demolition crew', p, `−${n(p.deleted)} lines`, 'The best code is the code you deleted.', 'person');
+    if ((p = best('fixes', (x) => x.fixes))) give('fixes', 'Fix-it', p, `${n(p.fixes)} fix commits`, 'Breaks things, fixes things. Net zero, strong vibes.', 'person');
+    if ((p = best('human', (x) => x.humanOnly))) give('human', 'Artisanal', p, `${n(p.humanOnly)} commits with no AI`, 'Small-batch, hand-typed, probably slower.', 'person');
   }
-  if (biggest?.lines >= AWARD_MIN.biggest) give('biggest', 'Biggest bang', { name: biggest.name }, `${n(biggest.lines)} lines in one commit`, `“${biggest.subject.slice(0, 48)}” Review requested. Thoughts and prayers.`);
-  if (ranked[0]?.commits >= AWARD_MIN.fav) give('fav', 'Favourite agent', null, `${ranked[0].tool}, in ${n(ranked[0].commits)} commits`, `${Math.round((ranked[0].commits / commits) * 100)}% of the history. They have a type.`);
+  if (biggest?.lines >= AWARD_MIN.biggest) give('biggest', 'Biggest bang', { name: biggest.name }, `${n(biggest.lines)} lines in one commit`, `“${biggest.subject.slice(0, 48)}” Review requested. Thoughts and prayers.`, 'repo');
+  if (ranked[0]?.commits >= AWARD_MIN.fav) give('fav', 'Favourite agent', null, `${ranked[0].tool}, in ${n(ranked[0].commits)} commits`, `${Math.round((ranked[0].commits / commits) * 100)}% of the history. They have a type.`, 'repo');
   const day = [...perDay.entries()].sort((a, b) => b[1] - a[1])[0];
   if (day?.[1] >= AWARD_MIN.day) {
     const [y, m, d] = day[0].split('-').map(Number);
-    give('day', 'Busiest day', null, `${new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}, ${n(day[1])} commits`, 'Someone had a deadline. Or a fresh coffee.');
+    give('day', 'Busiest day', null, `${new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}, ${n(day[1])} commits`, 'Someone had a deadline. Or a fresh coffee.', 'repo');
   }
-  if (longest >= AWARD_MIN.streak) give('streak', 'Longest streak', null, `${longest} days in a row`, 'Touch grass. Then come back.');
+  if (longest >= AWARD_MIN.streak) give('streak', 'Longest streak', null, `${longest} days in a row`, 'Touch grass. Then come back.', 'repo');
   const file = [...files.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (file?.[1] >= AWARD_MIN.file) give('file', 'Most reworked file', null, `${file[0]}, ${n(file[1])} commits`, 'We are not going to talk about it.');
+  if (file?.[1] >= AWARD_MIN.file) give('file', 'Most reworked file', null, `${file[0]}, ${n(file[1])} commits`, 'We are not going to talk about it.', 'repo');
   return out;
 }
 

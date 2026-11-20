@@ -1485,7 +1485,6 @@ function paintPanel() {
     </button>
     ${branchVsSelectHTML(b)}
     </div>
-    <div class="section-note">Local tips on this Mac</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
@@ -1494,7 +1493,6 @@ function paintPanel() {
       <span class="name">Remotes</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="section-note">On the remote only — no local checkout of the same name</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
       remotes.length
         ? remoteBody
@@ -1578,14 +1576,6 @@ function paintPanel() {
       e.preventDefault();
       e.stopPropagation();
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
-    });
-  });
-  el.panel.querySelectorAll('[data-branch-delete]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const br = branchByName(btn.dataset.branchDelete);
-      if (br) openDeleteBranchSheet(br);
     });
   });
 }
@@ -1698,17 +1688,12 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
   // Keep lane selection clickable while the list refreshes; block checkout targets only.
   const block = refreshing && !br.hasLane;
   const kind = br.remote ? 'remote' : 'local';
-  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
-  // #90 visible delete (context menu still works); kind lives on the wrap for styling/copy
-  const del = canDelete
-    ? `<button class="iconbtn branch-del" type="button" data-branch-delete="${esc(br.name)}" title="Delete ${kind} ${esc(br.name)}" aria-label="Delete ${kind} branch ${esc(br.name)}">${iconHTML('x', 'sm')}</button>`
-    : '';
+  // #126 delete is right-click only (context menu); kind stays on the wrap for styling/copy
   return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}${pinned ? ' pinned' : ''}" data-branch-kind="${kind}">
     <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
       ${mark}
       <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
     </button>
-    ${del}
   </div>`;
 }
 
@@ -1848,7 +1833,7 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title" title="Primary checkout · ${esc(l.displayPath || l.path)}">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
-        <h1>${esc(l.name)}</h1>
+        <h1 title="${esc(l.name)}">${esc(l.name)}</h1>
       </div>
       <div class="facts">
         ${l.onTeamBranch ? '' : `<span class="fact bad">${iconHTML('shield-check', 'sm')}<strong>not on</strong> ${esc(b.teamBranch)}</span>`}
@@ -1954,7 +1939,7 @@ async function handleAction(act, lane, url) {
     if (act === 'openUrl') return invoke('os.openExternal', url);
     if (act === 'commit') return openCommitSheet(lane);
     if (act === 'push') {
-      return runGit('lane.push', lane.index, `Pushed ${lane.name} to origin`, 'push');
+      return pushLaneTip(lane);
     }
     if (act === 'pull') {
       return runGit('lane.pull', lane.index, `Pulled ${lane.name} from origin`, 'pull');
@@ -2015,12 +2000,12 @@ function setActionBusy(act, on) {
   });
 }
 
-async function runGit(channel, laneIndex, okMsg, act, undo) {
+async function runGit(channel, laneIndex, okMsg, act, undo, extra) {
   const tabId = beginOp(act);
   if (!tabId) return;
   const root = state.board?.root;
   try {
-    const board = await invoke(channel, ...pin(laneIndex));
+    const board = await invoke(channel, ...pin(laneIndex, ...(extra === undefined ? [] : [extra])));
     if (undo) pushUndo(undo.label, tabId, undo.run);
     if (settleBoard(tabId, root, board)) {
       state.flashMarks.add(laneIndex);
@@ -2029,6 +2014,61 @@ async function runGit(channel, laneIndex, okMsg, act, undo) {
   } finally {
     endOp(tabId, act);
   }
+}
+
+function isPushRejected(err) {
+  const msg = err?.message || String(err || '');
+  return err?.code === 'PUSH_REJECTED' || /non-fast-forward|rejected by origin|Force push/i.test(msg);
+}
+
+async function pushLaneTip(lane, { force } = {}) {
+  try {
+    await runGit(
+      'lane.push',
+      lane.index,
+      force === 'force'
+        ? `Force-pushed ${lane.name} to origin`
+        : force === 'lease'
+          ? `Force-pushed ${lane.name} (with lease) to origin`
+          : `Pushed ${lane.name} to origin`,
+      'push',
+      undefined,
+      force ? { force } : undefined,
+    );
+  } catch (e) {
+    if (!force && isPushRejected(e)) openForcePushSheet({ kind: 'lane', lane });
+  }
+}
+
+function openForcePushSheet({ kind, lane, branch }) {
+  const label = kind === 'branch' ? (branch?.short || branch?.name) : lane?.name;
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="force-push-title">
+      <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Force push</div>
+      <h1 id="force-push-title">${esc(label || 'origin')}</h1>
+      <p>Origin rejected a normal push (non-fast-forward). Prefer lease when you just rebased; plain force overwrites whatever is on the remote tip.</p>
+      <div class="list">
+        <label class="list-row compact choice">
+          <input type="radio" name="force" value="lease" checked />
+          <div class="name">Force with lease<small><span class="mono">--force-with-lease</span> — refuses if someone else moved the remote tip.</small></div>
+        </label>
+        <label class="list-row compact choice">
+          <input type="radio" name="force" value="force" />
+          <div class="name">Force<small><span class="mono">--force</span> — overwrites the remote tip. Destructive.</small></div>
+        </label>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn danger" type="submit">${iconHTML('arrow-up', 'sm')}Force push</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode = el.sheetLayer.querySelector('input[name=force]:checked')?.value || 'lease';
+    closeSheet();
+    if (kind === 'branch') await pushBranchRow(branch.name, { force: mode });
+    else if (lane) await pushLaneTip(lane, { force: mode });
+  });
 }
 
 async function runUp(lane, { force = false } = {}) {
@@ -2175,7 +2215,7 @@ function openWarmSheet() {
   });
 }
 
-let feedbackDraft = { comment: '', target: null, credit: false };
+let feedbackDraft = { comment: '', target: null, credit: false, viaGh: false };
 
 /** Effective git email for optional feedback credit (local override, else global). */
 function feedbackCreditEmail() {
@@ -2245,7 +2285,7 @@ function startFeedbackPick() {
     e.stopPropagation();
     const node = hitAt(e.clientX, e.clientY);
     stopFeedbackPick();
-    const creditSeed = { credit: !!feedbackDraft.credit };
+    const creditSeed = { credit: !!feedbackDraft.credit, viaGh: !!feedbackDraft.viaGh };
     if (!node) {
       openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target, ...creditSeed });
       return;
@@ -2376,9 +2416,13 @@ async function captureFeedbackPreview(target) {
 
 async function openFeedbackSheet(seed = {}) {
   const email = await ensureFeedbackIdentity();
+  let ghAvailable = false;
+  try { ghAvailable = !!(await invoke('feedback.ghAvailable')); } catch { ghAvailable = false; }
   const target = seed.target || null;
   const comment = seed.comment ?? '';
   const creditOn = !!seed.credit && !!email;
+  // Prefer the signed-in `gh` path whenever the CLI is on disk; hide the relay option.
+  const viaGh = ghAvailable;
   const chip = target?.label
     ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
     : `<span class="feedback-target-chip muted">No element selected</span>`;
@@ -2389,8 +2433,11 @@ async function openFeedbackSheet(seed = {}) {
   const creditHint = email
     ? ''
     : `<p class="feedback-credit-hint">Add an email in Settings → Accounts first.</p>`;
+  const pathNote = viaGh
+    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>). The screenshot stays on this Mac.</p>`
+    : '';
   openSheet(`
-    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
+    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore data-via="${viaGh ? 'gh' : 'relay'}">
       <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
       <h1 id="feedback-title">What’s broken?</h1>
       <label class="field">Comment<textarea name="comment" rows="3" required autofocus placeholder="What happened?">${esc(comment)}</textarea></label>
@@ -2418,7 +2465,8 @@ async function openFeedbackSheet(seed = {}) {
         </label>
         ${creditHint}
       </div>
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Goes to the Plenum team. Your <code>repoPath</code> stays on this Mac.</span></p>
+      ${pathNote}
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
         <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>⌘↩</kbd></button>
@@ -2467,6 +2515,21 @@ async function openFeedbackSheet(seed = {}) {
   if (!previewSrc) refreshPreview();
   else feedbackPreviewPng = previewSrc;
 
+  const toastSent = (sent) => {
+    const link = sent?.issueUrl
+      ? { url: sent.issueUrl, label: sent.issueNumber != null ? `#${sent.issueNumber}` : 'Open issue' }
+      : null;
+    if (sent?.via === 'gh') {
+      toast('Opened as a public GitHub issue. Thanks.', 'ok', { link });
+      return;
+    }
+    if (sent?.screenshot === false) {
+      toast('Sent, but the screenshot didn’t upload. Thanks.', 'ok', { link });
+      return;
+    }
+    toast('Sent. Thanks.', 'ok', { link });
+  };
+
   const send = async () => {
     if (sendBtn.disabled) return;
     const text = ta.value.trim();
@@ -2479,11 +2542,13 @@ async function openFeedbackSheet(seed = {}) {
       toast('Add an email in Settings → Accounts, or leave credit off.', 'bad');
       return;
     }
+    const useGh = form.dataset.via === 'gh';
     const draft = {
       comment: text,
       target,
       credit: wantCredit,
       pngBase64: feedbackPreviewPng,
+      viaGh: useGh,
     };
     setSendBusy(true);
     try {
@@ -2496,17 +2561,21 @@ async function openFeedbackSheet(seed = {}) {
         pngBase64,
       });
       try {
-        const sent = await invoke('feedback.send', dir);
+        const sent = await invoke(useGh ? 'feedback.sendViaGh' : 'feedback.send', dir);
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast(sent?.screenshot === false ? 'Sent, but the screenshot didn’t upload. Thanks.' : 'Sent. Thanks.', 'ok');
-      } catch {
-        // Saved locally; main retries unsent reports on launch and every 15 min.
+        toastSent(sent);
+      } catch (e) {
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
+        if (useGh) {
+          toast(e.message || 'Couldn’t create the GitHub issue. Check `gh auth status`.', 'bad');
+        } else {
+          // Saved locally; main retries unsent reports on launch and every 15 min.
+          toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
+        }
       }
     } catch (e) {
       setSendBusy(false);
@@ -2521,6 +2590,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target,
       credit: !!credit?.checked,
+      viaGh,
     };
     feedbackPreviewPng = null;
     closeSheet();
@@ -2532,6 +2602,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target: null,
       credit: !!credit?.checked,
+      viaGh,
     });
   });
   ta.focus();
@@ -2647,7 +2718,7 @@ async function updateBranchRow(name) {
   finally { endOp(tabId, 'branch-update'); }
 }
 
-async function pushBranchRow(name) {
+async function pushBranchRow(name, { force } = {}) {
   if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br || br.remote) return;
@@ -2655,12 +2726,20 @@ async function pushBranchRow(name) {
   if (!tabId) return;
   const root = state.board?.root;
   try {
-    const board = await invoke('branch.push', ...pin({ branch: br.name }));
+    const payload = force ? { branch: br.name, force } : { branch: br.name };
+    const board = await invoke('branch.push', ...pin(payload));
     if (settleBoard(tabId, root, board)) {
-      toast(`Pushed ${br.short || br.name} to origin`, 'ok');
+      const tip = br.short || br.name;
+      toast(
+        force === 'force' ? `Force-pushed ${tip} to origin`
+          : force === 'lease' ? `Force-pushed ${tip} (with lease) to origin`
+            : `Pushed ${tip} to origin`,
+        'ok',
+      );
     }
-  } catch { /* toasted */ }
-  finally { endOp(tabId, 'branch-push'); }
+  } catch (e) {
+    if (!force && isPushRejected(e)) openForcePushSheet({ kind: 'branch', branch: br });
+  } finally { endOp(tabId, 'branch-push'); }
 }
 
 async function checkoutBranchRow(name) {
@@ -2752,6 +2831,7 @@ function openLaneCtxMenu(x, y, lane) {
   if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'));
   add('Pull from remote', () => handleAction('pull', lane));
   if (lane.unpushed) add('Push to remote', () => handleAction('push', lane));
+  add('Force push…', () => openForcePushSheet({ kind: 'lane', lane }));
   if (!lane.isPrimary) {
     if (lane.running) add('Stop', () => handleAction('down', lane));
     else if (lane.runnable && lane.readiness !== 'safe') add('Run', () => handleAction('up', lane));
@@ -2785,7 +2865,10 @@ function openBranchCtxMenu(x, y, name) {
       }
       updateBranchRow(br.name);
     });
-    if (!br.hasLane) add('Push to remote', () => pushBranchRow(br.name));
+    if (!br.hasLane) {
+      add('Push to remote', () => pushBranchRow(br.name));
+      add('Force push…', () => openForcePushSheet({ kind: 'branch', branch: br }));
+    }
   }
   if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
   if (canRename) add('Rename…', () => openRenameBranchSheet(br));
@@ -4008,12 +4091,14 @@ const SETTINGS_PAGES = {
       <p class="lede">Why a second checkout can’t start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing hits disk until Write.</p>
       <div class="cols">
         <div><div class="col-head">What the repo does today</div>${findings}</div>
-        <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
+        <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span>${s && !s.loading && !s.canAccept ? '<small> — add a <span class="mono">run:</span> line to enable Write</small>' : ''}</div>
+          <textarea class="setup-yaml mono" data-setup-yaml spellcheck="false" aria-label="Proposed lane.yaml"${s?.loading ? ' disabled' : ''}>${esc(s?.proposedYaml || '')}</textarea>
+        </div>
       </div>
-      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
+      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>. Edit the YAML before Write if the guess is wrong.</span>
         <div class="row-end">
           <button class="btn" type="button" data-copy-doctor title="Copy a plenum doctor command for this repo">Copy CLI</button>
-          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
+          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run: line in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
         </div>
       </div>`;
   },
@@ -4103,13 +4188,31 @@ async function loadSetup(root) {
   if (state.settings.open && state.settings.page === 'setup') renderSettings();
 }
 
+function setupYamlHasRun(text) {
+  return /^run:\s*\S+/m.test(String(text || ''));
+}
+
 function bindSetup(root) {
   const s = state.setup;
   root.querySelector('[data-crumb]')?.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); });
   root.querySelector('[data-copy-doctor]')?.addEventListener('click', () => {
     navigator.clipboard.writeText(`plenum doctor '${String(s.root).replace(/'/g, `'\\''`)}'`).then(() => toast('Copied', 'ok'), () => {});
   });
-  root.querySelector('[data-write]')?.addEventListener('click', async () => {
+  const yaml = root.querySelector('[data-setup-yaml]');
+  const writeBtn = root.querySelector('[data-write]');
+  const syncWrite = () => {
+    if (!s || !writeBtn) return;
+    const text = yaml?.value ?? s.proposedYaml ?? '';
+    s.proposedYaml = text;
+    const ok = setupYamlHasRun(text);
+    s.canAccept = ok;
+    writeBtn.disabled = !ok;
+    writeBtn.title = ok ? '' : 'Needs a run: line in the proposal';
+  };
+  yaml?.addEventListener('input', syncWrite);
+  writeBtn?.addEventListener('click', async () => {
+    syncWrite();
+    if (!s.canAccept) return;
     try {
       const board = await invoke('repo.acceptManifest', s.proposedYaml, s.root);
       state.repoBoards.delete(s.root);
@@ -4241,6 +4344,9 @@ async function loadStats() {
   statsView.root = tab.path;
   statsView.loading = true;
   if (statsView.data?.root !== tab.path) statsView.data = null;
+  if (!state.identity) {
+    try { state.identity = await invoke('git.identity.get'); } catch { /* leave prior */ }
+  }
   rerenderStats();
   try {
     const data = await invoke('stats.get', tab.path, statsView.scope);
@@ -4263,6 +4369,12 @@ function bindStats(root) {
     statsView.scope = b.dataset.statsScope;
     loadStats();
   }));
+  root.querySelectorAll('[data-stats-fame]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.statsFame;
+    if ((state.prefs.statsFame || 'mine') === v) return;
+    setPref({ statsFame: v });
+    rerenderStats();
+  }));
 }
 
 // Award id -> [icon, token colour]. Only design-system colours: agent, human, lane 2-4.
@@ -4275,6 +4387,28 @@ const AWARD_LOOK = {
 
 // Human is the app's human blue, agents follow in order, so a tool keeps its colour on every chart.
 const STAT_COLORS = ['var(--human)', 'var(--agent)', 'var(--lane-2)', 'var(--lane-3)', 'var(--lane-4)', 'var(--ink-tertiary)', 'var(--ink-subtle)'];
+
+function statsIdentity() {
+  const id = state.identity;
+  if (!id) return { name: '', email: '' };
+  const local = id.local?.email || id.local?.name ? id.local : null;
+  const pick = local || id.global || {};
+  return { name: String(pick.name || '').trim(), email: String(pick.email || '').trim().toLowerCase() };
+}
+
+function awardIsMine(a, me) {
+  if (a.scope === 'repo') return false;
+  const email = String(a.email || '').trim().toLowerCase();
+  if (me.email && email && email === me.email) return true;
+  if (me.name && a.who && a.who === me.name) return true;
+  return false;
+}
+
+function awardRowHTML(a) {
+  const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
+  const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
+  return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
+}
 
 function statsPageHTML() {
   const s = statsView.data;
@@ -4307,13 +4441,23 @@ function statsPageHTML() {
     settingsRow('clock', 'Per active day', '', `${n(s.activeDays)} active day${s.activeDays === 1 ? '' : 's'}`, `<span class="stat-num"><b>${s.perActiveDay.toFixed(1)}</b></span>`),
   ].join('')}</div>`;
 
-  // Only earned titles; no section when there are none.
-  const awardRows = s.awards.map((a) => {
-    const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
-    const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
-    return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
-  }).join('');
-  const awards = awardRows ? `<div class="group-head">Hall of fame<small>Earned, not awarded.</small></div><div class="list">${awardRows}</div>` : '';
+  // Hall of fame: yours + repo by default; everyone is opt-in (#106).
+  const fameMode = state.prefs.statsFame === 'all' ? 'all' : 'mine';
+  const me = statsIdentity();
+  const mine = s.awards.filter((a) => awardIsMine(a, me));
+  const repoAwards = s.awards.filter((a) => a.scope === 'repo');
+  const others = s.awards.filter((a) => a.scope === 'person' && !awardIsMine(a, me));
+  const fameToggle = `<div class="option-row" role="group" aria-label="Hall of fame">${[['mine', 'Yours + repo'], ['all', 'Everyone']].map(([v, t]) =>
+    `<button class="option${fameMode === v ? ' on' : ''}" type="button" aria-pressed="${fameMode === v}" data-stats-fame="${v}">${t}</button>`).join('')}</div>`;
+  const block = (title, detail, list) => list.length
+    ? `<div class="group-head">${title}<small>${detail}</small></div><div class="list">${list.map(awardRowHTML).join('')}</div>`
+    : '';
+  const awards = (mine.length || repoAwards.length || (fameMode === 'all' && others.length))
+    ? `${fameToggle}
+      ${block('Your titles', me.email || me.name ? `Matched to ${esc(me.email || me.name)}.` : 'Set a git email in Accounts to claim titles.', mine)}
+      ${block('The repo', 'About the history, not a person.', repoAwards)}
+      ${fameMode === 'all' ? block('Everyone else', 'Competitive titles across contributors.', others) : ''}`
+    : `<div class="group-head">Hall of fame<small>Nothing earned yet on this history.</small></div>${fameToggle}`;
 
   // Agents over time: one stacked bar per week, last 52 weeks.
   const wk = s.weekly.weeks;
@@ -4349,9 +4493,21 @@ function statsPageHTML() {
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const hot = Math.max(1, ...s.heat.flat());
-  const heat = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour">${s.heat.map((row, d) =>
-    `<span class="d">${days[d]}</span>${row.map((v, h) => `<i style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}"></i>`).join('')}`).join('')}
-    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? h : ''}</span>`).join('')}</div>`;
+  const peak = s.heatPeak;
+  const peakLabel = peak
+    ? `${days[peak.day]} ${String(peak.hour).padStart(2, '0')}:00`
+    : '';
+  const heatRead = peak
+    ? `<p class="stat-heat-read">Peak slot <b>${peakLabel}</b> · ${n(peak.n)} commit${peak.n === 1 ? '' : 's'}. Darker cells are busier; outlined cell is the peak.</p>`
+    : `<p class="stat-heat-read">No commits on this history yet.</p>`;
+  const heatGrid = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour${peak ? `, peak ${peakLabel}` : ''}">${s.heat.map((row, d) =>
+    `<span class="d">${days[d]}</span>${row.map((v, h) => {
+      const isPeak = peak && peak.day === d && peak.hour === h;
+      return `<i class="${isPeak ? 'peak' : ''}" style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}${isPeak ? ' · peak' : ''}"></i>`;
+    }).join('')}`).join('')}
+    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? String(h).padStart(2, '0') : ''}</span>`).join('')}</div>`;
+  const heatLegend = `<div class="stat-heat-legend" aria-hidden="true"><span>Quiet</span><span class="scale">${[0.05, 0.25, 0.5, 0.75, 1].map((a) => `<i style="--a:${a}"></i>`).join('')}</span><span>Busy</span></div>`;
+  const heat = `<div class="stat-heat-wrap">${heatRead}${heatGrid}${heatLegend}</div>`;
 
   return `${head}
     ${hero}${facts}
@@ -4359,7 +4515,7 @@ function statsPageHTML() {
     ${over ? `<div class="group-head">Agents over time<small>Commits per ${s.weekly.unit}, last ${wk.length} ${s.weekly.unit}s.</small></div>${over}` : ''}
     <div class="group-head">Commits per day<small>Last ${s.series.length} days.</small></div>${daily}
     <div class="group-head">Who writes the most code<small>Lines added, merges left out. Two git identities for one person? Merge them with a <span class="mono">.mailmap</span>.</small></div><div class="list">${people}</div>
-    <div class="group-head">When it happens<small>Commits by weekday and hour, your local time.</small></div>${heat}`;
+    <div class="group-head">When it happens<small>Weekday × hour in your local time — denser cells mean more commits.</small></div>${heat}`;
 }
 
 function rerenderAgents() {
@@ -4730,6 +4886,7 @@ document.addEventListener('keydown', (e) => {
         comment: feedbackDraft.comment,
         target: feedbackDraft.target,
         credit: !!feedbackDraft.credit,
+        viaGh: !!feedbackDraft.viaGh,
       });
       return;
     }

@@ -60,12 +60,26 @@ export async function doctor(repoPath) {
     }
   }
 
-  if (await exists(path.join(root, 'Makefile'))) {
+  const hasMakefile = await exists(path.join(root, 'Makefile'));
+  if (hasMakefile) {
     findings.push('found Makefile');
+    if (!proposed.run) {
+      const makeRun = await makefileRunTarget(root);
+      if (makeRun) {
+        proposed.run = `make ${makeRun}`;
+        findings.push(`Makefile ${makeRun}: → run: ${proposed.run}`);
+      }
+    }
   }
 
   const apphosts = await findNamed(root, 'apphost.mts', 4);
-  for (const rel of apphosts) findings.push(`found ${rel}`);
+  for (const rel of apphosts) {
+    findings.push(
+      proposed.run
+        ? `found ${rel}`
+        : `found ${rel} — no auto start command; add a run: line in the proposal (or a package.json scripts.dev/start)`,
+    );
+  }
 
   const envFiles = await untrackedEnvFiles(root);
   if (envFiles.length) {
@@ -78,7 +92,11 @@ export async function doctor(repoPath) {
   }
 
   const canAccept = typeof proposed.run === 'string' && !!proposed.run.trim();
-  if (!canAccept) findings.push('no run command - Accept disabled until the repo has a start script');
+  if (!canAccept) {
+    findings.push(
+      'no run command yet — edit the proposal below to add run: … then Write (Accept stays off until a start command is set)',
+    );
+  }
 
   return { findings, proposed, proposedYaml: dumpManifest(proposed), canAccept };
 }
@@ -183,6 +201,25 @@ async function untrackedEnvFiles(root) {
   return parseDirty(text)
     .filter((f) => f.code === '??' && /(^|\/)\.env(\.|$)/.test(f.path) && !/[\n\r]/.test(f.path))
     .map((f) => f.path);
+}
+
+/** First Makefile target among run / start / serve / dev (simple `name:` lines only). */
+async function makefileRunTarget(root) {
+  let text = '';
+  try {
+    text = await fs.readFile(path.join(root, 'Makefile'), 'utf8');
+  } catch {
+    return null;
+  }
+  const names = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^([A-Za-z_][\w.-]*)\s*:/.exec(line);
+    if (m) names.add(m[1]);
+  }
+  for (const want of ['run', 'start', 'serve', 'dev']) {
+    if (names.has(want)) return want;
+  }
+  return null;
 }
 
 async function findNamed(root, basename, maxDepth) {

@@ -1,6 +1,6 @@
 {
   "name": "plenum",
-  "version": "0.2.14",
+  "version": "0.2.17",
   "private": true,
   "description": "Mac git client for parallel work: board, lanes, git verbs, runnable lanes, CLI, and local MCP",
   "author": "Plenum",
@@ -18,7 +18,7 @@
     "prestart": "npm run build",
     "build": "node scripts/stamp-build-info.mjs && vite build",
     "start": "electron .",
-    "test": "node --test --test-concurrency=1 electron/prefs.test.mjs electron/feedback.test.mjs electron/github-star.test.mjs electron/load-env.test.mjs electron/build-info.test.mjs electron/updates.test.mjs electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs electron/agents/*.test.mjs bin/*.test.mjs app/lib/*.test.mjs",
+    "test": "node --test --test-concurrency=1 electron/prefs.test.mjs electron/feedback.test.mjs electron/github-star.test.mjs electron/github-feedback.test.mjs electron/load-env.test.mjs electron/build-info.test.mjs electron/updates.test.mjs electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs electron/agents/*.test.mjs bin/*.test.mjs app/lib/*.test.mjs",
     "smoke:init": "node scripts/smoke-init.mjs",
     "icons": "node scripts/build-icons.mjs",
     "pack": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
