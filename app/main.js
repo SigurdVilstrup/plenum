@@ -2421,7 +2421,8 @@ async function openFeedbackSheet(seed = {}) {
   const target = seed.target || null;
   const comment = seed.comment ?? '';
   const creditOn = !!seed.credit && !!email;
-  const viaGh = !!seed.viaGh && ghAvailable;
+  // Prefer the signed-in `gh` path whenever the CLI is on disk; hide the relay option.
+  const viaGh = ghAvailable;
   const chip = target?.label
     ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
     : `<span class="feedback-target-chip muted">No element selected</span>`;
@@ -2432,15 +2433,8 @@ async function openFeedbackSheet(seed = {}) {
   const creditHint = email
     ? ''
     : `<p class="feedback-credit-hint">Add an email in Settings → Accounts first.</p>`;
-  const pathRow = ghAvailable
-    ? `<div class="field">
-        <span>Create as</span>
-        <div class="option-row" role="group" aria-label="How to create the issue">
-          <button class="option${!viaGh ? ' on' : ''}" type="button" aria-pressed="${!viaGh}" data-feedback-via="relay">Plenum (default)</button>
-          <button class="option${viaGh ? ' on' : ''}" type="button" aria-pressed="${viaGh}" data-feedback-via="gh">Your GitHub CLI</button>
-        </div>
-        <p class="feedback-credit-hint">GitHub CLI posts the public issue as you. The screenshot stays on this Mac.</p>
-      </div>`
+  const pathNote = viaGh
+    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>). The screenshot stays on this Mac.</p>`
     : '';
   openSheet(`
     <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore data-via="${viaGh ? 'gh' : 'relay'}">
@@ -2471,7 +2465,7 @@ async function openFeedbackSheet(seed = {}) {
         </label>
         ${creditHint}
       </div>
-      ${pathRow}
+      ${pathNote}
       <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
@@ -2502,16 +2496,6 @@ async function openFeedbackSheet(seed = {}) {
     });
     paintSendLabel(on);
   };
-
-  form.querySelectorAll('[data-feedback-via]').forEach((b) => b.addEventListener('click', () => {
-    const v = b.dataset.feedbackVia;
-    form.dataset.via = v;
-    form.querySelectorAll('[data-feedback-via]').forEach((x) => {
-      const on = x.dataset.feedbackVia === v;
-      x.classList.toggle('on', on);
-      x.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-  }));
 
   const refreshPreview = async () => {
     try {
@@ -2587,7 +2571,7 @@ async function openFeedbackSheet(seed = {}) {
         closeSheet();
         stopFeedbackPick();
         if (useGh) {
-          toast(e.message || 'Couldn’t create the GitHub issue. Try Plenum send, or check `gh auth status`.', 'bad');
+          toast(e.message || 'Couldn’t create the GitHub issue. Check `gh auth status`.', 'bad');
         } else {
           // Saved locally; main retries unsent reports on launch and every 15 min.
           toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
@@ -2606,7 +2590,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target,
       credit: !!credit?.checked,
-      viaGh: form.dataset.via === 'gh',
+      viaGh,
     };
     feedbackPreviewPng = null;
     closeSheet();
@@ -2618,7 +2602,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target: null,
       credit: !!credit?.checked,
-      viaGh: form.dataset.via === 'gh',
+      viaGh,
     });
   });
   ta.focus();

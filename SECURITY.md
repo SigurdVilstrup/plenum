@@ -12,7 +12,7 @@ Plenum is a local Mac desktop app. It runs git and lane processes on your machin
 
 ## Feedback relay
 
-In-app feedback posts to a public Supabase Edge Function (see `.env.example`). That endpoint is intentionally reachable without a user JWT; treat anything you type in feedback as potentially visible to maintainers via GitHub issues. Do not paste credentials or private keys into feedback.
+When the GitHub CLI (`gh`) is available, in-app feedback creates the public issue as that signed-in user and does not use the relay. Otherwise it posts to a public Supabase Edge Function (see `.env.example`). That endpoint is intentionally reachable without a user JWT; treat anything you type in feedback as potentially visible to maintainers via GitHub issues. Do not paste credentials or private keys into feedback.
 
 ## Local secrets
 
