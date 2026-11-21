@@ -4,7 +4,7 @@
 export const TOUR_STEPS = [
   {
     title: 'Welcome to Plenum',
-    body: 'One board for every worktree of a repo. A worktree on its own branch is a lane, so several features can be in flight at once. It is still plain git.',
+    body: 'One board for every worktree of a repo. A lane is a worktree with Plenum’s runner set up so it can Start on its own ports. Plain worktrees sit under Worktrees until you Open as lane.',
   },
   {
     sel: '.searchbtn',
@@ -13,8 +13,8 @@ export const TOUR_STEPS = [
   },
   {
     sel: '#panel',
-    title: 'Your lanes',
-    body: 'Protected main sits on top: the team branch, which Plenum watches but does not work in. Every other row is a lane. Behind means commits on the team branch the lane does not have yet. Click a lane to select it.',
+    title: 'Protected, Lanes, Worktrees',
+    body: 'Protected is the integration branch (you still commit there). Lanes can Start/Stop/Test. Worktrees are not lanes yet — Open as lane applies the recipe. Behind means commits on Protected the lane does not have yet.',
   },
   {
     sel: '.graph',
@@ -24,7 +24,7 @@ export const TOUR_STEPS = [
   {
     sel: '#lane-head',
     title: 'Act on the lane',
-    body: 'Commit, push, pull, rebase and merge live here. Uncommitted files open a Changes panel on the right. With a .plenum/lane.yaml you also get Run, Stop and Test on the lane’s own ports.',
+    body: 'Commit, push, pull, rebase and Finish live here. Uncommitted files open a Changes panel on the right. With a .plenum/lane.yaml you also get Start, Stop and Test — including on Protected.',
   },
   {
     title: 'Make it yours',

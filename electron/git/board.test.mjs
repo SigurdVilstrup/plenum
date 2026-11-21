@@ -208,8 +208,9 @@ test('loadBoard: feature lane runnable from .plenum/lane.yaml', async () => {
     assert.equal(board.lanes.length, 2);
 
     const primary = board.lanes[0];
-    assert.equal(primary.runnable, false);
+    assert.equal(primary.runnable, true);
     assert.equal(primary.running, false);
+    assert.deepEqual(primary.urls, { web: 'http://127.0.0.1:5001' });
 
     const lane = board.lanes[1];
     assert.equal(lane.runnable, true);

@@ -17,6 +17,29 @@ export function emailAvatarHash(email) {
   return e ? createHash('sha256').update(e).digest('hex') : '';
 }
 
+/** Marker written after createLane/repairLane applies setup + env.copy. */
+export const PREPARED_STAMP = path.join('.plenum', 'prepared');
+
+/** True when a worktree has been opened as a lane (stamp / env.copy), or is Protected. */
+export function isLanePrepared(manifest, lanePath, isPrimary = false) {
+  if (!manifest) return false;
+  if (isPrimary) return true;
+  const root = path.resolve(lanePath);
+  const stamp = path.join(root, PREPARED_STAMP);
+  if (fs.existsSync(stamp)) return true;
+  const copies = (manifest.env?.copy || []).filter((rel) => typeof rel === 'string' && rel.trim());
+  if (!copies.length) {
+    // No env.copy and no stamp: treat as unprepared when setup exists (must Open as lane / Repair).
+    return !manifest.setup;
+  }
+  for (const rel of copies) {
+    const dest = path.resolve(lanePath, rel);
+    if (!dest.startsWith(root + path.sep) && dest !== root) return false;
+    if (!fs.existsSync(dest)) return false;
+  }
+  return true;
+}
+
 const AGENT_TOOLS = [
   ['claude', 'Claude'],
   ['cursor', 'Cursor'],
@@ -684,6 +707,7 @@ export async function loadBoard(repoPath, { historyLimit = 120, fetch = false } 
       head: tree.head,
       alert,
       agents: agentsInLane(tree.path, agents, treePaths),
+      prepared: isLanePrepared(manifest, tree.path, index === 0),
       ...laneStatus(manifest, index, getProc(top, index), getLastTest(top, index)),
     });
   }

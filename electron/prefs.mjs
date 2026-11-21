@@ -106,7 +106,11 @@ function sanitize(partial) {
       if (!v || typeof v !== 'object') continue;
       out[k] = {};
       for (const [root, o] of Object.entries(v)) {
-        if (typeof o?.lanesFolder === 'string' && o.lanesFolder.trim()) out[k][root] = { lanesFolder: o.lanesFolder.trim() };
+        if (!o || typeof o !== 'object') continue;
+        const row = {};
+        if (typeof o.lanesFolder === 'string' && o.lanesFolder.trim()) row.lanesFolder = o.lanesFolder.trim();
+        if (o.protectedPicked === true) row.protectedPicked = true;
+        if (Object.keys(row).length) out[k][root] = row;
       }
     } else if (k === 'warmTabTtlMs' || k === 'zoom') out[k] = v;
   }
