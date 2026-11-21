@@ -684,6 +684,7 @@ const OP_LABELS = {
   pull: 'Pull',
   rebase: 'Rebase',
   merge: 'Merge',
+  finish: 'Finish',
   commit: 'Commit',
   stash: 'Stash',
   stashPop: 'Pop stash',
@@ -789,6 +790,7 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
   }
   paint();
   maybeStartTour();
+  maybePromptProtected(board);
   requestAnimationFrame(() => {
     state.enteringLanes.clear();
     state.flashMarks.clear();
@@ -799,6 +801,61 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
     }
     const op = state.opsByTab.get(state.store.activeId);
     if (op?.act) setActionBusy(op.act, true);
+  });
+}
+
+/** First open: explain Protected and confirm (or change) the team branch. */
+function maybePromptProtected(board) {
+  if (!board?.root || state.settings.open || el.sheetLayer?.childElementCount) return;
+  const ov = state.prefs.repoOverrides?.[board.root] || {};
+  if (ov.protectedPicked || board.teamBranchSource === 'override') return;
+  if (state._protectedPromptRoot === board.root) return;
+  state._protectedPromptRoot = board.root;
+  openProtectedPicker(board);
+}
+
+async function markProtectedPicked(root) {
+  const next = { ...(state.prefs.repoOverrides || {}) };
+  next[root] = { ...(next[root] || {}), protectedPicked: true };
+  await invoke('prefs.set', { repoOverrides: next });
+  state.prefs.repoOverrides = next;
+}
+
+function openProtectedPicker(board) {
+  const locals = (board.branches || []).filter((b) => !b.remote).map((b) => b.short || b.name);
+  const names = [...new Set([board.teamBranch, ...locals].filter(Boolean))];
+  const opts = names.map((n) => `<option value="${esc(n)}"${n === board.teamBranch ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="prot-title">
+      <div class="eyebrow">${iconHTML('shield-check', 'sm')}Protected branch</div>
+      <h1 id="prot-title">Which branch do you integrate into?</h1>
+      <p>Protected is a role, not a lock. You still commit and push on it. Behind counts default to this tip. Lanes Start on their own ports once you write a recipe.</p>
+      <label class="field">Branch<select name="branch" class="select mono" required>${opts}</select></label>
+      <div class="row-end">
+        <button class="btn" type="button" data-prot-later>Not now</button>
+        <button class="btn primary" type="submit">${iconHTML('check-circle', 'sm')}Continue</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  form.querySelector('[data-prot-later]')?.addEventListener('click', async () => {
+    try {
+      await markProtectedPicked(board.root);
+      closeSheet();
+    } catch { /* toasted */ }
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const branch = form.querySelector('[name=branch]').value.trim();
+    const root = board.root;
+    try {
+      if (branch && branch !== board.teamBranch) {
+        await invoke('repo.setTeamBranch', branch, root);
+      }
+      await markProtectedPicked(root);
+      closeSheet();
+      await refresh({ loud: false });
+      toast(`Protected → ${branch || board.teamBranch}`, 'ok');
+    } catch { /* toasted */ }
   });
 }
 
@@ -1390,17 +1447,47 @@ async function openTabImageSheet(tab) {
 }
 
 
+function laneRowHTML(l, b, selected) {
+  const enter = state.enteringLanes.has(l.index) ? ' enter' : '';
+  const flash = state.flashMarks.has(l.index) ? ' flash' : '';
+  const run = l.running ? ' running' : '';
+  const runTitle = l.running ? ' Running.' : '';
+  let mark;
+  if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working: uncommitted changes.${runTitle}"><i></i></span>`;
+  else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove: merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
+  else mark = `<span class="mark unmerged${flash}${run}" title="Not merged yet.${runTitle}"><i></i></span>`;
+  const meta = l.readiness === 'safe'
+    ? `<span class="meta ok">merged</span>`
+    : l.behind > 0
+      ? `<span class="meta ${l.behind >= 2 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind} behind</span>`
+      : `<span class="meta"></span>`;
+  const folder = l.folder ? `<span class="folder">${esc(l.folder)}</span>` : '';
+  const isSelected = l.index === selected;
+  return `<div class="lane-block${isSelected ? ' selected' : ''}">
+    <button class="lane-row${enter}${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
+      ${mark}<span class="lane-main"><span class="name">${esc(l.name)}</span>${meta}${laneAgentsHTML(l)}</span>${folder}
+    </button>
+    ${isSelected ? laneRunHTML(l) : ''}
+  </div>`;
+}
+
 function paintPanel() {
   const b = state.board;
   const selected = state.selectedLane;
   const primary = b.lanes[0];
-  const lanes = b.lanes.slice(1);
+  const rest = b.lanes.slice(1);
+  const hasManifest = Boolean(b.hasManifest);
+  // Lanes = runnable worktrees (incl. setup-incomplete → Repair). Worktrees = no recipe / not opened as lane.
+  const laneList = hasManifest ? rest.filter((l) => l.runnable) : [];
+  const worktrees = hasManifest
+    ? rest.filter((l) => !l.runnable)
+    : rest;
   const markPrimary = primary.alert
     ? `${iconHTML('warning-circle')}`
     : `${iconHTML('shield-check')}`;
   const primarySelected = selected === 0;
   let html = `<div class="section">
-    <div class="section-head" title="Checkout on the team branch. Plenum watches it and won’t work in it.">Protected</div>
+    <div class="section-head" title="Integration branch. You still commit and push here; Start works when the repo has a lane recipe.">Protected</div>
     <div class="lane-block${primarySelected ? ' selected' : ''}">
       <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0">
         <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
@@ -1410,37 +1497,38 @@ function paintPanel() {
     </div>
   </div>`;
 
-  const rows = lanes.map((l) => {
-    const enter = state.enteringLanes.has(l.index) ? ' enter' : '';
-    const flash = state.flashMarks.has(l.index) ? ' flash' : '';
-    const run = l.running ? ' running' : '';
-    const runTitle = l.running ? ' Running.' : '';
-    let mark;
-    if (l.readiness === 'working') mark = `<span class="mark working${flash}${run}" title="Working: uncommitted changes.${runTitle}"><i></i></span>`;
-    else if (l.readiness === 'safe') mark = `<span class="mark safe${flash}${run}" title="Safe to remove: merged, tree clean.${runTitle}">${iconHTML('check-circle')}</span>`;
-    else mark = `<span class="mark unmerged${flash}${run}" title="Not merged yet.${runTitle}"><i></i></span>`;
-    // #82 any behind reads as warn/bad so it doesn't wash out next to the name
-    const meta = l.readiness === 'safe'
-      ? `<span class="meta ok">merged</span>`
-      : l.behind > 0
-        ? `<span class="meta ${l.behind >= 2 ? 'bad' : 'warn'}" title="${l.behind} commits behind ${esc(b.teamRef)}">${iconHTML('cloud-arrow-down', 'sm')}${l.behind} behind</span>`
-        : `<span class="meta"></span>`;
-    const folder = l.folder ? `<span class="folder">${esc(l.folder)}</span>` : '';
-    const isSelected = l.index === selected;
-    return `<div class="lane-block${isSelected ? ' selected' : ''}">
-      <button class="lane-row${enter}${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
-        ${mark}<span class="lane-main"><span class="name">${esc(l.name)}</span>${meta}${laneAgentsHTML(l)}</span>${folder}
-      </button>
-      ${isSelected ? laneRunHTML(l) : ''}
-    </div>`;
-  }).join('');
+  html += `<div class="section">
+    <div class="section-head">
+      <span title="Worktrees with Plenum runner setup.">Lanes <span class="count">${laneList.length}</span></span>
+      <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
+    </div>
+    ${laneList.length
+      ? laneList.map((l) => laneRowHTML(l, b, selected)).join('')
+      : `<div class="empty-note">${hasManifest
+        ? 'None yet — use + or Open as lane on a worktree'
+        : `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup first</button>`}</div>`}
+  </div>`;
 
   html += `<div class="section">
     <div class="section-head">
-      <span title="A worktree on its own branch.">Lanes <span class="count">${lanes.length}</span></span>
-      <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
+      <span title="Worktrees without runner setup yet.">Worktrees <span class="count">${worktrees.length}</span></span>
     </div>
-    ${rows}
+    ${worktrees.length
+      ? worktrees.map((l) => {
+        const isSelected = l.index === selected;
+        const cta = hasManifest
+          ? `<button class="btn primary" type="button" data-act="openAsLane">${iconHTML('play', 'sm')}Open as lane</button>`
+          : laneSetupLink();
+        return `<div class="lane-block${isSelected ? ' selected' : ''}">
+          <button class="lane-row${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
+            <span class="mark">${iconHTML('git-branch')}</span>
+            <span class="lane-main"><span class="name">${esc(l.name)}</span><span class="meta">not a lane</span></span>
+            ${l.folder ? `<span class="folder">${esc(l.folder)}</span>` : ''}
+          </button>
+          ${isSelected ? `<div class="lane-run">${cta}</div>` : ''}
+        </div>`;
+      }).join('')
+      : '<div class="empty-note">None</div>'}
   </div>`;
 
   const allBranches = b.branches || [];
@@ -1485,7 +1573,6 @@ function paintPanel() {
     </button>
     ${branchVsSelectHTML(b)}
     </div>
-    <div class="section-note">Local tips on this Mac</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
@@ -1494,7 +1581,6 @@ function paintPanel() {
       <span class="name">Remotes</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="section-note">On the remote only — no local checkout of the same name</div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
       remotes.length
         ? remoteBody
@@ -1520,10 +1606,14 @@ function paintPanel() {
       if (lane) openLaneCtxMenu(e.clientX, e.clientY, lane);
     });
   });
-  el.panel.querySelectorAll('.lane-run [data-act]').forEach((btn) => {
+  el.panel.querySelectorAll('.lane-run [data-act], .empty-note [data-act]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (btn.dataset.act === 'doctor') {
+        openLaneSetup();
+        return;
+      }
       const lane = laneByIndex(state.selectedLane);
       if (!lane) return;
       if (btn.dataset.act === 'servicesMenu') {
@@ -1578,14 +1668,6 @@ function paintPanel() {
       e.preventDefault();
       e.stopPropagation();
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
-    });
-  });
-  el.panel.querySelectorAll('[data-branch-delete]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const br = branchByName(btn.dataset.branchDelete);
-      if (br) openDeleteBranchSheet(br);
     });
   });
 }
@@ -1698,17 +1780,12 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
   // Keep lane selection clickable while the list refreshes; block checkout targets only.
   const block = refreshing && !br.hasLane;
   const kind = br.remote ? 'remote' : 'local';
-  const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
-  // #90 visible delete (context menu still works); kind lives on the wrap for styling/copy
-  const del = canDelete
-    ? `<button class="iconbtn branch-del" type="button" data-branch-delete="${esc(br.name)}" title="Delete ${kind} ${esc(br.name)}" aria-label="Delete ${kind} branch ${esc(br.name)}">${iconHTML('x', 'sm')}</button>`
-    : '';
+  // #126 delete is right-click only (context menu); kind stays on the wrap for styling/copy
   return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}${pinned ? ' pinned' : ''}" data-branch-kind="${kind}">
     <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
       ${mark}
       <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
     </button>
-    ${del}
   </div>`;
 }
 
@@ -1770,7 +1847,7 @@ function gitActionsHTML(l) {
     if (l.behind) {
       a.push(`<button class="btn" type="button" data-act="rebase" title="Rebase onto a tip (default ${esc(state.board.teamRef)})">${iconHTML('arrow-counter-clockwise', 'sm')}Rebase onto…</button>`);
     } else if (l.ahead && !l.dirty) {
-      a.push(`<button class="btn" type="button" data-act="merge" title="Merge this lane into main">${iconHTML('git-merge', 'sm')}Merge into main</button>`);
+      a.push(`<button class="btn" type="button" data-act="finish" title="Finish this lane: pick merge target, stop, remove">${iconHTML('git-merge', 'sm')}Finish…</button>`);
     }
   }
   return a.join('');
@@ -1806,33 +1883,34 @@ function laneSetupLink() {
 
 /** Run controls on the selected lane in the panel: play/stop · Test · services · shared-data icon. */
 function laneRunHTML(l) {
-  if (l.isPrimary) {
-    return `<div class="lane-run"><span class="hint">${iconHTML('shield-check', 'sm')}Protected — never started</span></div>`;
-  }
-  if (l.readiness === 'safe' && !l.running) {
-    return `<div class="lane-run"><span class="hint">${iconHTML('stop', 'sm')}Merged — not started</span></div>`;
-  }
   if (!l.runnable) {
     return `<div class="lane-run"><span class="hint">${iconHTML('warning-circle', 'sm')}no lane.yaml</span>${laneSetupLink()}</div>`;
   }
+  if (l.prepared === false && !l.isPrimary) {
+    return `<div class="lane-run"><span class="hint">${iconHTML('warning-circle', 'sm')}setup incomplete</span><button class="btn" type="button" data-act="repair">${iconHTML('gear-six', 'sm')}Repair</button></div>`;
+  }
   const runToggle = l.running
     ? `<button class="iconbtn danger" type="button" data-act="down" title="Stop" aria-label="Stop">${iconHTML('stop')}</button>`
-    : `<button class="iconbtn primary" type="button" data-act="up" title="Run" aria-label="Run">${iconHTML('play')}</button>`;
+    : `<button class="iconbtn primary" type="button" data-act="up" title="Start" aria-label="Start">${iconHTML('play')}</button>`;
   const testTitle = l.lastTest
     ? `Test · last ${l.lastTest.ok ? 'passed' : 'failed'}`
     : 'Run tests';
   const services = `<button class="iconbtn" type="button" data-act="servicesMenu" aria-haspopup="menu" title="Open a service">${iconHTML('globe-simple')}${iconHTML('caret-down', 'sm')}</button>`;
   const dataTitle = l.dataMode === 'snapshot'
-    ? 'Snapshot data: seeds its own copy via services.*.snapshot before Run.'
-    : 'Shared data: databases shared across lanes. Set a service to snapshot in .plenum/lane.yaml for an isolated copy.';
+    ? 'Snapshot data: seeds its own copy via services.*.snapshot before Start.'
+    : 'Shared data: local throwaway DBs shared across lanes — not staging or production.';
   const dataIcon = l.dataMode === 'snapshot' || l.dataMode === 'shared' || !l.dataMode
     ? `<span class="lane-fact data" title="${esc(dataTitle)}" aria-label="${l.dataMode === 'snapshot' ? 'Snapshot data' : 'Shared data'}">${iconHTML('database')}</span>`
+    : '';
+  const finish = !l.isPrimary && l.ahead && !l.dirty
+    ? `<button class="btn" type="button" data-act="finish" title="Finish: merge, stop, remove">${iconHTML('git-merge', 'sm')}Finish</button>`
     : '';
   return `<div class="lane-run">
     ${runToggle}
     <button class="iconbtn" type="button" data-act="test" title="${esc(testTitle)}" aria-label="Test">${iconHTML('flask')}</button>
     ${services}
     ${dataIcon}
+    ${finish}
   </div>`;
 }
 
@@ -1848,7 +1926,7 @@ function paintHeader() {
     html = `<div class="head-row">
       <div class="title" title="Primary checkout · ${esc(l.displayPath || l.path)}">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
-        <h1>${esc(l.name)}</h1>
+        <h1 title="${esc(l.name)}">${esc(l.name)}</h1>
       </div>
       <div class="facts">
         ${l.onTeamBranch ? '' : `<span class="fact bad">${iconHTML('shield-check', 'sm')}<strong>not on</strong> ${esc(b.teamBranch)}</span>`}
@@ -1954,7 +2032,7 @@ async function handleAction(act, lane, url) {
     if (act === 'openUrl') return invoke('os.openExternal', url);
     if (act === 'commit') return openCommitSheet(lane);
     if (act === 'push') {
-      return runGit('lane.push', lane.index, `Pushed ${lane.name} to origin`, 'push');
+      return pushLaneTip(lane);
     }
     if (act === 'pull') {
       return runGit('lane.pull', lane.index, `Pulled ${lane.name} from origin`, 'pull');
@@ -1962,9 +2040,11 @@ async function handleAction(act, lane, url) {
     if (act === 'rebase') {
       return openRebaseOntoSheet(lane);
     }
-    if (act === 'merge') return openMergeSheet(lane);
+    if (act === 'merge' || act === 'finish') return openFinishSheet(lane);
     if (act === 'remove') return openRemoveSheet(lane);
     if (act === 'doctor') return openLaneSetup();
+    if (act === 'repair') return repairSelectedLane(lane);
+    if (act === 'openAsLane') return openAsLaneSheet(lane);
     if (act === 'conflicts') return openConflictSheet(lane);
     if (act === 'stash') {
       return runGit('lane.stash', lane.index, `Stashed changes on ${lane.name}`, 'stash', {
@@ -2015,12 +2095,12 @@ function setActionBusy(act, on) {
   });
 }
 
-async function runGit(channel, laneIndex, okMsg, act, undo) {
+async function runGit(channel, laneIndex, okMsg, act, undo, extra) {
   const tabId = beginOp(act);
   if (!tabId) return;
   const root = state.board?.root;
   try {
-    const board = await invoke(channel, ...pin(laneIndex));
+    const board = await invoke(channel, ...pin(laneIndex, ...(extra === undefined ? [] : [extra])));
     if (undo) pushUndo(undo.label, tabId, undo.run);
     if (settleBoard(tabId, root, board)) {
       state.flashMarks.add(laneIndex);
@@ -2029,6 +2109,61 @@ async function runGit(channel, laneIndex, okMsg, act, undo) {
   } finally {
     endOp(tabId, act);
   }
+}
+
+function isPushRejected(err) {
+  const msg = err?.message || String(err || '');
+  return err?.code === 'PUSH_REJECTED' || /non-fast-forward|rejected by origin|Force push/i.test(msg);
+}
+
+async function pushLaneTip(lane, { force } = {}) {
+  try {
+    await runGit(
+      'lane.push',
+      lane.index,
+      force === 'force'
+        ? `Force-pushed ${lane.name} to origin`
+        : force === 'lease'
+          ? `Force-pushed ${lane.name} (with lease) to origin`
+          : `Pushed ${lane.name} to origin`,
+      'push',
+      undefined,
+      force ? { force } : undefined,
+    );
+  } catch (e) {
+    if (!force && isPushRejected(e)) openForcePushSheet({ kind: 'lane', lane });
+  }
+}
+
+function openForcePushSheet({ kind, lane, branch }) {
+  const label = kind === 'branch' ? (branch?.short || branch?.name) : lane?.name;
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="force-push-title">
+      <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Force push</div>
+      <h1 id="force-push-title">${esc(label || 'origin')}</h1>
+      <p>Origin rejected a normal push (non-fast-forward). Prefer lease when you just rebased; plain force overwrites whatever is on the remote tip.</p>
+      <div class="list">
+        <label class="list-row compact choice">
+          <input type="radio" name="force" value="lease" checked />
+          <div class="name">Force with lease<small><span class="mono">--force-with-lease</span> — refuses if someone else moved the remote tip.</small></div>
+        </label>
+        <label class="list-row compact choice">
+          <input type="radio" name="force" value="force" />
+          <div class="name">Force<small><span class="mono">--force</span> — overwrites the remote tip. Destructive.</small></div>
+        </label>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn danger" type="submit">${iconHTML('arrow-up', 'sm')}Force push</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode = el.sheetLayer.querySelector('input[name=force]:checked')?.value || 'lease';
+    closeSheet();
+    if (kind === 'branch') await pushBranchRow(branch.name, { force: mode });
+    else if (lane) await pushLaneTip(lane, { force: mode });
+  });
 }
 
 async function runUp(lane, { force = false } = {}) {
@@ -2093,7 +2228,7 @@ function openDriftSheet(lane, pending) {
 
 async function runConflictable(channel, lane, extra, act, okMsg) {
   const tabId = beginOp(act);
-  if (!tabId) return;
+  if (!tabId) return false;
   const root = state.board?.root;
   try {
     const res = await invoke(channel, ...pin(lane.index, extra));
@@ -2102,7 +2237,7 @@ async function runConflictable(channel, lane, extra, act, okMsg) {
         state.conflictRoot = res.conflictRoot || null;
         openConflictSheet(lane, res);
       }
-      return;
+      return false;
     }
     if (settleBoard(tabId, root, res)) {
       state.flashMarks.add(lane.index);
@@ -2111,6 +2246,7 @@ async function runConflictable(channel, lane, extra, act, okMsg) {
         ? `Rebased ${lane.name} onto ${team}`
         : `Merged ${lane.name} into ${team}`), 'ok');
     }
+    return true;
   } finally {
     endOp(tabId, act);
   }
@@ -2175,7 +2311,7 @@ function openWarmSheet() {
   });
 }
 
-let feedbackDraft = { comment: '', target: null, credit: false };
+let feedbackDraft = { comment: '', target: null, credit: false, viaGh: false };
 
 /** Effective git email for optional feedback credit (local override, else global). */
 function feedbackCreditEmail() {
@@ -2245,7 +2381,7 @@ function startFeedbackPick() {
     e.stopPropagation();
     const node = hitAt(e.clientX, e.clientY);
     stopFeedbackPick();
-    const creditSeed = { credit: !!feedbackDraft.credit };
+    const creditSeed = { credit: !!feedbackDraft.credit, viaGh: !!feedbackDraft.viaGh };
     if (!node) {
       openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target, ...creditSeed });
       return;
@@ -2376,9 +2512,13 @@ async function captureFeedbackPreview(target) {
 
 async function openFeedbackSheet(seed = {}) {
   const email = await ensureFeedbackIdentity();
+  let ghAvailable = false;
+  try { ghAvailable = !!(await invoke('feedback.ghAvailable')); } catch { ghAvailable = false; }
   const target = seed.target || null;
   const comment = seed.comment ?? '';
   const creditOn = !!seed.credit && !!email;
+  // Prefer the signed-in `gh` path whenever the CLI is on disk; hide the relay option.
+  const viaGh = ghAvailable;
   const chip = target?.label
     ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
     : `<span class="feedback-target-chip muted">No element selected</span>`;
@@ -2389,8 +2529,11 @@ async function openFeedbackSheet(seed = {}) {
   const creditHint = email
     ? ''
     : `<p class="feedback-credit-hint">Add an email in Settings → Accounts first.</p>`;
+  const pathNote = viaGh
+    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>). The screenshot stays on this Mac.</p>`
+    : '';
   openSheet(`
-    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore>
+    <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore data-via="${viaGh ? 'gh' : 'relay'}">
       <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
       <h1 id="feedback-title">What’s broken?</h1>
       <label class="field">Comment<textarea name="comment" rows="3" required autofocus placeholder="What happened?">${esc(comment)}</textarea></label>
@@ -2418,7 +2561,8 @@ async function openFeedbackSheet(seed = {}) {
         </label>
         ${creditHint}
       </div>
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Goes to the Plenum team. Your <code>repoPath</code> stays on this Mac.</span></p>
+      ${pathNote}
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
         <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>⌘↩</kbd></button>
@@ -2467,6 +2611,21 @@ async function openFeedbackSheet(seed = {}) {
   if (!previewSrc) refreshPreview();
   else feedbackPreviewPng = previewSrc;
 
+  const toastSent = (sent) => {
+    const link = sent?.issueUrl
+      ? { url: sent.issueUrl, label: sent.issueNumber != null ? `#${sent.issueNumber}` : 'Open issue' }
+      : null;
+    if (sent?.via === 'gh') {
+      toast('Opened as a public GitHub issue. Thanks.', 'ok', { link });
+      return;
+    }
+    if (sent?.screenshot === false) {
+      toast('Sent, but the screenshot didn’t upload. Thanks.', 'ok', { link });
+      return;
+    }
+    toast('Sent. Thanks.', 'ok', { link });
+  };
+
   const send = async () => {
     if (sendBtn.disabled) return;
     const text = ta.value.trim();
@@ -2479,11 +2638,13 @@ async function openFeedbackSheet(seed = {}) {
       toast('Add an email in Settings → Accounts, or leave credit off.', 'bad');
       return;
     }
+    const useGh = form.dataset.via === 'gh';
     const draft = {
       comment: text,
       target,
       credit: wantCredit,
       pngBase64: feedbackPreviewPng,
+      viaGh: useGh,
     };
     setSendBusy(true);
     try {
@@ -2496,17 +2657,21 @@ async function openFeedbackSheet(seed = {}) {
         pngBase64,
       });
       try {
-        const sent = await invoke('feedback.send', dir);
+        const sent = await invoke(useGh ? 'feedback.sendViaGh' : 'feedback.send', dir);
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast(sent?.screenshot === false ? 'Sent, but the screenshot didn’t upload. Thanks.' : 'Sent. Thanks.', 'ok');
-      } catch {
-        // Saved locally; main retries unsent reports on launch and every 15 min.
+        toastSent(sent);
+      } catch (e) {
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
+        if (useGh) {
+          toast(e.message || 'Couldn’t create the GitHub issue. Check `gh auth status`.', 'bad');
+        } else {
+          // Saved locally; main retries unsent reports on launch and every 15 min.
+          toast('Couldn’t reach the feedback server. Saved, will retry automatically.', 'bad');
+        }
       }
     } catch (e) {
       setSendBusy(false);
@@ -2521,6 +2686,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target,
       credit: !!credit?.checked,
+      viaGh,
     };
     feedbackPreviewPng = null;
     closeSheet();
@@ -2532,6 +2698,7 @@ async function openFeedbackSheet(seed = {}) {
       comment: ta.value,
       target: null,
       credit: !!credit?.checked,
+      viaGh,
     });
   });
   ta.focus();
@@ -2647,7 +2814,7 @@ async function updateBranchRow(name) {
   finally { endOp(tabId, 'branch-update'); }
 }
 
-async function pushBranchRow(name) {
+async function pushBranchRow(name, { force } = {}) {
   if (state.loudRefreshByTab.has(state.store.activeId)) return;
   const br = branchByName(name);
   if (!br || br.remote) return;
@@ -2655,12 +2822,20 @@ async function pushBranchRow(name) {
   if (!tabId) return;
   const root = state.board?.root;
   try {
-    const board = await invoke('branch.push', ...pin({ branch: br.name }));
+    const payload = force ? { branch: br.name, force } : { branch: br.name };
+    const board = await invoke('branch.push', ...pin(payload));
     if (settleBoard(tabId, root, board)) {
-      toast(`Pushed ${br.short || br.name} to origin`, 'ok');
+      const tip = br.short || br.name;
+      toast(
+        force === 'force' ? `Force-pushed ${tip} to origin`
+          : force === 'lease' ? `Force-pushed ${tip} (with lease) to origin`
+            : `Pushed ${tip} to origin`,
+        'ok',
+      );
     }
-  } catch { /* toasted */ }
-  finally { endOp(tabId, 'branch-push'); }
+  } catch (e) {
+    if (!force && isPushRejected(e)) openForcePushSheet({ kind: 'branch', branch: br });
+  } finally { endOp(tabId, 'branch-push'); }
 }
 
 async function checkoutBranchRow(name) {
@@ -2752,10 +2927,14 @@ function openLaneCtxMenu(x, y, lane) {
   if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'));
   add('Pull from remote', () => handleAction('pull', lane));
   if (lane.unpushed) add('Push to remote', () => handleAction('push', lane));
-  if (!lane.isPrimary) {
+  add('Force push…', () => openForcePushSheet({ kind: 'lane', lane }));
+  if (lane.runnable && (lane.prepared !== false || lane.isPrimary)) {
     if (lane.running) add('Stop', () => handleAction('down', lane));
-    else if (lane.runnable && lane.readiness !== 'safe') add('Run', () => handleAction('up', lane));
-    if (lane.ahead && !lane.dirty) add('Merge into main…', () => handleAction('merge', lane));
+    else add('Start', () => handleAction('up', lane));
+  }
+  if (!lane.isPrimary) {
+    if (lane.prepared === false && lane.runnable) add('Repair', () => handleAction('repair', lane));
+    if (lane.ahead && !lane.dirty) add('Finish…', () => handleAction('finish', lane));
     const removeLabel = lane.readiness === 'safe' ? 'Remove lane…' : 'Remove lane… !';
     add(removeLabel, () => handleAction('remove', lane), true);
   }
@@ -2785,7 +2964,10 @@ function openBranchCtxMenu(x, y, name) {
       }
       updateBranchRow(br.name);
     });
-    if (!br.hasLane) add('Push to remote', () => pushBranchRow(br.name));
+    if (!br.hasLane) {
+      add('Push to remote', () => pushBranchRow(br.name));
+      add('Force push…', () => openForcePushSheet({ kind: 'branch', branch: br }));
+    }
   }
   if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
   if (canRename) add('Rename…', () => openRenameBranchSheet(br));
@@ -2895,17 +3077,39 @@ function openRebaseOntoSheet(lane) {
 async function openLaneFromBranch(branch) {
   const name = String(branch || '').trim();
   if (!name) return;
-  const tabId = state.store.activeId;
-  const root = state.board?.root;
-  try {
-    const board = await invoke('lane.create', ...pin({ existing: true, branch: name }));
-    const created = board.lanes.find((l) => l.branch === name) || board.lanes[board.lanes.length - 1];
-    pushCreateLaneUndo(tabId, created, { newBranch: false });
-    if (settleBoard(tabId, root, board, { selectLane: created?.index, enterLane: created?.index })) {
-      toast(`Lane ${created?.name || name} opened`, 'ok', { undo: Boolean(created) });
-      if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
-    }
-  } catch { /* toasted */ }
+  if (!state.board?.hasManifest) {
+    toast('Lane setup first — write .plenum/lane.yaml', 'warn');
+    return openLaneSetup();
+  }
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="open-br-lane-title">
+      <div class="eyebrow">${iconHTML('play', 'sm')}Open as lane</div>
+      <h1 id="open-br-lane-title">${esc(name)}</h1>
+      <p>Creates a worktree if needed and applies the repo recipe so it can Start on its own ports.</p>
+      <div class="check">
+        ${iconHTML('database')}
+        <div><strong>Shared data.</strong> Lanes share one local throwaway database by default — not staging or production.</div>
+      </div>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">${iconHTML('play', 'sm')}Open as lane</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    closeSheet();
+    const tabId = state.store.activeId;
+    const root = state.board?.root;
+    try {
+      const board = await invoke('lane.create', ...pin({ existing: true, branch: name }));
+      const created = board.lanes.find((l) => l.branch === name) || board.lanes[board.lanes.length - 1];
+      pushCreateLaneUndo(tabId, created, { newBranch: false });
+      if (settleBoard(tabId, root, board, { selectLane: created?.index, enterLane: created?.index })) {
+        toast(`Lane ${created?.name || name} opened`, 'ok', { undo: Boolean(created) });
+        if (created && state.prefs.openLaneInEditor !== false) invoke('os.openEditor', created.path).catch(() => {});
+      }
+    } catch { /* toasted */ }
+  });
 }
 
 function openCreateLane() {
@@ -3679,35 +3883,116 @@ function openCommitSheet(lane) {
   ta.focus();
 }
 
-function openMergeSheet(lane) {
+function openFinishSheet(lane) {
+  const board = state.board;
+  const targets = board.lanes
+    .filter((l) => l.index !== lane.index)
+    .map((l) => {
+      const label = l.isPrimary ? `${l.name} (Protected)` : l.name;
+      const sel = l.isPrimary || l.branch === board.teamBranch ? ' selected' : '';
+      return `<option value="${esc(l.branch || l.name)}"${sel}>${esc(label)}</option>`;
+    })
+    .join('');
   openSheet(`
-    <form class="modal" role="dialog" aria-labelledby="merge-title">
-      <div class="eyebrow">${iconHTML('git-merge', 'sm')}Merge into ${esc(state.board.teamBranch)}</div>
-      <h1 id="merge-title">Merge ${esc(lane.name)}</h1>
-      <p>Primary has to be clean and on ${esc(state.board.teamBranch)}. Pick how the commits land.</p>
+    <form class="modal" role="dialog" aria-labelledby="finish-title">
+      <div class="eyebrow">${iconHTML('git-merge', 'sm')}Finish lane</div>
+      <h1 id="finish-title">Finish ${esc(lane.name)}</h1>
+      <p>Merge into a checkout that is already open, then stop this lane’s services and remove its worktree. Target does not have to be Protected.</p>
+      <label class="field">Merge into<select name="into" class="select mono" required>${targets}</select></label>
       <div class="list">
-        <label class="list-row compact choice"><input type="radio" name="mode" value="ff" checked /><div class="name">Fast-forward<small>Only when history is linear.</small></div></label>
-        <label class="list-row compact choice"><input type="radio" name="mode" value="merge" /><div class="name">Merge commit<small>Always writes a merge commit.</small></div></label>
+        <label class="list-row compact choice"><input type="radio" name="mode" value="merge" checked /><div class="name">Merge commit<small>Always writes a merge commit.</small></div></label>
+        <label class="list-row compact choice"><input type="radio" name="mode" value="ff" /><div class="name">Fast-forward<small>Only when history is linear.</small></div></label>
       </div>
+      <label class="check"><input type="checkbox" name="remove" checked /> Remove worktree after merge</label>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">${iconHTML('git-merge', 'sm')}Merge</button>
+        <button class="btn primary" type="submit">${iconHTML('git-merge', 'sm')}Finish</button>
       </div>
     </form>`);
   el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const mode = el.sheetLayer.querySelector('input[name=mode]:checked')?.value || 'ff';
+    const form = e.target;
+    const mode = form.querySelector('input[name=mode]:checked')?.value || 'merge';
+    const into = form.querySelector('[name=into]').value;
+    const remove = form.querySelector('[name=remove]')?.checked !== false;
     closeSheet();
-    const team = state.board?.teamBranch || 'main';
     const how = mode === 'ff' ? 'fast-forward' : 'merge commit';
-    await runConflictable(
-      'lane.merge',
+    state.pendingFinish = { lanePath: lane.path, branch: lane.branch, into, remove, how };
+    const ok = await runConflictable(
+      'lane.finish',
       lane,
-      { mode },
-      'merge',
-      `Merged ${lane.name} into ${team} (${how})`,
+      { mode, into, remove },
+      'finish',
+      `Finished ${lane.name} → ${into} (${how})`,
     );
+    if (ok) state.pendingFinish = null;
   });
+}
+
+async function finalizePendingFinish(tabId, root) {
+  const pending = state.pendingFinish;
+  if (!pending?.remove) {
+    state.pendingFinish = null;
+    return;
+  }
+  try {
+    const board = state.board;
+    const still = board?.lanes?.find((l) =>
+      pathResolveEq(l.path, pending.lanePath) || l.branch === pending.branch);
+    if (still && !still.isPrimary) {
+      if (still.running) await invoke('lane.down', ...pin(still.index));
+      const next = await invoke('lane.remove', ...pin(still.index, { force: true }));
+      if (settleBoard(tabId, root, next)) {
+        toast(`Finished ${pending.branch} → ${pending.into} (${pending.how})`, 'ok');
+      }
+    }
+  } catch { /* toasted */ }
+  state.pendingFinish = null;
+}
+
+function pathResolveEq(a, b) {
+  if (!a || !b) return false;
+  const norm = (p) => String(p).replace(/\/+$/, '');
+  return norm(a) === norm(b);
+}
+
+/** Kept for callers that still say Merge; Finish is the end-of-life path. */
+function openMergeSheet(lane) {
+  return openFinishSheet(lane);
+}
+
+function openAsLaneSheet(lane) {
+  const hasManifest = Boolean(state.board?.hasManifest);
+  if (!hasManifest) {
+    toast('Lane setup first — write .plenum/lane.yaml', 'warn');
+    return openLaneSetup();
+  }
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="open-lane-title">
+      <div class="eyebrow">${iconHTML('play', 'sm')}Open as lane</div>
+      <h1 id="open-lane-title">${esc(lane.name)}</h1>
+      <p>Applies the repo recipe (env copy + setup) so this worktree can Start on its own ports. Shared data is the default: one local throwaway database across lanes — not staging or production. Isolation needs a snapshot seed in lane.yaml.</p>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">${iconHTML('play', 'sm')}Open as lane</button>
+      </div>
+    </form>`);
+  el.sheetLayer.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    closeSheet();
+    await repairSelectedLane(lane, { opened: true });
+  });
+}
+
+async function repairSelectedLane(lane, { opened = false } = {}) {
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
+  try {
+    const board = await invoke('lane.repair', ...pin(lane.index));
+    if (settleBoard(tabId, root, board, { selectLane: lane.index })) {
+      toast(opened ? `Opened ${lane.name} as a lane` : `Repaired ${lane.name}`, 'ok');
+    }
+  } catch { /* toasted */ }
 }
 
 async function openConflictSheet(lane, snapshot) {
@@ -3768,13 +4053,17 @@ async function openConflictSheet(lane, snapshot) {
       }
       state.conflictRoot = null;
       closeSheet();
-      if (settleBoard(tabId, root, res)) toast('Conflicts resolved. Continued.', 'ok');
+      if (settleBoard(tabId, root, res)) {
+        if (state.pendingFinish) await finalizePendingFinish(tabId, root);
+        else toast('Conflicts resolved. Continued.', 'ok');
+      }
     } catch { /* toasted */ }
   });
   modal.querySelector('[data-abort]')?.addEventListener('click', async () => {
     try {
       const board = await invoke('lane.conflictAbort', ...pin(lane.index, croot));
       state.conflictRoot = null;
+      state.pendingFinish = null;
       closeSheet();
       if (settleBoard(tabId, root, board)) toast('Aborted. Branch restored.', 'ok');
     } catch { /* toasted */ }
@@ -3995,28 +4284,7 @@ const SETTINGS_PAGES = {
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared = one instance for every lane; snapshot seeds a copy before Run.')}
       </div>`;
   },
-  setup: () => {
-    const s = state.setup;
-    const tab = state.store.tabs.find((t) => t.path === s?.root);
-    const findings = !s || s.loading
-      ? '<div class="finding">' + iconHTML('terminal-window', 'sm') + '<div>Reading the repo…</div></div>'
-      : s.findings.length
-        ? s.findings.map((f) => `<div class="finding">${iconHTML('terminal-window', 'sm')}<div>${esc(f)}</div></div>`).join('')
-        : `<div class="finding">${iconHTML('warning-circle', 'sm')}<div>Nothing obvious turned up.</div></div>`;
-    return `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repository</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>
-      <h1>Lane setup</h1>
-      <p class="lede">Why a second checkout can’t start, and the <span class="mono">.plenum/lane.yaml</span> that fixes it. Nothing hits disk until Write.</p>
-      <div class="cols">
-        <div><div class="col-head">What the repo does today</div>${findings}</div>
-        <div><div class="col-head">Proposed <span class="mono">.plenum/lane.yaml</span></div><pre>${esc(s?.proposedYaml || '')}</pre></div>
-      </div>
-      <div class="foot">${iconHTML('plugs-connected', 'sm')}<span>Same proposal from <span class="mono">plenum doctor</span> or MCP <span class="mono">repo.doctor</span>.</span>
-        <div class="row-end">
-          <button class="btn" type="button" data-copy-doctor title="Copy a plenum doctor command for this repo">Copy CLI</button>
-          <button class="btn primary" type="button" data-write${s?.canAccept ? '' : ' disabled title="Needs a run command in the proposal"'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>
-        </div>
-      </div>`;
-  },
+  setup: () => setupWizardHTML(),
   statistics: () => statsPageHTML(),
   agents: () => {
     const a = state.agents;
@@ -4091,25 +4359,266 @@ function seedActiveRepoBoard() {
 }
 
 async function loadSetup(root) {
-  state.setup = { root, loading: true, findings: [], proposedYaml: '', canAccept: false };
+  state.setup = {
+    root,
+    loading: true,
+    step: state.setup?.root === root ? (state.setup.step || 0) : 0,
+    findings: [],
+    proposedYaml: '',
+    proposed: null,
+    hits: [],
+    wiring: null,
+    canAccept: false,
+    draft: state.setup?.root === root ? state.setup.draft : null,
+    sharedAck: false,
+  };
   renderSettings();
   try {
     const res = await invoke('repo.doctor', root);
     if (state.setup?.root !== root) return;
-    state.setup = { root, loading: false, findings: res.findings || [], proposedYaml: res.proposedYaml || '', canAccept: !!res.canAccept };
+    const proposed = res.proposed || {};
+    state.setup = {
+      ...state.setup,
+      loading: false,
+      findings: res.findings || [],
+      proposedYaml: res.proposedYaml || '',
+      proposed,
+      hits: res.hits || [],
+      wiring: res.wiring || null,
+      canAccept: !!res.canAccept,
+      draft: state.setup.draft || {
+        run: proposed.run || '',
+        test: proposed.test || '',
+        setup: proposed.setup || '',
+        offset: proposed.ports?.offset ?? 100,
+        expose: { ...(proposed.ports?.expose || {}) },
+        envCopy: [...(proposed.env?.copy || [])],
+        envSet: { ...(proposed.env?.set || {}) },
+      },
+    };
   } catch {
     state.setup = { ...state.setup, loading: false };
   }
   if (state.settings.open && state.settings.page === 'setup') renderSettings();
 }
 
+function setupYamlHasRun(text) {
+  return /^run:\s*\S+/m.test(String(text || ''));
+}
+
+function draftToYaml(d) {
+  const lines = ['version: 1'];
+  if (d.setup) lines.push(`setup: ${JSON.stringify(d.setup)}`);
+  if (d.run) lines.push(`run: ${JSON.stringify(d.run)}`);
+  if (d.test) lines.push(`test: ${JSON.stringify(d.test)}`);
+  lines.push('env:', '  copy:');
+  for (const p of d.envCopy || []) lines.push(`    - ${JSON.stringify(p)}`);
+  const set = d.envSet || {};
+  if (Object.keys(set).length) {
+    lines.push('  set:');
+    for (const [k, v] of Object.entries(set)) lines.push(`    ${k}: ${JSON.stringify(v)}`);
+  }
+  lines.push('ports:', `  offset: ${Number(d.offset) || 100}`, '  expose:');
+  for (const [k, v] of Object.entries(d.expose || {})) {
+    if (k && v != null && v !== '') lines.push(`    ${k}: ${Number(v)}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+const SETUP_STEPS = [
+  'What setup does',
+  'Start command',
+  'Named ports',
+  'Port hits & wires',
+  'Prepare',
+  'Review & write',
+];
+
+function setupWizardHTML() {
+  const s = state.setup;
+  const tab = state.store.tabs.find((t) => t.path === s?.root);
+  const step = Math.max(0, Math.min(SETUP_STEPS.length - 1, s?.step || 0));
+  const crumbs = `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repository</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>`;
+  if (!s || s.loading) {
+    return `${crumbs}<h1>Lane setup</h1><p class="lede">Reading the repo…</p>`;
+  }
+  const bar = `<div class="setup-steps" role="tablist" aria-label="Setup steps">${SETUP_STEPS.map((label, i) =>
+    `<button type="button" class="setup-step${i === step ? ' current' : ''}${i < step ? ' done' : ''}" data-goto-step="${i}" role="tab" aria-selected="${i === step}">${esc(label)}</button>`).join('')}</div>`;
+  const d = s.draft || {};
+  let body = '';
+  if (step === 0) {
+    body = `<h1>What setup does</h1>
+      <p class="lede">Writes one recipe (<span class="mono">.plenum/lane.yaml</span>) so Plenum can Start, Stop, and Test each worktree on its own ports — without switching Protected’s checkout.</p>
+      <p class="lede">Worktrees with the recipe applied show under Lanes; the rest stay under Worktrees until you Open as lane. Data is shared by default (local throwaway DBs only); isolation needs a snapshot seed.</p>`;
+  } else if (step === 1) {
+    body = `<h1>Start command</h1>
+      <p class="lede">What Plenum runs when you press Start. Use <span class="mono">{'{port.web}'}</span> if the process should bind the lane’s port.</p>
+      <label class="field">run<input class="input mono" data-draft="run" value="${esc(d.run || '')}" placeholder="npm run dev -- --port {port.web}" /></label>
+      <label class="field">test <span class="muted">(optional)</span><input class="input mono" data-draft="test" value="${esc(d.test || '')}" placeholder="npm test" /></label>`;
+  } else if (step === 2) {
+    const exposeRows = Object.entries(d.expose || {}).map(([name, port], i) =>
+      `<div class="setup-port-row"><input class="input mono" data-expose-name="${i}" value="${esc(name)}" placeholder="web" /><input class="input mono" data-expose-port="${i}" value="${esc(port)}" placeholder="5173" /></div>`).join('')
+      || `<div class="setup-port-row"><input class="input mono" data-expose-name="0" value="web" placeholder="web" /><input class="input mono" data-expose-port="0" value="5173" placeholder="5173" /></div>`;
+    body = `<h1>Named ports</h1>
+      <p class="lede">Base ports plus an offset × lane index so each worktree stays unique. Protected uses index 0 (base ports).</p>
+      <label class="field">Offset<input class="input mono" data-draft="offset" type="number" min="0" value="${esc(d.offset ?? 100)}" /></label>
+      <div class="col-head">Expose</div>
+      <div class="setup-ports" data-expose-list>${exposeRows}</div>
+      <button class="btn" type="button" data-add-port>${iconHTML('plus', 'sm')}Add port</button>`;
+  } else if (step === 3) {
+    const hits = s.hits || [];
+    const hitRows = hits.length
+      ? hits.slice(0, 24).map((h) => `<div class="list-row compact" data-hit-hash="${esc(h.hash)}" data-hit-path="${esc(h.path)}" data-hit-line="${esc(h.line)}">
+          ${iconHTML('warning-circle')}
+          <div class="name"><span class="mono">${esc(h.path)}:${h.line}</span><small class="mono">${esc(h.snippet)}</small></div>
+          <button class="btn" type="button" data-allow-hit>Allowlist</button>
+        </div>`).join('')
+      : `<div class="list-row compact"><div class="name">No open port hits</div></div>`;
+    const wires = Object.entries(d.envSet || {}).map(([k, v]) =>
+      `<div class="setup-port-row"><input class="input mono" data-wire-key value="${esc(k)}" /><input class="input mono" data-wire-val value="${esc(v)}" /></div>`).join('');
+    const proposed = s.wiring?.proposedWires || {};
+    body = `<h1>Port hits & wires</h1>
+      <p class="lede">Hard-coded localhost ports break per-lane listeners. Wire them with <span class="mono">env.set</span> and <span class="mono">{'{port.*}'}</span>, or allowlist intentional ones.</p>
+      <div class="col-head">Open hits</div>
+      <div class="list">${hitRows}</div>
+      <div class="col-head">env.set wires</div>
+      <div class="setup-ports" data-wire-list>${wires || `<div class="setup-port-row"><input class="input mono" data-wire-key placeholder="VITE_API_URL" /><input class="input mono" data-wire-val placeholder="http://127.0.0.1:{port.api}" /></div>`}</div>
+      <div class="row-end">
+        ${Object.keys(proposed).length ? `<button class="btn" type="button" data-apply-wires>Apply proposed wires</button>` : ''}
+        <button class="btn" type="button" data-add-wire>${iconHTML('plus', 'sm')}Add wire</button>
+      </div>`;
+  } else if (step === 4) {
+    body = `<h1>Prepare</h1>
+      <p class="lede">Runs once when a lane is created or repaired. Copy local secrets from Protected; never commit them.</p>
+      <label class="field">setup<input class="input mono" data-draft="setup" value="${esc(d.setup || '')}" placeholder="npm install" /></label>
+      <label class="field">env.copy <span class="muted">(one path per line)</span>
+        <textarea class="setup-yaml mono" data-draft-copy rows="4" spellcheck="false">${esc((d.envCopy || []).join('\n'))}</textarea>
+      </label>`;
+  } else {
+    const yaml = s.proposedYaml || draftToYaml(d);
+    body = `<h1>Review & write</h1>
+      <p class="lede">Shared data is the default. Confirm you understand, then write the recipe.</p>
+      <label class="check"><input type="checkbox" data-shared-ack${s.sharedAck ? ' checked' : ''} /> I understand lanes share one local throwaway database by default — not staging or production.</label>
+      <details class="setup-advanced"${s.showYaml ? ' open' : ''}>
+        <summary>Advanced YAML</summary>
+        <textarea class="setup-yaml mono" data-setup-yaml spellcheck="false" aria-label="Proposed lane.yaml">${esc(yaml)}</textarea>
+      </details>
+      <div class="finding">${iconHTML('plugs-connected', 'sm')}<div>Same proposal from <span class="mono">plenum doctor</span> / MCP <span class="mono">repo.doctor</span>.</div></div>`;
+  }
+  const back = step > 0 ? `<button class="btn" type="button" data-setup-back>Back</button>` : `<button class="btn" type="button" data-crumb>Cancel</button>`;
+  const next = step < SETUP_STEPS.length - 1
+    ? `<button class="btn primary" type="button" data-setup-next>Continue</button>`
+    : `<button class="btn primary" type="button" data-write${s.sharedAck && setupYamlHasRun(s.proposedYaml || draftToYaml(d)) ? '' : ' disabled'}>${iconHTML('files', 'sm')}Write <span class="mono">.plenum/lane.yaml</span></button>`;
+  return `${crumbs}${bar}${body}<div class="foot"><div class="row-end">${back}${next}</div></div>`;
+}
+
+function syncSetupDraft(root) {
+  const s = state.setup;
+  if (!s?.draft) return;
+  const d = s.draft;
+  root.querySelectorAll('[data-draft]').forEach((inp) => {
+    const key = inp.dataset.draft;
+    d[key] = inp.type === 'number' ? Number(inp.value) : inp.value;
+  });
+  const copy = root.querySelector('[data-draft-copy]');
+  if (copy) d.envCopy = copy.value.split(/\n/).map((x) => x.trim()).filter(Boolean);
+  const expose = {};
+  root.querySelectorAll('[data-expose-name]').forEach((inp) => {
+    const i = inp.dataset.exposeName;
+    const name = inp.value.trim();
+    const port = root.querySelector(`[data-expose-port="${i}"]`)?.value;
+    if (name && port) expose[name] = Number(port);
+  });
+  if (root.querySelector('[data-expose-list]')) d.expose = expose;
+  const envSet = {};
+  const keys = [...root.querySelectorAll('[data-wire-key]')];
+  const vals = [...root.querySelectorAll('[data-wire-val]')];
+  keys.forEach((inp, i) => {
+    const k = inp.value.trim();
+    const v = vals[i]?.value ?? '';
+    if (k) envSet[k] = v;
+  });
+  if (keys.length) d.envSet = envSet;
+  s.proposedYaml = draftToYaml(d);
+  s.canAccept = setupYamlHasRun(s.proposedYaml);
+}
+
 function bindSetup(root) {
   const s = state.setup;
-  root.querySelector('[data-crumb]')?.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); });
-  root.querySelector('[data-copy-doctor]')?.addEventListener('click', () => {
-    navigator.clipboard.writeText(`plenum doctor '${String(s.root).replace(/'/g, `'\\''`)}'`).then(() => toast('Copied', 'ok'), () => {});
+  root.querySelectorAll('[data-crumb]').forEach((n) => n.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); }));
+  root.querySelectorAll('[data-goto-step]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      syncSetupDraft(root);
+      s.step = Number(btn.dataset.gotoStep);
+      renderSettings();
+    });
+  });
+  root.querySelector('[data-setup-back]')?.addEventListener('click', () => {
+    syncSetupDraft(root);
+    s.step = Math.max(0, (s.step || 0) - 1);
+    renderSettings();
+  });
+  root.querySelector('[data-setup-next]')?.addEventListener('click', () => {
+    syncSetupDraft(root);
+    s.step = Math.min(SETUP_STEPS.length - 1, (s.step || 0) + 1);
+    renderSettings();
+  });
+  root.querySelector('[data-add-port]')?.addEventListener('click', () => {
+    syncSetupDraft(root);
+    const keys = Object.keys(s.draft.expose || {});
+    s.draft.expose = { ...s.draft.expose, [`port${keys.length + 1}`]: 3000 + keys.length };
+    renderSettings();
+  });
+  root.querySelector('[data-add-wire]')?.addEventListener('click', () => {
+    syncSetupDraft(root);
+    s.draft.envSet = { ...s.draft.envSet, '': '' };
+    renderSettings();
+  });
+  root.querySelector('[data-apply-wires]')?.addEventListener('click', () => {
+    syncSetupDraft(root);
+    s.draft.envSet = { ...s.draft.envSet, ...(s.wiring?.proposedWires || {}) };
+    renderSettings();
+  });
+  root.querySelectorAll('[data-allow-hit]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('[data-hit-hash]');
+      if (!row) return;
+      try {
+        const res = await invoke('repo.allowlistPort', {
+          path: row.dataset.hitPath,
+          line: Number(row.dataset.hitLine),
+          snippetHash: row.dataset.hitHash,
+          note: 'allowlisted from Lane setup',
+        }, s.root);
+        s.hits = res.hits || [];
+        s.findings = res.findings || s.findings;
+        toast('Allowlisted', 'ok');
+        renderSettings();
+      } catch { /* toasted */ }
+    });
+  });
+  root.querySelector('[data-shared-ack]')?.addEventListener('change', (e) => {
+    s.sharedAck = e.target.checked;
+    renderSettings();
+  });
+  const yaml = root.querySelector('[data-setup-yaml]');
+  yaml?.addEventListener('input', () => {
+    s.proposedYaml = yaml.value;
+    s.canAccept = setupYamlHasRun(yaml.value);
+    s.showYaml = true;
   });
   root.querySelector('[data-write]')?.addEventListener('click', async () => {
+    syncSetupDraft(root);
+    if (yaml) s.proposedYaml = yaml.value;
+    else s.proposedYaml = draftToYaml(s.draft);
+    if (!s.sharedAck) {
+      toast('Confirm shared-data default first', 'warn');
+      return;
+    }
+    if (!setupYamlHasRun(s.proposedYaml)) {
+      toast('Needs a run: line', 'warn');
+      return;
+    }
     try {
       const board = await invoke('repo.acceptManifest', s.proposedYaml, s.root);
       state.repoBoards.delete(s.root);
@@ -4241,6 +4750,9 @@ async function loadStats() {
   statsView.root = tab.path;
   statsView.loading = true;
   if (statsView.data?.root !== tab.path) statsView.data = null;
+  if (!state.identity) {
+    try { state.identity = await invoke('git.identity.get'); } catch { /* leave prior */ }
+  }
   rerenderStats();
   try {
     const data = await invoke('stats.get', tab.path, statsView.scope);
@@ -4263,6 +4775,12 @@ function bindStats(root) {
     statsView.scope = b.dataset.statsScope;
     loadStats();
   }));
+  root.querySelectorAll('[data-stats-fame]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.statsFame;
+    if ((state.prefs.statsFame || 'mine') === v) return;
+    setPref({ statsFame: v });
+    rerenderStats();
+  }));
 }
 
 // Award id -> [icon, token colour]. Only design-system colours: agent, human, lane 2-4.
@@ -4275,6 +4793,28 @@ const AWARD_LOOK = {
 
 // Human is the app's human blue, agents follow in order, so a tool keeps its colour on every chart.
 const STAT_COLORS = ['var(--human)', 'var(--agent)', 'var(--lane-2)', 'var(--lane-3)', 'var(--lane-4)', 'var(--ink-tertiary)', 'var(--ink-subtle)'];
+
+function statsIdentity() {
+  const id = state.identity;
+  if (!id) return { name: '', email: '' };
+  const local = id.local?.email || id.local?.name ? id.local : null;
+  const pick = local || id.global || {};
+  return { name: String(pick.name || '').trim(), email: String(pick.email || '').trim().toLowerCase() };
+}
+
+function awardIsMine(a, me) {
+  if (a.scope === 'repo') return false;
+  const email = String(a.email || '').trim().toLowerCase();
+  if (me.email && email && email === me.email) return true;
+  if (me.name && a.who && a.who === me.name) return true;
+  return false;
+}
+
+function awardRowHTML(a) {
+  const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
+  const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
+  return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
+}
 
 function statsPageHTML() {
   const s = statsView.data;
@@ -4307,13 +4847,23 @@ function statsPageHTML() {
     settingsRow('clock', 'Per active day', '', `${n(s.activeDays)} active day${s.activeDays === 1 ? '' : 's'}`, `<span class="stat-num"><b>${s.perActiveDay.toFixed(1)}</b></span>`),
   ].join('')}</div>`;
 
-  // Only earned titles; no section when there are none.
-  const awardRows = s.awards.map((a) => {
-    const [ic, col] = AWARD_LOOK[a.id] || ['sparkle', '--ink-subtle'];
-    const row = settingsRow(ic, esc(a.title), a.who ? esc(a.who) : '', `${esc(a.stat)}<small class="quip">${esc(a.quip)}</small>`);
-    return row.replace('<svg class="icon "', `<svg class="icon" style="color:var(${col})"`);
-  }).join('');
-  const awards = awardRows ? `<div class="group-head">Hall of fame<small>Earned, not awarded.</small></div><div class="list">${awardRows}</div>` : '';
+  // Hall of fame: yours + repo by default; everyone is opt-in (#106).
+  const fameMode = state.prefs.statsFame === 'all' ? 'all' : 'mine';
+  const me = statsIdentity();
+  const mine = s.awards.filter((a) => awardIsMine(a, me));
+  const repoAwards = s.awards.filter((a) => a.scope === 'repo');
+  const others = s.awards.filter((a) => a.scope === 'person' && !awardIsMine(a, me));
+  const fameToggle = `<div class="option-row" role="group" aria-label="Hall of fame">${[['mine', 'Yours + repo'], ['all', 'Everyone']].map(([v, t]) =>
+    `<button class="option${fameMode === v ? ' on' : ''}" type="button" aria-pressed="${fameMode === v}" data-stats-fame="${v}">${t}</button>`).join('')}</div>`;
+  const block = (title, detail, list) => list.length
+    ? `<div class="group-head">${title}<small>${detail}</small></div><div class="list">${list.map(awardRowHTML).join('')}</div>`
+    : '';
+  const awards = (mine.length || repoAwards.length || (fameMode === 'all' && others.length))
+    ? `${fameToggle}
+      ${block('Your titles', me.email || me.name ? `Matched to ${esc(me.email || me.name)}.` : 'Set a git email in Accounts to claim titles.', mine)}
+      ${block('The repo', 'About the history, not a person.', repoAwards)}
+      ${fameMode === 'all' ? block('Everyone else', 'Competitive titles across contributors.', others) : ''}`
+    : `<div class="group-head">Hall of fame<small>Nothing earned yet on this history.</small></div>${fameToggle}`;
 
   // Agents over time: one stacked bar per week, last 52 weeks.
   const wk = s.weekly.weeks;
@@ -4349,9 +4899,21 @@ function statsPageHTML() {
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const hot = Math.max(1, ...s.heat.flat());
-  const heat = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour">${s.heat.map((row, d) =>
-    `<span class="d">${days[d]}</span>${row.map((v, h) => `<i style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}"></i>`).join('')}`).join('')}
-    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? h : ''}</span>`).join('')}</div>`;
+  const peak = s.heatPeak;
+  const peakLabel = peak
+    ? `${days[peak.day]} ${String(peak.hour).padStart(2, '0')}:00`
+    : '';
+  const heatRead = peak
+    ? `<p class="stat-heat-read">Peak slot <b>${peakLabel}</b> · ${n(peak.n)} commit${peak.n === 1 ? '' : 's'}. Darker cells are busier; outlined cell is the peak.</p>`
+    : `<p class="stat-heat-read">No commits on this history yet.</p>`;
+  const heatGrid = `<div class="stat-heat" role="img" aria-label="Commits by weekday and hour${peak ? `, peak ${peakLabel}` : ''}">${s.heat.map((row, d) =>
+    `<span class="d">${days[d]}</span>${row.map((v, h) => {
+      const isPeak = peak && peak.day === d && peak.hour === h;
+      return `<i class="${isPeak ? 'peak' : ''}" style="--a:${(v / hot).toFixed(2)}" title="${days[d]} ${String(h).padStart(2, '0')}:00, ${v} commit${v === 1 ? '' : 's'}${isPeak ? ' · peak' : ''}"></i>`;
+    }).join('')}`).join('')}
+    <span></span>${Array.from({ length: 24 }, (_, h) => `<span class="h">${h % 6 === 0 ? String(h).padStart(2, '0') : ''}</span>`).join('')}</div>`;
+  const heatLegend = `<div class="stat-heat-legend" aria-hidden="true"><span>Quiet</span><span class="scale">${[0.05, 0.25, 0.5, 0.75, 1].map((a) => `<i style="--a:${a}"></i>`).join('')}</span><span>Busy</span></div>`;
+  const heat = `<div class="stat-heat-wrap">${heatRead}${heatGrid}${heatLegend}</div>`;
 
   return `${head}
     ${hero}${facts}
@@ -4359,7 +4921,7 @@ function statsPageHTML() {
     ${over ? `<div class="group-head">Agents over time<small>Commits per ${s.weekly.unit}, last ${wk.length} ${s.weekly.unit}s.</small></div>${over}` : ''}
     <div class="group-head">Commits per day<small>Last ${s.series.length} days.</small></div>${daily}
     <div class="group-head">Who writes the most code<small>Lines added, merges left out. Two git identities for one person? Merge them with a <span class="mono">.mailmap</span>.</small></div><div class="list">${people}</div>
-    <div class="group-head">When it happens<small>Commits by weekday and hour, your local time.</small></div>${heat}`;
+    <div class="group-head">When it happens<small>Weekday × hour in your local time — denser cells mean more commits.</small></div>${heat}`;
 }
 
 function rerenderAgents() {
@@ -4640,11 +5202,12 @@ function paletteCommands() {
     { id: 'push', label: `Push ${lane?.name || ''} to origin`.trim(), run: () => handleAction('push', lane), when: lane && lane.unpushed },
     { id: 'pull', label: `Pull ${lane?.name || ''} (ff-only)`.trim(), run: () => handleAction('pull', lane), when: !!lane },
     { id: 'rebase', label: 'Rebase on main', run: () => handleAction('rebase', lane), when: lane && !lane.isPrimary && lane.behind },
-    { id: 'merge', label: 'Merge into main…', run: () => handleAction('merge', lane), when: lane && !lane.isPrimary && lane.ahead && !lane.dirty },
+    { id: 'finish', label: 'Finish lane…', run: () => handleAction('finish', lane), when: lane && !lane.isPrimary && lane.ahead && !lane.dirty },
     { id: 'conflicts', label: 'Resolve conflicts…', run: () => handleAction('conflicts', lane), when: !!lane },
-    { id: 'up', label: 'Run lane', run: () => handleAction('up', lane), when: lane && !lane.isPrimary && lane.runnable && !lane.running && lane.readiness !== 'safe' },
+    { id: 'up', label: 'Start lane', run: () => handleAction('up', lane), when: lane && lane.runnable && !lane.running && (lane.prepared !== false || lane.isPrimary) },
     { id: 'down', label: 'Stop lane', run: () => handleAction('down', lane), when: lane && lane.running },
-    { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && !lane.isPrimary && lane.runnable && lane.readiness !== 'safe' },
+    { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && lane.runnable && (lane.prepared !== false || lane.isPrimary) },
+    { id: 'repair', label: 'Repair lane', run: () => handleAction('repair', lane), when: lane && !lane.isPrimary && lane.runnable && lane.prepared === false },
     { id: 'reveal', label: 'Reveal in Finder', run: () => handleAction('reveal', lane), when: !!lane },
     { id: 'editor', label: `Open in ${editorName()}`, run: () => handleAction('editor', lane), when: !!lane },
     { id: 'terminal', label: 'Open in terminal', run: () => invoke('os.openTerminal', lane.path).catch(() => {}), when: !!lane },
@@ -4730,6 +5293,7 @@ document.addEventListener('keydown', (e) => {
         comment: feedbackDraft.comment,
         target: feedbackDraft.target,
         credit: !!feedbackDraft.credit,
+        viaGh: !!feedbackDraft.viaGh,
       });
       return;
     }

@@ -53,6 +53,13 @@ function repoPath(raw) {
 function printHuman(cmd, data) {
   if (cmd === 'doctor') {
     for (const f of data.findings) console.log(`- ${f}`);
+    if (data.hits?.length) {
+      console.log('');
+      console.log(`Port hits (${data.hits.length}):`);
+      for (const h of data.hits.slice(0, 20)) {
+        console.log(`  ${h.path}:${h.line}  ${h.snippet}`);
+      }
+    }
     console.log('');
     process.stdout.write(data.proposedYaml);
     console.log(data.canAccept ? '(can accept)' : '(cannot accept yet)');
@@ -63,8 +70,9 @@ function printHuman(cmd, data) {
     for (const lane of data.lanes) {
       const run = lane.runnable
         ? (lane.running ? `running pid=${lane.pid ?? '?'}` : 'stopped')
-        : 'protected';
-      console.log(`  [${lane.index}] ${lane.name}  ${lane.readiness}  ${run}`);
+        : 'no-manifest';
+      const role = lane.isPrimary ? 'protected' : (lane.prepared ? 'lane' : 'worktree');
+      console.log(`  [${lane.index}] ${lane.name}  ${lane.readiness}  ${role}  ${run}`);
     }
     return;
   }

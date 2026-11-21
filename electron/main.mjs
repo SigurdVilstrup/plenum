@@ -25,6 +25,8 @@ import {
   collectFeedbackEnv,
   sanitizeReporterEmail,
   sendFeedbackReport,
+  sendFeedbackViaGh,
+  ghFeedbackAvailable,
   retryUnsentFeedback,
   listUnsentFeedback,
   sendCheckin,
@@ -374,7 +376,7 @@ ipcMain.handle('feedback.retry', async () => {
   return { sent, left: listUnsentFeedback(prefsDir()).length };
 });
 
-ipcMain.handle('feedback.send', async (_e, dir) => {
+function assertFeedbackDir(dir) {
   const root = path.resolve(prefsDir(), 'feedback');
   const reportDir = path.resolve(String(dir || ''));
   if (reportDir !== root && !reportDir.startsWith(root + path.sep)) {
@@ -383,12 +385,31 @@ ipcMain.handle('feedback.send', async (_e, dir) => {
   if (!fs.existsSync(path.join(reportDir, 'meta.json')) || !fs.existsSync(path.join(reportDir, 'window.png'))) {
     throw new Error('bad report path');
   }
+  return reportDir;
+}
+
+ipcMain.handle('feedback.ghAvailable', () => ghFeedbackAvailable());
+
+ipcMain.handle('feedback.send', async (_e, dir) => {
+  const reportDir = assertFeedbackDir(dir);
   const meta = await sendFeedbackReport(reportDir, relayOpts());
   return {
     dir: reportDir,
     screenshot: meta.screenshot !== false,
     issueUrl: meta.issueUrl,
     issueNumber: meta.issueNumber,
+  };
+});
+
+ipcMain.handle('feedback.sendViaGh', async (_e, dir) => {
+  const reportDir = assertFeedbackDir(dir);
+  const meta = await sendFeedbackViaGh(reportDir);
+  return {
+    dir: reportDir,
+    screenshot: false,
+    issueUrl: meta.issueUrl,
+    issueNumber: meta.issueNumber,
+    via: 'gh',
   };
 });
 
@@ -424,14 +445,29 @@ function tabRoot(root) {
 ipcMain.handle('repo.doctor', async (_e, rootArg) => {
   const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');
-  const { findings, proposedYaml, canAccept } = await doctor(root);
-  return { findings, proposedYaml, canAccept };
+  const result = await doctor(root);
+  return {
+    findings: result.findings,
+    proposedYaml: result.proposedYaml,
+    proposed: result.proposed,
+    canAccept: result.canAccept,
+    hits: result.hits || [],
+    allowlist: result.allowlist || [],
+    wiring: result.wiring || null,
+  };
 });
 ipcMain.handle('repo.acceptManifest', async (_e, yaml, rootArg) => {
   const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');
   await acceptManifest(root, yaml);
   return loadBoard(root);
+});
+ipcMain.handle('repo.allowlistPort', async (_e, entry, rootArg) => {
+  const root = tabRoot(rootArg);
+  if (!root) throw new Error('No repository open.');
+  const { addAllowlistEntry } = await import('./lane/port-scour.mjs');
+  await addAllowlistEntry(root, entry || {});
+  return doctor(root);
 });
 
 ipcMain.handle('os.pickFolder', async () => {
@@ -665,6 +701,17 @@ ipcMain.handle('lane.merge', async (_e, ...args) => {
     throw e;
   }
 });
+ipcMain.handle('lane.finish', async (_e, ...args) => {
+  try {
+    return await withRoot(ops.finishLane, ...args);
+  } catch (e) {
+    if (e.code === 'CONFLICT') {
+      return { conflict: true, conflicts: e.conflicts, operation: e.operation, conflictRoot: e.conflictRoot };
+    }
+    throw e;
+  }
+});
+ipcMain.handle('lane.repair', (_e, ...args) => withRoot(ops.repairLane, ...args));
 ipcMain.handle('lane.conflicts', (_e, ...args) => withRoot(ops.conflictStatus, ...args));
 ipcMain.handle('lane.conflictStage', (_e, ...args) => withRoot(ops.conflictStage, ...args));
 ipcMain.handle('lane.conflictContinue', (_e, ...args) => withRoot(ops.conflictContinue, ...args));

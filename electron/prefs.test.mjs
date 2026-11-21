@@ -60,6 +60,13 @@ test('setPrefs toggles tabFavicons', () => {
   assert.equal(setPrefs({ tabFavicons: true }, dir).tabFavicons, true);
 });
 
+test('setPrefs accepts statsFame mine|all', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.equal(getPrefs(dir).statsFame, 'mine');
+  assert.equal(setPrefs({ statsFame: 'all' }, dir).statsFame, 'all');
+  assert.equal(setPrefs({ statsFame: 'nope' }, dir).statsFame, 'all');
+});
+
 test('setPrefs clamps warmTabTtlMs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
   assert.equal(setPrefs({ warmTabTtlMs: 1000 }, dir).warmTabTtlMs, 30_000);

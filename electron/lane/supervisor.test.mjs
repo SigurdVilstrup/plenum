@@ -71,11 +71,16 @@ test('up starts a long-lived command and down stops it', async () => {
   }
 });
 
-test('refuses primary checkout', async () => {
+test('primary checkout can start when a manifest exists', async () => {
   const { root, wt } = await fixture();
   try {
-    await assert.rejects(() => supervisor.up(root, 0), /protected/i);
+    const status = await supervisor.up(root, 0);
+    assert.ok(status.pid);
+    assert.equal(status.running, true);
+    assert.equal(status.urls?.web, 'http://127.0.0.1:5001');
+    await supervisor.down(root, 0);
   } finally {
+    try { await supervisor.down(root, 0); } catch { /* already down */ }
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });
   }
@@ -134,10 +139,11 @@ test('test stores lastTest not ok on non-zero exit', async () => {
   }
 });
 
-test('test refuses primary checkout', async () => {
-  const { root, wt } = await fixture();
+test('test runs on primary checkout when a manifest exists', async () => {
+  const { root, wt } = await fixture({ testCmd: 'node -e "process.exit(0)"' });
   try {
-    await assert.rejects(() => supervisor.test(root, 0), /protected/i);
+    const result = await supervisor.test(root, 0);
+    assert.equal(result.ok, true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(wt, { recursive: true, force: true });

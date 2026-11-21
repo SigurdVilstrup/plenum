@@ -67,6 +67,9 @@ export function bumpPatchVersion(current) {
     const semver = require('semver');
     if (semver.valid(current)) return semver.inc(current, 'patch');
   } catch { /* fall through */ }
+  // No semver in the tree (or require failed): still bump x.y.z so mock updates work.
+  const m = String(current || '').trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (m) return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
   return '0.0.1';
 }
 

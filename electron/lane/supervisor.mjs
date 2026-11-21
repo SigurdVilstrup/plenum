@@ -144,8 +144,6 @@ export function getLastTest(root, laneIndex) {
 }
 
 async function prepareLane(root, laneIndex) {
-  if (laneIndex === 0) throw new Error('Protected checkout can’t be run - use a lane.');
-
   const { top, paths } = await resolveLanes(root);
   const cwd = paths[laneIndex];
   if (!cwd) throw new Error(`lane ${laneIndex} not found`);

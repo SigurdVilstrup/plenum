@@ -2,10 +2,16 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { git, gitOk } from './run.mjs';
-import { loadBoard } from './board.mjs';
+import { loadBoard, PREPARED_STAMP } from './board.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from '../lane/manifest.mjs';
 import { down, getProc } from '../lane/supervisor.mjs';
 import { manifestPath } from '../paths.mjs';
+
+function writePreparedStamp(lanePath) {
+  const stamp = path.join(lanePath, PREPARED_STAMP);
+  fs.mkdirSync(path.dirname(stamp), { recursive: true });
+  fs.writeFileSync(stamp, `${new Date().toISOString()}\n`);
+}
 
 function assertLane(board, laneIndex) {
   const lane = board.lanes.find((l) => l.index === laneIndex);
@@ -104,6 +110,7 @@ export async function createLane(root, { name, branch, lanesFolder, existing = f
         }
         await runSetup(renderTemplate(String(manifest.setup), ctx), folder, env);
       }
+      writePreparedStamp(folder);
     }
   } catch (err) {
     await git(['worktree', 'remove', '--force', folder], primary.path).catch(() => {});
@@ -213,20 +220,26 @@ export async function revertLaneChanges(root, laneIndex, paths) {
   return loadBoard(root);
 }
 
-/** Primary uses a normal push; lanes may force-with-lease after rebase. */
-export async function pushLane(root, laneIndex) {
+/**
+ * Push the lane tip to origin.
+ * @param {'lease'|'force'|false|undefined} [opts.force]
+ *   - undefined/false: primary = normal push; other lanes = --force-with-lease (post-rebase)
+ *   - 'lease': always --force-with-lease
+ *   - 'force' / true: --force (overwrites remote tip)
+ */
+export async function pushLane(root, laneIndex, opts = {}) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
-  if (lane.isPrimary) {
-    await git(['push', '-u', 'origin', 'HEAD'], lane.path).catch(async (e) => {
-      await git(['push'], lane.path).catch(() => { throw e; });
-    });
-    return loadBoard(root);
-  }
+  const mode = normalizeForcePush(opts?.force);
+  const flags = forcePushFlags(mode, { defaultLease: !lane.isPrimary });
   try {
-    await git(['push', '--force-with-lease', '-u', 'origin', 'HEAD'], lane.path);
+    await git(['push', ...flags, '-u', 'origin', 'HEAD'], lane.path);
   } catch (e) {
-    await git(['push', '--force-with-lease'], lane.path).catch(() => { throw e; });
+    try {
+      await git(['push', ...flags], lane.path);
+    } catch {
+      throw annotatePushReject(e, lane.branch || 'HEAD');
+    }
   }
   return loadBoard(root);
 }
@@ -348,23 +361,46 @@ export async function updateBranchFromRemote(root, { branch } = {}) {
 }
 
 /** Push a local tip to origin (no checkout required). Sets upstream on first push. */
-export async function pushBranchToRemote(root, { branch } = {}) {
+export async function pushBranchToRemote(root, { branch, force } = {}) {
   const board = await loadBoard(root);
   const name = assertBranchName(branch);
   if (name.startsWith('origin/')) throw new Error('That tip is already on origin. Nothing to push.');
   if (!(await gitOk(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], board.root))) {
     throw new Error(`Local branch ${name} not found.`);
   }
+  const mode = normalizeForcePush(force);
+  const flags = forcePushFlags(mode, { defaultLease: false });
   try {
-    await git(['push', '-u', 'origin', name], board.root);
+    await git(['push', ...flags, '-u', 'origin', name], board.root);
   } catch (e) {
-    const msg = e?.message || String(e);
-    if (/non-fast-forward|rejected/i.test(msg)) {
-      throw new Error(`${name} was rejected by origin. Pull or rebase first.`);
-    }
-    throw e;
+    throw annotatePushReject(e, name);
   }
   return loadBoard(root);
+}
+
+function normalizeForcePush(force) {
+  if (force === true || force === 'force') return 'force';
+  if (force === 'lease') return 'lease';
+  return null;
+}
+
+function forcePushFlags(mode, { defaultLease = false } = {}) {
+  if (mode === 'force') return ['--force'];
+  if (mode === 'lease' || (!mode && defaultLease)) return ['--force-with-lease'];
+  return [];
+}
+
+function annotatePushReject(err, name) {
+  const msg = err?.message || String(err);
+  if (/non-fast-forward|rejected|stale info|failed to push|fetch first/i.test(msg)) {
+    const e = new Error(
+      `${name} was rejected by origin (non-fast-forward). Pull or rebase, or use Force push…`,
+    );
+    e.code = 'PUSH_REJECTED';
+    e.cause = err;
+    return e;
+  }
+  return err;
 }
 
 /** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate. */
@@ -413,30 +449,91 @@ export async function deleteBranch(root, name, { force = false, remote = false }
   return loadBoard(root);
 }
 
-export async function mergeLaneIntoMain(root, laneIndex, { mode = 'merge' } = {}) {
+export async function mergeLaneIntoMain(root, laneIndex, { mode = 'merge', into } = {}) {
   const board = await loadBoard(root);
   const lane = assertLane(board, laneIndex);
-  const primary = board.lanes[0];
-  if (primary.dirty) throw new Error('Primary has uncommitted work. Clean it before merging into main.');
-  if (!primary.onTeamBranch) throw new Error(`Primary must be on ${board.teamBranch} before merging.`);
+  const targetName = String(into || '').trim() || board.teamBranch;
+  let target = board.lanes.find((l) => l.branch === targetName || l.name === targetName);
+  // Default Finish/merge into Protected’s checkout when the tip isn’t open elsewhere.
+  if (!target && targetName === board.teamBranch) target = board.lanes[0];
+  if (!target) {
+    throw new Error(`No worktree checked out for ${targetName}. Open that branch first.`);
+  }
+  if (target.index === lane.index) throw new Error('Cannot merge a lane into itself.');
+  if (target.dirty) throw new Error(`${targetName} has uncommitted work. Clean it before merging.`);
   if (lane.dirty) throw new Error('Lane has uncommitted work.');
+  if (target.isPrimary && targetName === board.teamBranch && !target.onTeamBranch) {
+    throw new Error(`Primary must be on ${board.teamBranch} before merging.`);
+  }
   const args = mode === 'ff'
     ? ['merge', '--ff-only', lane.branch]
     : ['merge', '--no-ff', '-m', `Merge branch '${lane.branch}'`, lane.branch];
   try {
-    await git(args, primary.path);
+    await git(args, target.path);
   } catch (e) {
-    const conflicts = await listConflicts(primary.path);
+    const conflicts = await listConflicts(target.path);
     if (conflicts.length) {
-      const err = new Error('Merge paused on conflicts in the primary checkout.');
+      const err = new Error(`Merge paused on conflicts in ${targetName}.`);
       err.code = 'CONFLICT';
       err.conflicts = conflicts;
       err.operation = 'merge';
-      err.conflictRoot = primary.path;
+      err.conflictRoot = target.path;
       throw err;
     }
     throw e;
   }
+  return loadBoard(root);
+}
+
+/** Merge → stop → remove. `remove: false` keeps the worktree after merge. */
+export async function finishLane(root, laneIndex, { mode = 'merge', into, remove = true } = {}) {
+  const before = await loadBoard(root);
+  const lane = before.lanes.find((l) => l.index === laneIndex);
+  if (!lane) throw new Error('Lane not found.');
+  const branch = lane.branch;
+  const lanePath = lane.path;
+  let board = await mergeLaneIntoMain(root, laneIndex, { mode, into });
+  const still = board.lanes.find((l) => path.resolve(l.path) === path.resolve(lanePath) || l.branch === branch);
+  const idx = still?.index ?? laneIndex;
+  if (still && getProc(board.root, idx)?.running) {
+    await down(board.root, idx).catch(() => {});
+  }
+  if (remove && still && !still.isPrimary) {
+    board = await removeLane(root, still.index, { force: true });
+  }
+  return board;
+}
+
+/** Re-apply env.copy + setup for an existing worktree (Repair / Open as lane). */
+export async function repairLane(root, laneIndex) {
+  const board = await loadBoard(root);
+  const lane = board.lanes.find((l) => l.index === laneIndex);
+  if (!lane) throw new Error('Lane not found.');
+  const primary = board.lanes[0];
+  const manifest = await loadManifest(manifestPath(primary.path));
+  if (!manifest) throw new Error('No .plenum/lane.yaml — run Lane setup first.');
+  for (const rel of manifest.env.copy) {
+    const src = resolveContained(primary.path, rel, 'primary');
+    const dest = resolveContained(lane.path, rel, 'lane');
+    if (!fs.existsSync(src)) throw new Error(`env.copy source missing: ${rel}`);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+  }
+  if (manifest.setup) {
+    const ports = resolvePorts(manifest, laneIndex);
+    const offset = (manifest.ports?.offset ?? 0) * laneIndex;
+    const ctx = { offset, lane: laneIndex, port: ports, ports };
+    const env = {
+      ...process.env,
+      PLENUM_LANE: String(laneIndex),
+      PLENUM_OFFSET: String(offset),
+    };
+    for (const [k, v] of Object.entries(manifest.env.set ?? {})) {
+      env[k] = renderTemplate(String(v), ctx);
+    }
+    await runSetup(renderTemplate(String(manifest.setup), ctx), lane.path, env);
+  }
+  writePreparedStamp(lane.path);
   return loadBoard(root);
 }
 

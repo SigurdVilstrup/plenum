@@ -2,13 +2,14 @@ import { resolvePorts } from './manifest.mjs';
 
 /**
  * Pure UI fields for a board lane from manifest + index (+ optional process / lastTest).
+ * Protected (index 0) is runnable when a manifest exists — same recipe, base ports.
  * @param {object|null} manifest
  * @param {number} laneIndex
  * @param {object|null} [proc]
  * @param {object|null} [lastTest]
  */
 export function laneStatus(manifest, laneIndex, proc = null, lastTest = null) {
-  const runnable = Boolean(manifest) && laneIndex !== 0;
+  const runnable = Boolean(manifest);
   if (!runnable) {
     return {
       runnable: false,

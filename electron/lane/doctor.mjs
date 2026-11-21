@@ -3,13 +3,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { parseDirty } from '../git/board.mjs';
-import { writeManifestDir } from '../paths.mjs';
+import { writeManifestDir, manifestPath } from '../paths.mjs';
 import { loadManifest } from './manifest.mjs';
+import {
+  scourPortHits,
+  loadAllowlist,
+  filterHits,
+  wiringChecks,
+} from './port-scour.mjs';
 
 /**
  * Read-only lane doctor. Proposes a v1 manifest; writes nothing.
  * @param {string} repoPath
- * @returns {Promise<{ findings: string[], proposed: object, proposedYaml: string, canAccept: boolean }>}
+ * @returns {Promise<{ findings: string[], proposed: object, proposedYaml: string, canAccept: boolean, hits: object[], allowlist: object[], wiring: object }>}
  */
 export async function doctor(repoPath) {
   const root = path.resolve(repoPath);
@@ -17,7 +23,7 @@ export async function doctor(repoPath) {
   const proposed = {
     version: 1,
     ports: { offset: 100, expose: {} },
-    env: { copy: [] },
+    env: { copy: [], set: {} },
   };
 
   const pkg = await readJson(path.join(root, 'package.json'));
@@ -60,12 +66,26 @@ export async function doctor(repoPath) {
     }
   }
 
-  if (await exists(path.join(root, 'Makefile'))) {
+  const hasMakefile = await exists(path.join(root, 'Makefile'));
+  if (hasMakefile) {
     findings.push('found Makefile');
+    if (!proposed.run) {
+      const makeRun = await makefileRunTarget(root);
+      if (makeRun) {
+        proposed.run = `make ${makeRun}`;
+        findings.push(`Makefile ${makeRun}: → run: ${proposed.run}`);
+      }
+    }
   }
 
   const apphosts = await findNamed(root, 'apphost.mts', 4);
-  for (const rel of apphosts) findings.push(`found ${rel}`);
+  for (const rel of apphosts) {
+    findings.push(
+      proposed.run
+        ? `found ${rel}`
+        : `found ${rel} — no auto start command; add a run: line in the proposal (or a package.json scripts.dev/start)`,
+    );
+  }
 
   const envFiles = await untrackedEnvFiles(root);
   if (envFiles.length) {
@@ -77,10 +97,54 @@ export async function doctor(repoPath) {
     findings.push('wire ports manually');
   }
 
-  const canAccept = typeof proposed.run === 'string' && !!proposed.run.trim();
-  if (!canAccept) findings.push('no run command - Accept disabled until the repo has a start script');
+  const rawHits = await scourPortHits(root);
+  const allowlist = await loadAllowlist(root);
+  const hits = filterHits(rawHits, allowlist);
+  if (hits.length) {
+    findings.push(
+      `${hits.length} port hit${hits.length === 1 ? '' : 's'} (localhost/LAN + port) — wire via env.set {port.*} or allowlist`,
+    );
+    for (const h of hits.slice(0, 8)) {
+      findings.push(`  ${h.path}:${h.line}  ${h.snippet}`);
+    }
+    if (hits.length > 8) findings.push(`  …and ${hits.length - 8} more`);
+  } else if (rawHits.length) {
+    findings.push(`all ${rawHits.length} port hit${rawHits.length === 1 ? '' : 's'} allowlisted`);
+  }
 
-  return { findings, proposed, proposedYaml: dumpManifest(proposed), canAccept };
+  let existing = null;
+  try {
+    existing = await loadManifest(manifestPath(root));
+  } catch { /* ignore */ }
+  const forWiring = existing || proposed;
+  // Only propose wires for ports that exist on the proposal we would write.
+  const proposeExpose = proposed.ports?.expose || {};
+  if (Object.keys(proposeExpose).includes('api') && !proposed.env?.set?.VITE_API_URL) {
+    proposed.env = proposed.env || { copy: [], set: {} };
+    proposed.env.set = { ...(proposed.env.set || {}), VITE_API_URL: 'http://127.0.0.1:{port.api}' };
+    findings.push('proposed wire: VITE_API_URL → http://127.0.0.1:{port.api}');
+  }
+  const wiring = wiringChecks(forWiring, hits);
+  if (wiring.unused.length) {
+    findings.push(`exposed ports unused in run/env.set: ${wiring.unused.join(', ')}`);
+  }
+
+  const canAccept = typeof proposed.run === 'string' && !!proposed.run.trim();
+  if (!canAccept) {
+    findings.push(
+      'no run command yet — edit the proposal below to add run: … then Write (Accept stays off until a start command is set)',
+    );
+  }
+
+  return {
+    findings,
+    proposed,
+    proposedYaml: dumpManifest(proposed),
+    canAccept,
+    hits,
+    allowlist,
+    wiring,
+  };
 }
 
 /**
@@ -185,6 +249,25 @@ async function untrackedEnvFiles(root) {
     .map((f) => f.path);
 }
 
+/** First Makefile target among run / start / serve / dev (simple `name:` lines only). */
+async function makefileRunTarget(root) {
+  let text = '';
+  try {
+    text = await fs.readFile(path.join(root, 'Makefile'), 'utf8');
+  } catch {
+    return null;
+  }
+  const names = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^([A-Za-z_][\w.-]*)\s*:/.exec(line);
+    if (m) names.add(m[1]);
+  }
+  for (const want of ['run', 'start', 'serve', 'dev']) {
+    if (names.has(want)) return want;
+  }
+  return null;
+}
+
 async function findNamed(root, basename, maxDepth) {
   const out = [];
   async function walk(dir, depth, rel) {
@@ -214,6 +297,13 @@ function dumpManifest(m) {
   lines.push('env:');
   lines.push('  copy:');
   for (const p of m.env?.copy || []) lines.push(`    - ${yamlScalar(p)}`);
+  const set = m.env?.set && typeof m.env.set === 'object' ? m.env.set : {};
+  if (Object.keys(set).length) {
+    lines.push('  set:');
+    for (const [k, v] of Object.entries(set)) {
+      lines.push(`    ${k}: ${yamlScalar(v)}`);
+    }
+  }
   lines.push('ports:');
   lines.push(`  offset: ${m.ports?.offset ?? 100}`);
   lines.push('  expose:');

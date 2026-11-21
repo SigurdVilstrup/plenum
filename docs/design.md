@@ -26,7 +26,7 @@ Icons: Phosphor Regular, 16px, `currentColor`, vendored in `app/icons.svg`. No t
 
 - Window ~1280×800, hairline-strong border, soft desk shadow only.
 - Title bar (~52px): traffic lights, mark, tab strip; live sync + ⌘K on the right.
-- Lanes panel (~260px): Protected, Lanes, Branches without a lane; Settings at the bottom. Selected runnable lane expands Run / Stop / Test / services.
+- Lanes panel (~260px): Protected, Lanes, Worktrees (not lanes yet), Branches/Remotes; Settings at the bottom. Selected runnable lane (including Protected) expands Start / Stop / Test / services / Finish.
 - Board toolbar above panel + graph: lane facts left; Commit / Stash / Pop / Pull / Push, then Finder and Open in editor.
 - Graph owns the rest of the window: column header, 30px rows, SVG edges/nodes. Signature detail: the WIP row — dashed node above a tip with change count and Open.
 

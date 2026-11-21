@@ -452,3 +452,32 @@ test('pushBranchToRemote publishes a free local tip', async () => {
   assert.equal(br?.upstream, 'origin/feat/push-me');
   assert.equal(br?.upstreamAhead, 0);
 });
+
+test('pushBranchToRemote force overwrites a diverged remote tip', async () => {
+  const { root, bare } = await fixture();
+  sh(['checkout', '-b', 'feat/force'], root);
+  fs.writeFileSync(path.join(root, 'force.txt'), 'local');
+  sh(['add', 'force.txt'], root);
+  sh(['commit', '-m', 'local tip'], root);
+  sh(['push', '-u', 'origin', 'feat/force'], root);
+  const localBefore = (await git(['rev-parse', 'feat/force'], root)).trim();
+
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-force-'));
+  fs.rmSync(other, { recursive: true, force: true });
+  sh(['clone', bare, other]);
+  sh(['checkout', '-b', 'feat/force', 'origin/feat/force'], other);
+  fs.writeFileSync(path.join(other, 'force.txt'), 'remote');
+  sh(['add', 'force.txt'], other);
+  sh(['commit', '-m', 'remote tip'], other);
+  sh(['push', 'origin', 'feat/force'], other);
+  fs.rmSync(other, { recursive: true, force: true });
+
+  sh(['checkout', 'main'], root);
+  await assert.rejects(
+    () => ops.pushBranchToRemote(root, { branch: 'feat/force' }),
+    /Force push|rejected/i,
+  );
+  await ops.pushBranchToRemote(root, { branch: 'feat/force', force: 'force' });
+  const remote = (await git(['rev-parse', 'origin/feat/force'], root)).trim();
+  assert.equal(remote, localBefore);
+});
