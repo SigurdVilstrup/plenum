@@ -8,7 +8,7 @@ const ALLOWED = new Set([
   'board.get', 'stats.get', 'repo.refresh', 'repo.doctor', 'repo.acceptManifest', 'repo.setTeamBranch', 'repo.setBaselines',
   'os.pickFolder', 'os.reveal', 'os.openExternal', 'os.openEditor', 'os.openTerminal', 'os.displayPath',
   'lane.create', 'lane.remove', 'lane.commit', 'lane.revert', 'lane.push', 'lane.pull',
-  'lane.rebase', 'lane.merge', 'lane.conflicts',
+  'lane.rebase', 'lane.merge', 'lane.finish', 'lane.repair', 'lane.conflicts',
   'branch.checkout', 'branch.update', 'branch.push', 'branch.rename', 'branch.delete',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
   'lane.stash', 'lane.stashPop', 'lane.stashShow',

@@ -40,7 +40,7 @@ Bump the app version with `npm run version:patch` (or `minor` / `major`) before 
 1. `npm run smoke:init` then open `tmp/smoke-repo` in Plenum.
 2. On a feature lane: dirty → Commit → Push; create another lane from ⌘K.
 3. Advance `main` outside the app, confirm behind count, Rebase (or Merge). Walk a conflict if you can.
-4. With a `.plenum/lane.yaml` present: Run / Test / Stop on a feature lane; primary has no Run.
+4. With a `.plenum/lane.yaml` present: Start / Test / Stop on a prepared lane (and on Protected). Unprepared checkouts stay under Worktrees until Open as lane.
 5. Settings → Agents: wire a client and confirm MCP verbs (`doctor`, `create`, `up`, `status`, `test`, `down`) against a temp repo.
 
 ## Agents

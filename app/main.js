@@ -1478,10 +1478,10 @@ function paintPanel() {
   const primary = b.lanes[0];
   const rest = b.lanes.slice(1);
   const hasManifest = Boolean(b.hasManifest);
-  // Lanes = runnable worktrees (incl. setup-incomplete → Repair). Worktrees = no recipe / not opened as lane.
-  const laneList = hasManifest ? rest.filter((l) => l.runnable) : [];
+  // Lanes = prepared worktrees (recipe applied). Worktrees = not opened as lane yet.
+  const laneList = hasManifest ? rest.filter((l) => l.prepared) : [];
   const worktrees = hasManifest
-    ? rest.filter((l) => !l.runnable)
+    ? rest.filter((l) => !l.prepared)
     : rest;
   const markPrimary = primary.alert
     ? `${iconHTML('warning-circle')}`

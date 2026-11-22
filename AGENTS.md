@@ -1,6 +1,6 @@
 # Agents
 
-Plenum is a Mac git client for parallel work: a board of **lanes** (git worktrees), commit / push / pull / rebase / merge with a conflict walk, plus **runnable lanes** (`.plenum/lane.yaml`), a CLI, and a local MCP server.
+Plenum is a Mac git client for parallel work. A **lane** is a worktree with Plenum’s runner set up (`.plenum/lane.yaml` + Open as lane / create); plain worktrees sit under Worktrees until then. One board for Protected / Lanes / Worktrees, commit / push / pull / rebase / merge with a conflict walk, plus CLI and a local MCP server.
 
 ## Layout
 
