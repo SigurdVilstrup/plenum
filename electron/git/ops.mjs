@@ -222,16 +222,18 @@ export async function revertLaneChanges(root, laneIndex, paths) {
 
 /**
  * Push the lane tip to origin.
- * @param {'lease'|'force'|false|undefined} [opts.force]
- *   - undefined/false: primary = normal push; other lanes = --force-with-lease (post-rebase)
- *   - 'lease': always --force-with-lease
- *   - 'force' / true: --force (overwrites remote tip)
+ * Default is a normal fast-forward push for every lane.
+ * Opt into rewrite only via confirm sheet: `{ force: 'lease'|'force' }` or `{ forceWithLease: true }`.
+ * Primary never force-pushes.
  */
 export async function pushLane(root, laneIndex, opts = {}) {
   const board = await loadBoard(root);
   const lane = laneOrPrimary(board, laneIndex);
-  const mode = normalizeForcePush(opts?.force);
-  const flags = forcePushFlags(mode, { defaultLease: !lane.isPrimary });
+  const forceOpt = opts.forceWithLease === true ? 'lease' : opts?.force;
+  const mode = normalizeForcePush(forceOpt);
+  if (mode && lane.isPrimary) throw new Error('Protected primary never force-pushes.');
+  // Never default feature lanes to lease — Push must stay a plain git push.
+  const flags = forcePushFlags(mode, { defaultLease: false });
   try {
     await git(['push', ...flags, '-u', 'origin', 'HEAD'], lane.path);
   } catch (e) {

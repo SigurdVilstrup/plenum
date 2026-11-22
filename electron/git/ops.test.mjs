@@ -71,7 +71,13 @@ test('create commit push rebase force-with-lease merge remove', async () => {
   assert.ok(board.lanes.find((l) => l.name === 'feat/one').behind > 0);
   board = await ops.rebaseLane(root, lane.index);
   assert.equal(board.lanes.find((l) => l.name === 'feat/one').behind, 0);
-  board = await ops.pushLane(root, lane.index);
+  // After rewrite, a normal push must refuse; force-with-lease is opt-in.
+  await assert.rejects(() => ops.pushLane(root, lane.index), /non-fast-forward|rejected|failed to push/i);
+  board = await ops.pushLane(root, lane.index, { forceWithLease: true });
+  await assert.rejects(
+    () => ops.pushLane(root, 0, { forceWithLease: true }),
+    /never force-pushes/i,
+  );
   board = await ops.mergeLaneIntoMain(root, lane.index, { mode: 'ff' });
   const merged = board.lanes.find((l) => l.name === 'feat/one');
   assert.equal(merged.readiness, 'safe');

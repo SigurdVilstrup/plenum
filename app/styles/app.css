@@ -367,6 +367,7 @@ input, textarea, [contenteditable="true"] {
   opacity: 0;
 }
 .btn.primary.busy,
+.btn.danger.busy,
 .iconbtn.primary.busy,
 .iconbtn.danger.busy {
   --spin: #fff;
