@@ -507,7 +507,13 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
   let raw;
   try {
     const n = Math.max(50, Math.min(5000, Number(limit) || 120));
-    raw = await git(['log', '--date-order', '-n', String(n), '--all', `--pretty=format:${format}`], cwd);
+    // Paginate the same set belongs() keeps: local branches (+ teamRef when it is
+    // origin/…). `--all` burned the -n window on remote-tracking commits that the
+    // filter drops, so "load older" looked dead (same rows, or hasMore stuck wrong).
+    const args = ['log', '--date-order', '-n', String(n), '--branches'];
+    if (teamRef) args.push(teamRef);
+    args.push(`--pretty=format:${format}`);
+    raw = await git(args, cwd);
   } catch {
     return { rows: [], scanned: 0 };
   }

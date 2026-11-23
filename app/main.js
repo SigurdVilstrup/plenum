@@ -217,6 +217,7 @@ function paintBoardGraph() {
     currentBranch: laneByIndex(state.selectedLane)?.branch || null,
     gravatar: state.prefs.gravatar !== false,
     columns: cols,
+    historyHasMore: !!state.board.historyHasMore,
   });
   // Remeasure SVG left when a flex column sits before Graph — keep header/handles.
   syncGraphColumnChrome(el.graph, { remount: false, headers: false, measure: true });
@@ -1019,25 +1020,82 @@ function paint() {
 }
 
 let olderObserver = null;
+let olderScrollBound = null;
+let olderRetryTimer = null;
+let olderFailStreak = 0;
 
-function attachOlderSentinel(rowsEl) {
+/** True when the graph scroller is within `px` of the bottom (load-older trigger). */
+function nearOlderBottom(rowsEl, px = 96) {
+  if (!rowsEl) return false;
+  return rowsEl.scrollHeight - rowsEl.scrollTop - rowsEl.clientHeight < px;
+}
+
+function detachOlderSentinel() {
   if (olderObserver) {
     olderObserver.disconnect();
     olderObserver = null;
   }
-  if (!rowsEl || !state.board?.historyHasMore) return;
+  if (olderScrollBound) {
+    olderScrollBound.el.removeEventListener('scroll', olderScrollBound.fn);
+    olderScrollBound = null;
+  }
+  if (olderRetryTimer) {
+    clearTimeout(olderRetryTimer);
+    olderRetryTimer = null;
+  }
+}
+
+function scheduleOlderRetry(ms = 250, { afterFail = false } = {}) {
+  if (olderRetryTimer) return;
+  if (afterFail && olderFailStreak >= 5) return;
+  olderRetryTimer = setTimeout(() => {
+    olderRetryTimer = null;
+    loadOlderHistory();
+  }, ms);
+}
+
+function attachOlderSentinel(rowsEl) {
+  detachOlderSentinel();
+  olderFailStreak = 0;
+  if (!rowsEl || !state.board?.commits?.length) return;
+
+  // End of local history — say so clearly instead of a silent dead stop.
+  if (!state.board.historyHasMore) {
+    const end = document.createElement('div');
+    end.className = 'load-older history-end';
+    end.dataset.historyEnd = '1';
+    end.setAttribute('role', 'status');
+    end.innerHTML = '<span>End of history</span>';
+    rowsEl.appendChild(end);
+    return;
+  }
+
   const foot = document.createElement('div');
   foot.className = 'load-older';
   foot.dataset.loadOlder = '1';
   foot.setAttribute('aria-live', 'polite');
+  // Keep a real node so the sentinel has layout; empty flex boxes can miss IO in Electron.
   foot.innerHTML = state.loadingOlder
     ? `<i class="spinner btn-spin" aria-hidden="true"></i><span>Loading older…</span>`
-    : '';
+    : '<span class="sr-only">Load older commits</span>';
   rowsEl.appendChild(foot);
+
+  const tryLoad = () => {
+    if (nearOlderBottom(rowsEl)) loadOlderHistory();
+  };
+
+  // rootMargin pulls the trigger early so the last rows aren't a dead zone.
   olderObserver = new IntersectionObserver((entries) => {
     if (entries.some((e) => e.isIntersecting)) loadOlderHistory();
-  }, { root: rowsEl });
+  }, { root: rowsEl, rootMargin: '0px 0px 96px 0px', threshold: 0 });
   olderObserver.observe(foot);
+
+  // Backup: IO does not re-fire if the foot stays intersecting after a failed/busy attempt.
+  const onScroll = () => tryLoad();
+  rowsEl.addEventListener('scroll', onScroll, { passive: true });
+  olderScrollBound = { el: rowsEl, fn: onScroll };
+
+  requestAnimationFrame(tryLoad);
 }
 
 let tabDragId = null;
@@ -6135,11 +6193,19 @@ async function refresh({ loud = false } = {}) {
 async function loadOlderHistory() {
   if (!state.board?.historyHasMore || state.loadingOlder) return;
   const tabId = beginOp('history');
-  if (!tabId) return;
+  if (!tabId) {
+    // Tab busy with another op — IO won't re-fire while the foot stays on screen.
+    scheduleOlderRetry(250);
+    return;
+  }
   const root = state.board.root;
   const next = Math.min(5000, (state.historyLimit || 120) + 120);
   state.historyLimit = next;
   state.loadingOlder = true;
+  if (olderRetryTimer) {
+    clearTimeout(olderRetryTimer);
+    olderRetryTimer = null;
+  }
   const foot = el.graph.querySelector('[data-load-older]');
   if (foot) {
     foot.setAttribute('aria-busy', 'true');
@@ -6161,13 +6227,19 @@ async function loadOlderHistory() {
     }
     return;
   }
-  if (board) applyBoard(board);
-  else {
+  if (board) {
+    olderFailStreak = 0;
+    applyBoard(board);
+  } else {
+    olderFailStreak += 1;
+    // Revert optimistic bump so the next attempt asks for the same window.
+    state.historyLimit = Math.max(120, next - 120);
     const idle = el.graph.querySelector('[data-load-older]');
     if (idle) {
       idle.removeAttribute('aria-busy');
-      idle.innerHTML = '';
+      idle.innerHTML = '<span class="sr-only">Load older commits</span>';
     }
+    scheduleOlderRetry(600, { afterFail: true });
   }
 }
 

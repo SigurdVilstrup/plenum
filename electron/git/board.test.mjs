@@ -371,3 +371,59 @@ test('baselines: configured tips give per-branch ahead/behind', async () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('loadBoard: historyHasMore tracks local branches, not remote-tracking noise', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-bare-'));
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'Tester'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'hello');
+    git(['add', 'README'], root);
+    git(['commit', '-m', 'init'], root);
+    for (let i = 0; i < 4; i++) {
+      git(['commit', '--allow-empty', '-m', `local ${i}`], root);
+    }
+
+    // Many commits only on a fetched remote branch — must not steal the -n window.
+    git(['init', '--bare', '-b', 'main'], bare);
+    git(['remote', 'add', 'origin', bare], root);
+    git(['push', '-u', 'origin', 'main'], root);
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-other-'));
+    try {
+      git(['clone', bare, other]);
+      git(['config', 'user.email', 't@example.com'], other);
+      git(['config', 'user.name', 'Tester'], other);
+      git(['config', 'commit.gpgsign', 'false'], other);
+      git(['checkout', '-b', 'noise'], other);
+      for (let i = 0; i < 80; i++) {
+        git(['commit', '--allow-empty', '-m', `noise ${i}`], other);
+      }
+      git(['push', '-u', 'origin', 'noise'], other);
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
+    git(['fetch', 'origin'], root);
+
+    const board = await loadBoard(root, { historyLimit: 50 });
+    const real = board.commits.filter((c) => !c.isWIP);
+    assert.equal(real.length, 5, 'only local ancestry is painted');
+    assert.equal(board.historyHasMore, false, 'short local history is fully loaded');
+
+    // Long local history still paginates.
+    for (let i = 0; i < 60; i++) {
+      git(['commit', '--allow-empty', '-m', `more ${i}`], root);
+    }
+    const page = await loadBoard(root, { historyLimit: 50 });
+    assert.equal(page.historyHasMore, true);
+    assert.ok(page.commits.filter((c) => !c.isWIP).length <= 50);
+    const more = await loadBoard(root, { historyLimit: 120 });
+    assert.equal(more.historyHasMore, false);
+    assert.ok(more.commits.filter((c) => !c.isWIP).length > page.commits.filter((c) => !c.isWIP).length);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});

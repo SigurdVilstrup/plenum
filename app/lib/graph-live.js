@@ -93,6 +93,7 @@ export function renderGraph(root, {
   currentBranch = null,
   gravatar = true,
   columns = null,
+  historyHasMore = false,
 } = {}) {
   const rowsEl = root.querySelector('.rows');
   const scrollTop = rowsEl.scrollTop;
@@ -105,6 +106,9 @@ export function renderGraph(root, {
   const { rows: layout, height } = layoutGraphRows(commits);
   const y = (i) => layout[i].cy;
   const tips = new Set(commits.filter((c) => (c.isTip || c.refs?.some((r) => !r.tag))).map((c) => c.id));
+  // Extra canvas only while older commits can still load — a dangling stem at the
+  // true end of history looked like a broken infinite scroll.
+  const svgH = historyHasMore ? height + ROW : height;
 
   let edges = '';
   let nodes = '';
@@ -115,8 +119,9 @@ export function renderGraph(root, {
         const dash = c.isWIP || c.unpushed ? ' stroke-dasharray="3 3"' : '';
         if (p == null) {
           const dim = c.lane !== selectedLane ? ' dim' : '';
+          if (!historyHasMore) return;
           // Continue past the last painted tip so load-older doesn't look cut off.
-          edges += `<path class="edge${dim}" d="M${x(c.lane)} ${y(i)} V${height + ROW}" stroke="${laneColor(c.lane)}"/>`;
+          edges += `<path class="edge${dim}" d="M${x(c.lane)} ${y(i)} V${svgH}" stroke="${laneColor(c.lane)}"/>`;
           return;
         }
         const parent = commits[p];
@@ -156,7 +161,7 @@ export function renderGraph(root, {
   }
 
   const svg = showSvg
-    ? `<svg width="${width}" height="${height + ROW}" viewBox="0 0 ${width} ${height + ROW}" preserveAspectRatio="xMinYMin meet" aria-hidden="true">
+    ? `<svg width="${width}" height="${svgH}" viewBox="0 0 ${width} ${svgH}" preserveAspectRatio="xMinYMin meet" aria-hidden="true">
     <g fill="none" stroke-width="1.5" stroke-linecap="round">${edges}</g>
     <g>${nodes}</g>
   </svg>`
