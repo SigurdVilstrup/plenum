@@ -598,16 +598,23 @@ function openCustom(tool, abs) {
   else launch(tool, [abs]);
 }
 
+/** Resolve Settings → Editor to a launchable entry. Prefer the saved id whenever that app is present. */
+function resolveEditor(editorId) {
+  const wanted = EDITORS[editorId];
+  if (wanted && editorAvailable(wanted)) return wanted;
+  // Insertion order: cursor, vscode, zed, windsurf — first installed wins when the pick is missing.
+  return Object.values(EDITORS).find(editorAvailable) || wanted || EDITORS.cursor;
+}
+
 ipcMain.handle('os.openEditor', (_e, target) => {
   const abs = assertPath(target);
   // #103 a file from an old commit may be gone: say so instead of opening a blank buffer.
   if (!fs.existsSync(abs)) throw new Error(`${path.basename(abs)} isn't in the working tree (deleted or moved since).`);
   const { editor, editorPath } = getPrefs(prefsDir());
   if (editor === 'custom') return openCustom(editorPath, abs);
-  // Saved editor may not be installed (default is Cursor): fall back to the first one that is.
-  const e = (EDITORS[editor] && editorAvailable(EDITORS[editor]) ? EDITORS[editor] : Object.values(EDITORS).find(editorAvailable))
-    || EDITORS[editor] || EDITORS.cursor;
+  const e = resolveEditor(editor);
   const cli = editorCli(e);
+  // Prefer a trusted CLI; otherwise `open` with the editor's own bundle/args (never another editor's shim).
   if (cli) launch(cli, ['-r', '--', abs]);
   else launch('open', [...e.open, abs]);
 });

@@ -267,6 +267,14 @@ async function setPref(partial, render = true) {
   clearTimeout(setPref._toast);
   setPref._toast = setTimeout(() => toast('Saved', 'ok'), 320);
   if ('gravatar' in partial || 'graphColumns' in partial) paint();
+  // Editor chrome lives on the board / file pane — refresh even while Settings is open
+  // so closing Settings (or a later paint) never keeps a stale Cursor/VS Code glyph.
+  if ('editor' in partial || 'editorPath' in partial || 'openLaneInEditor' in partial) {
+    if (!state.settings.open && !state.branchOverview.open) {
+      if (state.board) paintHeader();
+      if (state.filePane) paintFilePane(state.filePane);
+    }
+  }
   if ('tabFavicons' in partial) {
     applyStore(await invoke('tabs.list'));
     paintTabs();
@@ -2057,18 +2065,32 @@ function gitActionsHTML(l) {
 }
 
 const EDITOR_ICON = { cursor: 'cursor', vscode: 'vscode', zed: 'zed', windsurf: 'windsurf', custom: 'arrow-square-out' };
+const EDITOR_LABEL = { cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed', windsurf: 'Windsurf' };
 /** Saved editor, or the first installed one when it isn't on this Mac (mirrors os.openEditor). */
 const effectiveEditor = () => {
   const p = state.prefs.editor;
   if (p === 'custom' || !state.editors.length || state.editors.find((e) => e.id === p)?.available) return p;
   return state.editors.find((e) => e.available && e.id !== 'custom')?.id || p;
 };
-const editorName = () => ({ cursor: 'Cursor', vscode: 'VS Code', zed: 'Zed', windsurf: 'Windsurf' }[effectiveEditor()] || 'editor');
+const editorLabelOf = (id) => EDITOR_LABEL[id] || (id === 'custom' ? 'editor' : 'editor');
+/** What Open actually launches (may fall back when the saved app is missing). */
+const editorName = () => editorLabelOf(effectiveEditor());
 const editorIcon = () => EDITOR_ICON[effectiveEditor()] || 'arrow-square-out';
+/** Icon for the Settings → Editor row: always the saved choice, not the fallback. */
+const savedEditorIcon = () => {
+  const p = state.prefs.editor;
+  if (p === 'custom') return 'folder-simple';
+  return EDITOR_ICON[p] || 'arrow-square-out';
+};
 
 function editorBtnHTML() {
   const n = editorName();
-  return `<button class="iconbtn framed primary" type="button" data-act="editor" title="Open in ${n}" aria-label="Open in ${n}">${iconHTML(editorIcon())}</button>`;
+  const saved = state.prefs.editor;
+  const eff = effectiveEditor();
+  const tip = saved !== eff && saved !== 'custom'
+    ? `Open in ${n} (${editorLabelOf(saved)} isn’t installed — using ${n})`
+    : `Open in ${n}`;
+  return `<button class="iconbtn framed primary" type="button" data-act="editor" title="${esc(tip)}" aria-label="${esc(tip)}">${iconHTML(editorIcon())}</button>`;
 }
 
 /** #89 agent CLIs with a session open in this lane (from board.lanes[].agents). */
@@ -3387,7 +3409,7 @@ function openCreateLane() {
       <p class="lede" style="margin:0">Already have a branch? Right-click it → <strong>Switch branch</strong> or <strong>Open as lane</strong>.</p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">${iconHTML('arrow-square-out', 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>
+        <button class="btn primary" type="submit">${iconHTML(state.prefs.openLaneInEditor === false ? 'tree-structure' : editorIcon(), 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
@@ -4399,7 +4421,13 @@ const SETTINGS_PAGES = {
       { id: 'custom', label: 'Other app…', available: true },
     ]).filter((e) => e.available || e.id === p.editor)
       .map((e) => [e.id, e.label]);
-    const rowIcon = p.editor === 'custom' ? 'folder-simple' : editorIcon();
+    // Bind the select to the *saved* pref — never effectiveEditor(). Using the fallback
+    // as the selected value made VS Code snap back to Cursor in the UI after save when
+    // detection disagreed, while prefs still held vscode (or the glyph stayed Cursor).
+    const eff = effectiveEditor();
+    const editorDetail = p.editor !== 'custom' && p.editor !== eff
+      ? `Saved ${editorLabelOf(p.editor)} isn’t available — Open uses ${editorLabelOf(eff)}`
+      : 'Only apps found on this Mac';
 
     const tools = state.diffMergeTools.length ? state.diffMergeTools : [
       { id: 'internal', label: 'Built-in', available: true },
@@ -4425,7 +4453,7 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Open with</div>
       <div class="list">
-        ${settingsRow(rowIcon, 'Editor', '', 'Only apps found on this Mac', selectHTML('editor', editorOpts, effectiveEditor(), 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden.')}
+        ${settingsRow(savedEditorIcon(), 'Editor', '', editorDetail, selectHTML('editor', editorOpts, p.editor, 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden; Open falls back to another installed editor.')}
         ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Plenum launches when Editor is Other app.') : ''}
         ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create also opens that worktree in your editor.')}
         ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
