@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defaultGraphColumns, normalizeGraphColumns } from '../app/lib/graph-columns-pref.js';
+import { defaultGraphColumns, normalizeGraphColumns } from './graph-columns-pref.mjs';
 
 const TTL_MIN = 30_000;
 const TTL_MAX = 600_000;
