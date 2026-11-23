@@ -16,6 +16,8 @@ import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-p
 import { groupBranchesByPrefix } from './lib/branch-folders.js';
 import { startTour } from './lib/tour.js';
 import { noteLaunch, pickNudge, markShown } from './lib/nudge.js';
+import { enhanceSelects, closeSelectMenus } from './lib/select.js';
+import { createBranchOverview } from './lib/branch-overview-page.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -72,7 +74,7 @@ const state = {
   /** Remote path folders start collapsed (#62); keys here are the ones the user opened. */
   openRemoteFolders: new Set(),
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
-  branchFilter: '', // #69 search across local + remote tips
+  branchFilter: '', // #69 panel filter across lanes, worktrees, local + remote
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
   changesPaintKey: '',
@@ -89,6 +91,19 @@ const state = {
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, setupTabId: null },
+  /** Full-window branch compare page (docs/branch-overview.md). */
+  branchOverview: {
+    open: false,
+    branch: null,
+    vs: null,
+    tab: 'commits',
+    query: '',
+    data: null,
+    loading: false,
+    error: null,
+    selectedSha: null,
+    loadSeq: 0,
+  },
   appInfo: { version: '', commit: '', committedAt: '' },
   /** electron-updater state from main (`app.update.state` / `onUpdate`). */
   update: null,
@@ -1490,8 +1505,15 @@ function paintPanel() {
     ? `${iconHTML('warning-circle')}`
     : `${iconHTML('shield-check')}`;
   const primarySelected = selected === 0;
-  const lanesOpen = state.lanesOpen;
-  const worktreesOpen = state.worktreesOpen;
+  const q = state.branchFilter.trim().toLowerCase();
+  const matchLane = (l) => !q
+    || String(l.name || '').toLowerCase().includes(q)
+    || String(l.branch || '').toLowerCase().includes(q)
+    || String(l.folder || '').toLowerCase().includes(q);
+  const visibleLanes = laneList.filter(matchLane);
+  const visibleWorktrees = worktrees.filter(matchLane);
+  const lanesOpen = state.lanesOpen || !!q;
+  const worktreesOpen = state.worktreesOpen || !!q;
   let html = `<div class="section section-protected">
     <div class="lane-block${primarySelected ? ' selected' : ''}">
       <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0" title="Protected · Integration branch. You still commit and push here; Start works when the repo has a lane recipe.">
@@ -1502,26 +1524,33 @@ function paintPanel() {
     </div>
   </div>`;
 
-  const lanesBody = laneList.length
-    ? laneList.map((l) => laneRowHTML(l, b, selected)).join('')
-    : `<div class="empty-note">${hasManifest
-      ? 'None yet — use + or Open as lane on a worktree'
-      : `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup first</button>`}</div>`;
+  html += `<div class="section branch-search">
+    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Filter" aria-label="Filter lanes, worktrees, and branches" spellcheck="false" autocomplete="off" /></label>
+  </div>`;
+
+  const lanesEmpty = q
+    ? 'No match'
+    : (hasManifest
+      ? 'None'
+      : `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup first</button>`);
+  const lanesBody = visibleLanes.length
+    ? visibleLanes.map((l) => laneRowHTML(l, b, selected)).join('')
+    : `<div class="empty-note">${lanesEmpty}</div>`;
   html += `<div class="section section-accordion">
     <div class="branch-head">
       <button class="lane-row branch-toggle" type="button" data-lanes aria-expanded="${lanesOpen}" title="Worktrees with Plenum runner setup.">
         <span class="mark">${iconHTML('caret-right')}</span>
         <span class="section-icon">${iconHTML('stack', 'sm')}</span>
         <span class="name">Lanes</span>
-        <span class="meta">${laneList.length}</span>
+        <span class="meta">${visibleLanes.length}</span>
       </button>
       <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
     </div>
     <div class="section-body"${lanesOpen ? '' : ' hidden'}>${lanesBody}</div>
   </div>`;
 
-  const worktreesBody = worktrees.length
-    ? worktrees.map((l) => {
+  const worktreesBody = visibleWorktrees.length
+    ? visibleWorktrees.map((l) => {
       const isSelected = l.index === selected;
       const cta = hasManifest
         ? `<button class="btn primary" type="button" data-act="openAsLane">${iconHTML('play', 'sm')}Open as lane</button>`
@@ -1535,19 +1564,18 @@ function paintPanel() {
         ${isSelected ? `<div class="lane-run">${cta}</div>` : ''}
       </div>`;
     }).join('')
-    : '<div class="empty-note">None</div>';
+    : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
   html += `<div class="section section-accordion">
     <button class="lane-row branch-toggle" type="button" data-worktrees aria-expanded="${worktreesOpen}" title="Worktrees without runner setup yet.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="section-icon">${iconHTML('tree-structure', 'sm')}</span>
       <span class="name">Worktrees</span>
-      <span class="meta">${worktrees.length}</span>
+      <span class="meta">${visibleWorktrees.length}</span>
     </button>
     <div class="section-body"${worktreesOpen ? '' : ' hidden'}>${worktreesBody}</div>
   </div>`;
 
   const allBranches = b.branches || [];
-  const q = state.branchFilter.trim().toLowerCase();
   const matches = (br) => !q || br.name.toLowerCase().includes(q);
   const locals = allBranches.filter((br) => !br.remote && matches(br));
   const remotes = allBranches.filter((br) => br.remote && matches(br));
@@ -1576,9 +1604,6 @@ function paintPanel() {
       <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
     </div>`;
   }
-  html += `<div class="section branch-search">
-    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Filter" aria-label="Filter local and remote branches" spellcheck="false" autocomplete="off" /></label>
-  </div>`;
   html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
     <div class="branch-head">
     <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen || !!q}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs protected tip stays on the lane header.">
@@ -1601,8 +1626,10 @@ function paintPanel() {
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${remoteBody}</div>
   </div>`;
 
+  closeSelectMenus();
   el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${panelFootHTML()}`;
   el.panel.classList.toggle('is-refreshing', refreshing);
+  enhanceSelects(el.panel);
   el.panel.querySelector('[data-settings]')?.addEventListener('click', () => openSettings());
   el.panel.querySelector('[data-feedback]')?.addEventListener('click', () => openFeedbackSheet());
   bindUpdateAct(el.panel);
@@ -2350,8 +2377,10 @@ async function runConflictable(channel, lane, extra, act, okMsg) {
 }
 
 function openSheet(html) {
+  closeSelectMenus();
   el.sheetLayer.innerHTML = html;
   el.sheetLayer.classList.add('open');
+  enhanceSelects(el.sheetLayer);
   el.sheetLayer.querySelector('[data-close]')?.addEventListener('click', () => {
     if (el.sheetLayer.querySelector('form[data-sending="1"]')) return;
     closeSheet();
@@ -2361,6 +2390,7 @@ function openSheet(html) {
 }
 
 function closeSheet() {
+  closeSelectMenus();
   el.sheetLayer.classList.remove('open');
   el.sheetLayer.innerHTML = '';
 }
@@ -2893,6 +2923,7 @@ function branchByName(name) {
 
 function dismissCtxMenus() {
   document.querySelector('.ctx-menu')?.remove();
+  closeSelectMenus();
 }
 
 async function updateBranchRow(name) {
@@ -5192,8 +5223,10 @@ function renderSettings() {
     `<button class="navitem${id === lit ? ' active' : ''}" type="button" data-page="${id}"${id === lit ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
   el.settingsNav.innerHTML = `<div class="settings-nav-list"><button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
     <div class="heading">Settings</div>${nav}</div>${panelFootHTML(true)}`;
+  closeSelectMenus();
   el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
+  enhanceSelects(el.settingsBody);
   if (page === 'appearance') renderGraph(el.settingsBody.querySelector('.theme-preview'), { commits: PREVIEW_COMMITS, selectedLane: 1, selectedCommit: 'a1b2c3d', currentBranch: 'feat/hover', gravatar: false });
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);

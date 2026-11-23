@@ -814,6 +814,189 @@ button.env-link {
 .ctx-menu button:hover { background: var(--surface-3); }
 .ctx-menu button.danger { color: var(--danger); }
 
+/* Custom select — same surface language as ctx-menu, replaces native OS menus */
+.pl-select {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.pl-select.is-select {
+  display: inline-flex;
+  min-width: 140px;
+}
+.pl-select.is-input {
+  display: inline-flex;
+  min-width: 220px;
+}
+.field .pl-select {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+.pl-select-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.pl-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  transition: border-color 120ms ease;
+}
+.field .pl-select-trigger {
+  background: var(--canvas);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+.pl-select.mono .pl-select-trigger,
+.pl-select.mono .pl-select-value {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.pl-select-trigger:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.field .pl-select-trigger:hover:not(:disabled) {
+  background: var(--canvas);
+}
+.pl-select-trigger:focus-visible,
+.pl-select.open .pl-select-trigger {
+  border-color: var(--primary);
+}
+.pl-select-trigger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.pl-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-select.is-empty .pl-select-value {
+  color: var(--ink-tertiary);
+}
+.pl-select-trigger .icon {
+  flex: none;
+  color: var(--ink-tertiary);
+}
+.pl-select.open .pl-select-trigger .icon {
+  color: var(--ink);
+}
+/* Ghost: fills a parent chrome control (branch vs) — no own border */
+.pl-select.is-ghost {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: auto;
+  max-width: none;
+}
+.pl-select.is-ghost .pl-select-trigger {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: inherit;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pl-select.is-ghost .pl-select-trigger:hover,
+.pl-select.is-ghost .pl-select-trigger:focus-visible,
+.pl-select.open.is-ghost .pl-select-trigger {
+  background: transparent;
+  border: 0;
+  opacity: 0;
+}
+.pl-select-menu {
+  position: fixed;
+  z-index: 40;
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: var(--shadow-menu);
+}
+.pl-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 7px 10px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.pl-select-option.mono,
+.pl-select-option .pl-select-option-label {
+  min-width: 0;
+}
+.pl-select-option.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.pl-select-option-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-select-check {
+  flex: none;
+  width: 12px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--primary);
+  text-align: center;
+}
+.pl-select-option.is-active,
+.pl-select-option:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.pl-select-option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pl-select-option[aria-selected="true"] {
+  font-weight: 500;
+}
+
 .services-menu {
   min-width: 200px;
 }
@@ -1327,7 +1510,14 @@ html.feedback-redact .blame-line {
   display: none !important;
 }
 .window.app .panel .section-body {
-  padding: 0 0 4px 4px;
+  padding: 0 0 2px 4px;
+}
+.window.app .panel .section-body .empty-note,
+.window.app .panel .branch-list .empty-note {
+  padding: 2px 8px 4px 28px;
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  line-height: 1.2;
 }
 .window.app .panel .branch-toggle .section-icon {
   display: inline-flex;
@@ -1629,6 +1819,28 @@ html.feedback-redact .blame-line {
 .window.app .load-older[aria-busy="true"] {
   color: var(--ink-muted);
 }
+.window.app .load-older.history-end {
+  min-height: 36px;
+  padding-top: 4px;
+  padding-bottom: 12px;
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  user-select: none;
+}
+.window.app .load-older.history-end span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.window.app .load-older.history-end span::before,
+.window.app .load-older.history-end span::after {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: var(--hairline-strong);
+}
 .window.app .body.is-busy {
   cursor: progress;
 }
@@ -1719,44 +1931,72 @@ html.feedback-redact .blame-line {
   font-size: 11px;
   font-weight: 500;
 }
-.window.app .panel .branch-vs {
+.window.app .panel .branch-vs-wrap .pl-select.is-ghost {
   position: absolute;
   inset: 0;
-  width: 100%;
-  opacity: 0;
-  cursor: pointer;
+}
+.window.app .panel .branch-vs {
+  /* Enhanced into .pl-select; native stays clipped */
   font-size: 12px;
 }
-/* #69 / #100 branch search — sits in the panel chrome, not a floating field */
+/* #69 / #100 panel filter — under Protected, above Lanes; same density as accordion rows */
 .window.app .panel .branch-search {
-  padding: 4px 8px 6px;
+  /* Equal inset so the field sits centered between the hairlines */
+  padding: 4px 8px;
   border-top: 1px solid var(--hairline);
-  background: var(--surface-1, var(--canvas));
+  border-bottom: 1px solid var(--hairline);
 }
 .window.app .panel .branch-search-box {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 8px;
-  height: 28px;
+  gap: 5px;
+  padding: 0 6px;
+  height: 22px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: transparent;
   color: var(--ink-tertiary);
-  box-shadow: inset 0 0 0 1px var(--hairline);
+  box-sizing: border-box;
+}
+.window.app .panel .branch-search-box:hover {
+  background: var(--surface-2);
+  color: var(--ink-muted);
 }
 .window.app .panel .branch-search-box:focus-within {
   color: var(--ink);
+  background: var(--surface-2);
   box-shadow: inset 0 0 0 1px var(--primary);
+}
+.window.app .panel .branch-search-box .icon {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: none;
 }
 .window.app .panel .branch-search-box input {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 12px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 22px;
   color: var(--ink);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.window.app .panel .branch-search-box input::-webkit-search-decoration,
+.window.app .panel .branch-search-box input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.window.app .panel .branch-search-box input::placeholder {
+  color: var(--ink-tertiary);
+  line-height: 22px;
 }
 
 .window.app .panel .branch-row-wrap {
@@ -1782,6 +2022,10 @@ html.feedback-redact .blame-line {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  width: 100%;
+}
+.baseline-control .pl-select {
+  display: flex;
   width: 100%;
 }
 .baseline-list {

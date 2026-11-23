@@ -2989,6 +2989,8 @@ a.navitem {
   font-size: 12px;
 }
 
+/* Native select chrome is replaced by .pl-select; keep .select for legacy class hooks */
+
 /* Bad-day states and the remove sheet */
 .mark.protected.alert {
   color: var(--danger);
@@ -3083,7 +3085,8 @@ a.navitem {
 
 .field input,
 .field select,
-.field textarea {
+.field textarea,
+.field .pl-select-trigger {
   border: 1px solid var(--hairline);
   background: var(--canvas);
   border-radius: var(--radius-md);
@@ -3104,9 +3107,12 @@ a.navitem {
 .field input:focus,
 .field select:focus,
 .field textarea:focus,
+.field .pl-select-trigger:focus,
 .field input:focus-visible,
 .field select:focus-visible,
-.field textarea:focus-visible {
+.field textarea:focus-visible,
+.field .pl-select-trigger:focus-visible,
+.field .pl-select.open .pl-select-trigger {
   border-color: var(--primary);
   outline: none;
 }
