@@ -1,5 +1,5 @@
 import './lib/icons.js';
-import { renderGraph } from './lib/graph-live.js';
+import { renderGraph, renderLinearHistory } from './lib/graph-live.js';
 import { authorshipPillHTML } from './lib/authorship-pill.js';
 import { authorshipBadgeLegendHTML, aiToolPillIconHTML } from './lib/ai-tool-badge.js';
 import {
@@ -16,8 +16,17 @@ import { renderDiffBody, renderHistoryList, renderBlameBody } from './lib/file-p
 import { groupBranchesByPrefix } from './lib/branch-folders.js';
 import { startTour } from './lib/tour.js';
 import { noteLaunch, pickNudge, markShown } from './lib/nudge.js';
+import { bindLayoutResizers } from './lib/layout-widths.js';
 import { enhanceSelects, closeSelectMenus } from './lib/select.js';
-import { createBranchOverview } from './lib/branch-overview-page.js';
+import {
+  applyGraphColumnLayout,
+  defaultGraphColumns,
+  GRAPH_COLUMN_META,
+  headersMatchColumns,
+  moveColumn,
+  normalizeGraphColumns,
+  setColumnOn,
+} from './lib/graph-columns-pref.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -91,7 +100,7 @@ const state = {
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, setupTabId: null },
-  /** Full-window branch compare page (docs/branch-overview.md). */
+  /** Full-window branch compare page (see docs/branch-overview.md). */
   branchOverview: {
     open: false,
     branch: null,
@@ -102,7 +111,6 @@ const state = {
     loading: false,
     error: null,
     selectedSha: null,
-    loadSeq: 0,
   },
   appInfo: { version: '', commit: '', committedAt: '' },
   /** electron-updater state from main (`app.update.state` / `onUpdate`). */
@@ -141,6 +149,8 @@ const el = {
   settings: document.getElementById('settings'),
   settingsNav: document.getElementById('settings-nav'),
   settingsBody: document.getElementById('settings-body'),
+  branchOverview: document.getElementById('branch-overview'),
+  branchOverviewBody: document.getElementById('branch-overview-body'),
   body: document.getElementById('body'),
   laneHead: document.getElementById('lane-head'),
   graph: document.querySelector('.graph'),
@@ -154,6 +164,79 @@ const el = {
   searchbtn: document.querySelector('.titlebar .searchbtn'),
   titlebar: document.querySelector('.titlebar'),
 };
+
+/** Panel + graph column widths (localStorage). Remount rails after panel/settings paint. */
+function graphColumnPrefs() {
+  return normalizeGraphColumns(state.prefs?.graphColumns);
+}
+
+/** Signature of order + visibility — skip header rebuild when unchanged. */
+function graphColumnsSig(cols = graphColumnPrefs()) {
+  return normalizeGraphColumns(cols).map((c) => `${c.id}:${c.on ? 1 : 0}`).join(',');
+}
+let lastGraphColsSig = '';
+
+/**
+ * Headers + CSS tracks / SVG left.
+ * `headers` rebuilds header cells; `remount` re-attaches board resize handles.
+ * Measure-only passes must not rebuild headers (that wipes the handles).
+ */
+function syncGraphColumnChrome(graphEl = el.graph, {
+  remount = true,
+  measure = false,
+  headers = remount,
+} = {}) {
+  if (!graphEl) return;
+  applyGraphColumnLayout(graphEl, graphColumnPrefs(), {
+    widths: layout.widths,
+    measure,
+    headers,
+  });
+  if (remount && graphEl === el.graph) layout.remountGraphCols();
+}
+
+function paintBoardGraph() {
+  if (!state.board || !el.graph) return;
+  const cols = graphColumnPrefs();
+  const head = el.graph.querySelector('.graph-cols');
+  // Rebuild headers whenever prefs diverge from the DOM — skipping caused drift
+  // (e.g. hide SHA → titles sat on the wrong tracks).
+  const needHeaders = !headersMatchColumns(head, cols) || graphColumnsSig(cols) !== lastGraphColsSig;
+  lastGraphColsSig = graphColumnsSig(cols);
+  syncGraphColumnChrome(el.graph, { remount: needHeaders, headers: needHeaders, measure: false });
+  const selectedCommit = state.changes?.kind === 'commit'
+    ? state.changes.sha
+    : state.changes?.kind === 'wip'
+      ? `wip-${state.changes.laneIndex}`
+      : null;
+  renderGraph(el.graph, {
+    commits: state.board.commits,
+    selectedLane: state.selectedLane,
+    selectedCommit,
+    runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
+    currentBranch: laneByIndex(state.selectedLane)?.branch || null,
+    gravatar: state.prefs.gravatar !== false,
+    columns: cols,
+  });
+  // Remeasure SVG left when a flex column sits before Graph — keep header/handles.
+  syncGraphColumnChrome(el.graph, { remount: false, headers: false, measure: true });
+  // Guarantee header cells still match row cells after paint.
+  if (!headersMatchColumns(el.graph.querySelector('.graph-cols'), cols)) {
+    syncGraphColumnChrome(el.graph, { remount: true, headers: true, measure: true });
+  }
+  layout.refresh(); // re-sync SVG canvas width/viewBox after paint
+  bindWipCommitFields();
+  attachOlderSentinel(el.graph.querySelector('.rows'));
+}
+
+const layout = bindLayoutResizers({
+  panel: el.panel,
+  settingsNav: el.settingsNav,
+  graph: el.graph,
+  onChange: () => {
+    syncGraphColumnChrome(el.graph, { remount: false, measure: true });
+  },
+});
 
 function applyTheme() {
   const t = state.prefs.theme || 'system';
@@ -182,7 +265,7 @@ async function setPref(partial, render = true) {
   // Debounce so rapid field edits coalesce to one acknowledgment.
   clearTimeout(setPref._toast);
   setPref._toast = setTimeout(() => toast('Saved', 'ok'), 320);
-  if ('gravatar' in partial) paint();
+  if ('gravatar' in partial || 'graphColumns' in partial) paint();
   if ('tabFavicons' in partial) {
     applyStore(await invoke('tabs.list'));
     paintTabs();
@@ -653,7 +736,7 @@ function copyFocused() {
 
 /** ⌘V outside a text field: a repo path opens that repo, anything else goes to the palette search. */
 async function pasteIntoApp(clip) {
-  if (el.sheetLayer.classList.contains('open') || state.settings.open) return;
+  if (el.sheetLayer.classList.contains('open') || state.settings.open || state.branchOverview.open) return;
   const text = String(clip ?? '').trim();
   if (!text || text.includes('\n')) return;
   if (/^(\/|~\/)/.test(text)) return openRepoPath(text);
@@ -825,7 +908,7 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
 
 /** First open: explain Protected and confirm (or change) the team branch. */
 function maybePromptProtected(board) {
-  if (!board?.root || state.settings.open || el.sheetLayer?.childElementCount) return;
+  if (!board?.root || state.settings.open || state.branchOverview.open || el.sheetLayer?.childElementCount) return;
   const ov = state.prefs.repoOverrides?.[board.root] || {};
   if (ov.protectedPicked || board.teamBranchSource === 'override') return;
   if (state._protectedPromptRoot === board.root) return;
@@ -881,11 +964,20 @@ function openProtectedPicker(board) {
 
 function paint() {
   paintTabs();
+  const overviewOpen = state.branchOverview.open;
   el.settings.hidden = !state.settings.open;
+  if (el.branchOverview) el.branchOverview.hidden = !overviewOpen;
   el.body.classList.toggle('settings-open', state.settings.open);
+  el.body.classList.toggle('branch-overview-open', overviewOpen);
   if (state.settings.open) {
     // Settings owns the body; the board repaints on close.
     for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
+    if (el.branchOverview) el.branchOverview.hidden = true;
+    return;
+  }
+  if (overviewOpen) {
+    for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
+    renderBranchOverview();
     return;
   }
   const tab = activeTab();
@@ -920,21 +1012,7 @@ function paint() {
   el.main.hidden = false;
   paintPanel();
   paintHeader();
-  const selectedCommit = state.changes?.kind === 'commit'
-    ? state.changes.sha
-    : state.changes?.kind === 'wip'
-      ? `wip-${state.changes.laneIndex}`
-      : null;
-  renderGraph(el.graph, {
-    commits: state.board.commits,
-    selectedLane: state.selectedLane,
-    selectedCommit,
-    runningLanes: new Set(state.board.lanes.filter((l) => l.running).map((l) => l.index)),
-    currentBranch: laneByIndex(state.selectedLane)?.branch || null,
-    gravatar: state.prefs.gravatar !== false,
-  });
-  bindWipCommitFields();
-  attachOlderSentinel(el.graph.querySelector('.rows'));
+  paintBoardGraph();
   if (state.changes) paintChanges();
   const op = state.opsByTab.get(state.store.activeId);
   if (op?.act) setActionBusy(op.act, true);
@@ -1714,6 +1792,7 @@ function paintPanel() {
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
     });
   });
+  layout.remountRails();
 }
 
 // #117 pinned branches per repo (right-click → Pin to top). Per-viewer convenience, like the baseline pick.
@@ -2408,7 +2487,7 @@ function openQuickStart() {
 
 // First board of a fresh install: walk through it once.
 function maybeStartTour() {
-  if (state.prefs.tourDone || !state.board || state.settings.open) return;
+  if (state.prefs.tourDone || !state.board || state.settings.open || state.branchOverview.open) return;
   if (el.sheetLayer.classList.contains('open')) return;
   requestAnimationFrame(openQuickStart);
 }
@@ -3070,6 +3149,7 @@ function openBranchCtxMenu(x, y, name) {
     br.hasLane ? 'Select worktree' : (br.remote ? 'Check out' : 'Switch branch'),
     () => checkoutBranchRow(br.name),
   );
+  add('Overview…', () => openBranchOverview(br.name));
   add('Copy name', () => copyText(br.name, 'branch name'));
   const root = state.board?.root;
   add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); });
@@ -4194,6 +4274,7 @@ async function openConflictSheet(lane, snapshot) {
 const SETTINGS_NAV = [
   ['general', 'list', 'General'],
   ['appearance', 'sun', 'Appearance'],
+  ['graph', 'tree-structure', 'Graph'],
   ['accounts', 'key', 'Accounts'],
   ['repositories', 'folder-simple', 'Repository'],
   ['agents', 'robot', 'Agents'],
@@ -4325,9 +4406,9 @@ const SETTINGS_PAGES = {
       </div>
       <div class="group-head">Look<small>Every look has a light and a dark side; Mode picks which.</small></div>
       ${themeGridHTML(chroma)}
-      <div class="group-head">Preview<small>Sample data. Follows the settings above.</small></div>
+      <div class="group-head">Preview<small>Sample data. Theme and look only — column layout is under Graph.</small></div>
       <div class="theme-preview" inert aria-hidden="true">
-        <div class="graph"><div class="rows"></div></div>
+        <div class="graph"><div class="graph-cols" aria-hidden="true"></div><div class="rows"></div></div>
         <div class="file-pane-diff">${renderDiffBody(PREVIEW_HUNKS)}</div>
       </div>
       <div class="group-head">Display</div>
@@ -4339,6 +4420,50 @@ const SETTINGS_PAGES = {
       <div class="group-head">Authorship<small>Read from the commit: Co-authored-by, Made-with, Generated-with, Assisted-by.</small></div>
       <p class="lede ab-lede">When a trailer names a known tool, the graph avatar gets a corner mark. Humans stay plain. The lane tip pill uses the same mark.</p>
       ${authorshipBadgeLegendHTML(iconHTML)}`;
+  },
+  graph: () => {
+    const cols = graphColumnPrefs();
+    const onCount = cols.filter((c) => c.on).length;
+    const labels = {
+      labels: 'Branch / Tag',
+      graph: 'Graph',
+      author: 'Author',
+      commit: 'Commit',
+      sha: 'SHA',
+      when: 'When',
+    };
+    const tips = {
+      labels: 'Ref pills for the tip commit.',
+      graph: 'Lane edges and nodes.',
+      author: 'Avatar (Gravatar still under Appearance).',
+      commit: 'Subject line.',
+      sha: 'Short hash.',
+      when: 'Relative time.',
+    };
+    const rows = cols.map((c, i) => {
+      const name = labels[c.id] || GRAPH_COLUMN_META[c.id]?.label || c.id;
+      const up = i === 0 ? ' disabled' : '';
+      const down = i === cols.length - 1 ? ' disabled' : '';
+      const move = `<span class="col-order" role="group" aria-label="Order for ${esc(name)}">
+          <button class="iconbtn" type="button" data-col-move="${c.id}" data-dir="-1" title="Move up" aria-label="Move ${esc(name)} up"${up}>${iconHTML('arrow-up', 'sm')}</button>
+          <button class="iconbtn" type="button" data-col-move="${c.id}" data-dir="1" title="Move down" aria-label="Move ${esc(name)} down"${down}>${iconHTML('caret-down', 'sm')}</button>
+        </span>`;
+      const sole = c.on && onCount === 1;
+      // Switches use data-graph-col (not data-pref) so we keep order + ≥1-on rules.
+      const sw = `<button class="switch${c.on ? ' on' : ''}" type="button" role="switch" aria-checked="${c.on}" aria-label="Show ${esc(name)}" data-graph-col="${c.id}"${sole ? ' aria-disabled="true" title="Keep at least one column on"' : ''}></button>`;
+      return settingsRow('list', name, '', `${i + 1} of ${cols.length}`, `${move}${sw}`, tips[c.id] || '');
+    }).join('');
+    return `<h1>Graph</h1><p class="lede">Show, hide, and reorder columns on the commit table. Stays on this Mac.</p>
+      <div class="group-head">Columns<small>At least one stays on. Hidden columns keep their place when you show them again.</small></div>
+      <div class="list col-pref-list">${rows}</div>
+      <div class="group-head">Preview<small>Sample data — same layout as the board when you go back.</small></div>
+      <div class="theme-preview graph-col-preview" inert aria-hidden="true">
+        <div class="graph"><div class="graph-cols" aria-hidden="true"></div><div class="rows"></div></div>
+      </div>
+      <div class="group-head">Reset</div>
+      <div class="list">
+        ${settingsRow('arrow-counter-clockwise', 'Default columns', '', 'Branch / Tag, Graph, Author, Commit, SHA, When — all on', '<button class="btn" type="button" data-graph-cols-reset>Reset</button>', 'Restores the shipping order and turns every column back on.')}
+      </div>`;
   },
   accounts: () => {
     const a = state.accounts;
@@ -5198,7 +5323,426 @@ function bindPrefs(root) {
     n.addEventListener('click', () => set(n.dataset.pref, n.getAttribute('aria-checked') !== 'true')));
 }
 
+/** Default compare ref: sidebar branch-vs when set; else this tip's upstream; else team. */
+function defaultOverviewVs(board, br = null) {
+  if (!board) return '';
+  const vsName = branchVs(board);
+  if (vsName) {
+    if (vsName === board.teamBranch) return board.teamRef || board.teamBranch;
+    const base = board.baselines?.find((x) => x.name === vsName);
+    if (base?.ref) return base.ref;
+  }
+  if (br?.upstream) return br.upstream;
+  return board.teamRef || board.teamBranch || 'main';
+}
+
+function overviewCompareOptions(board, br) {
+  const opts = [];
+  const seen = new Set();
+  const add = (value, label) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    opts.push({ value, label: label || value });
+  };
+  if (board?.teamRef || board?.teamBranch) {
+    add(board.teamRef || board.teamBranch, board.teamBranch || board.teamRef);
+  }
+  if (br?.upstream) add(br.upstream, `upstream (${br.upstream})`);
+  for (const b of board?.baselines || []) add(b.ref || b.name, b.name);
+  for (const x of board?.branches || []) {
+    if (x.name === br?.name) continue;
+    add(x.name, x.short || x.name);
+  }
+  return opts;
+}
+
+function buildOverviewPrompt(o, br) {
+  if (!o) return '';
+  const lines = [
+    `Branch ${o.branch} vs ${o.vs} (${o.ahead} ahead, ${o.behind} behind).`,
+  ];
+  if (o.mergeBase) lines.push(`Merge-base ${o.mergeBase.slice(0, 7)}.`);
+  const commits = o.commits || [];
+  if (commits.length) {
+    lines.push('Unique commits:');
+    const show = commits.slice(0, 15);
+    for (const c of show) lines.push(`- ${String(c.id).slice(0, 7)} ${c.subject}`);
+    if (commits.length > show.length) lines.push(`- … and ${commits.length - show.length} more`);
+  } else {
+    lines.push('No unique commits vs the compare base.');
+  }
+  const t = o.totals || { files: 0, added: 0, deleted: 0 };
+  lines.push(`Files: ${t.files} changed, +${t.added} −${t.deleted}.`);
+  if (o.truncatedCommits || o.truncatedFiles) {
+    lines.push(`Note: list capped${o.truncatedCommits ? ' (commits)' : ''}${o.truncatedFiles ? ' (files)' : ''}; ask for more SHAs if needed.`);
+  }
+  const topFiles = (o.files || []).slice(0, 10);
+  if (topFiles.length) {
+    lines.push('Top changed paths:');
+    for (const f of topFiles) lines.push(`- ${f.path} (+${f.added}/−${f.deleted})`);
+  }
+  if (o.dirty?.dirty) lines.push(`Working tree dirty (${o.dirty.dirty} path${o.dirty.dirty === 1 ? '' : 's'}) on a worktree for this branch.`);
+  else if (br?.hasLane) lines.push('Working tree clean on the lane for this branch.');
+  lines.push(`Summarize what this branch does and risk vs ${o.vs}.`);
+  return lines.join('\n');
+}
+
+async function loadBranchOverviewData() {
+  const ov = state.branchOverview;
+  const board = state.board;
+  if (!ov.open || !ov.branch || !board) return;
+  const br = branchByName(ov.branch);
+  const vs = ov.vs || defaultOverviewVs(board, br);
+  ov.vs = vs;
+  const seq = (ov.loadSeq = (ov.loadSeq || 0) + 1);
+  const branch = ov.branch;
+  ov.loading = true;
+  ov.error = null;
+  paint();
+  try {
+    const data = await invoke('branch.overview', ...pin({
+      branch,
+      vs,
+      team: board.teamBranch,
+      primaryBranch: board.lanes?.[0]?.branch || board.teamBranch,
+      laneBranches: (board.lanes || []).map((l) => l.branch).filter(Boolean),
+    }));
+    if (!state.branchOverview.open
+      || state.branchOverview.branch !== branch
+      || state.branchOverview.vs !== vs
+      || state.branchOverview.loadSeq !== seq) return;
+    state.branchOverview.data = data;
+    state.branchOverview.vs = data.vs || vs;
+    state.branchOverview.loading = false;
+    state.branchOverview.error = null;
+    paint();
+  } catch (e) {
+    if (!state.branchOverview.open
+      || state.branchOverview.branch !== branch
+      || state.branchOverview.vs !== vs
+      || state.branchOverview.loadSeq !== seq) return;
+    state.branchOverview.loading = false;
+    state.branchOverview.error = (e?.message || String(e)).replace(/^Error invoking remote method [^:]+:\s*/, '');
+    paint();
+  }
+}
+
+function openBranchOverview(branchName) {
+  const br = branchByName(branchName);
+  if (!br || !state.board) return;
+  if (state.settings.open) {
+    state.settings.open = false;
+  }
+  state.branchOverview = {
+    open: true,
+    branch: br.name,
+    vs: defaultOverviewVs(state.board, br),
+    tab: 'commits',
+    query: '',
+    data: null,
+    loading: true,
+    error: null,
+    selectedSha: null,
+    loadSeq: 0,
+  };
+  paint();
+  loadBranchOverviewData();
+}
+
+function closeBranchOverview({ repaint = true } = {}) {
+  state.branchOverview.open = false;
+  state.branchOverview.data = null;
+  state.branchOverview.error = null;
+  state.branchOverview.loading = false;
+  state.branchOverview.selectedSha = null;
+  if (repaint) paint();
+}
+
+function renderBranchOverview() {
+  const root = el.branchOverviewBody;
+  if (!root) return;
+  const ov = state.branchOverview;
+  const board = state.board;
+  const br = branchByName(ov.branch);
+  const short = br?.short || String(ov.branch || '').replace(/^origin\//, '');
+  const o = ov.data;
+  const vs = ov.vs || defaultOverviewVs(board, br);
+  const opts = overviewCompareOptions(board, br);
+  const compare = `<label class="bo-compare">Compare to
+    <select class="mono is-select" data-overview-vs aria-label="Compare branch against">
+      ${opts.map((x) => `<option value="${esc(x.value)}"${x.value === vs ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}
+    </select>
+  </label>`;
+
+  const where = br?.remote ? 'Remote tip' : br?.hasLane ? `Lane · ${esc(board.lanes.find((l) => l.index === br.laneIndex)?.name || '')}` : 'Local tip';
+  const up = br?.upstream ? ` · tracks <span class="mono">${esc(br.upstream)}</span>` : '';
+  const vsLabel = opts.find((x) => x.value === vs)?.label || vs;
+  const pills = o
+    ? `<div class="bo-pills">
+        <span class="bo-pill"><strong>${o.ahead}</strong> ahead of <span class="mono">${esc(vsLabel)}</span></span>
+        <span class="bo-pill"><strong>${o.behind}</strong> behind</span>
+        ${o.mergeBase ? `<span class="bo-pill">merge-base <span class="mono">${esc(o.mergeBase.slice(0, 7))}</span></span>` : ''}
+      </div>`
+    : '';
+
+  let body = '';
+  if (ov.loading && !o) {
+    body = `<p class="lede">Reading ${esc(short)} vs ${esc(vsLabel)}…</p>`;
+  } else if (ov.error) {
+    body = `<p class="lede bad">${esc(ov.error)}</p>
+      <p class="row-end"><button class="btn" type="button" data-overview-retry>Try again</button></p>`;
+  } else if (o) {
+    const q = (ov.query || '').trim().toLowerCase();
+    const commits = (o.commits || []).filter((c) => {
+      if (!q) return true;
+      return [c.subject, c.author, c.email, c.id, ...(c.refs || []).map((r) => r.name)]
+        .join(' ').toLowerCase().includes(q);
+    });
+    const files = (o.files || []).filter((f) => !q || f.path.toLowerCase().includes(q));
+    const prompt = buildOverviewPrompt(o, br);
+    const tabs = `<div class="bo-tabs" role="tablist">
+      <button class="bo-tab${ov.tab === 'commits' ? ' on' : ''}" type="button" role="tab" aria-selected="${ov.tab === 'commits'}" data-overview-tab="commits">Commits · ${(o.commits || []).length}</button>
+      <button class="bo-tab${ov.tab === 'files' ? ' on' : ''}" type="button" role="tab" aria-selected="${ov.tab === 'files'}" data-overview-tab="files">Files · ${(o.files || []).length}</button>
+    </div>`;
+    const search = `<div class="bo-toolbar">
+      <label class="bo-search">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-overview-query placeholder="${ov.tab === 'files' ? 'Filter paths…' : 'Search commits, authors, SHAs…'}" value="${esc(ov.query || '')}" /></label>
+      <span class="bo-count">${ov.tab === 'files' ? `${files.length} path${files.length === 1 ? '' : 's'}` : `Showing ${commits.length} of ${(o.commits || []).length}`}</span>
+    </div>`;
+    const promptBox = `<section class="bo-prompt">
+      <div class="bo-prompt-top"><span class="bo-prompt-label">Agent prompt</span>
+        <button class="btn primary" type="button" data-overview-copy>Copy</button>
+      </div>
+      <pre data-overview-prompt>${esc(prompt)}</pre>
+    </section>`;
+    let list = '';
+    if (ov.tab === 'files') {
+      list = files.length
+        ? `<div class="bo-files list">${files.map((f) =>
+          `<button class="list-row bo-file" type="button" data-overview-file="${esc(f.path)}" title="Open at tip commit (range list is vs compare base)">
+            <span class="mono path">${esc(f.path)}</span>
+            <span class="stat mono"><span class="add">+${f.added}</span><span class="del">−${f.deleted}</span></span>
+          </button>`).join('')}</div>`
+        : `<p class="lede">${q ? 'No paths match.' : 'No file changes in this range.'}</p>`;
+    } else if (!commits.length) {
+      list = `<p class="lede">${q ? 'No commits match.' : (o.ahead === 0 && o.behind === 0 ? 'Tip matches the compare ref — pick another base.' : 'No unique commits vs the compare base.')}</p>`;
+    } else {
+      list = `<div class="graph bo-graph" data-overview-graph>
+        <div class="graph-cols" aria-hidden="true"></div>
+        <div class="rows" role="table" aria-label="Commits on this branch vs compare base"></div>
+      </div>`;
+    }
+    const trunc = o.truncated ? `<p class="lede">Showing a capped slice of this range.</p>` : '';
+    body = `${promptBox}${tabs}${search}${trunc}${list}`;
+  }
+
+  root.innerHTML = `
+    <div class="bo-head">
+      <div class="bo-title-row">
+        <div>
+          <h1>${esc(short)}</h1>
+          <p class="lede">${where}${up} · compared to <span class="mono">${esc(vsLabel)}</span></p>
+          ${pills}
+        </div>
+        ${compare}
+      </div>
+    </div>
+    ${body}`;
+
+  root.querySelector('[data-overview-vs]')?.addEventListener('change', (e) => {
+    state.branchOverview.vs = e.target.value;
+    state.branchOverview.data = null;
+    loadBranchOverviewData();
+  });
+  root.querySelector('[data-overview-retry]')?.addEventListener('click', () => loadBranchOverviewData());
+  root.querySelectorAll('[data-overview-tab]').forEach((b) => b.addEventListener('click', () => {
+    state.branchOverview.tab = b.dataset.overviewTab;
+    state.branchOverview.query = '';
+    paint();
+  }));
+  const qInput = root.querySelector('[data-overview-query]');
+  qInput?.addEventListener('input', () => {
+    state.branchOverview.query = qInput.value;
+    refreshOverviewList();
+  });
+  root.querySelector('[data-overview-copy]')?.addEventListener('click', () => {
+    const text = root.querySelector('[data-overview-prompt]')?.textContent || '';
+    copyText(text, 'prompt');
+  });
+
+  bindOverviewList(root);
+  enhanceSelects(root);
+}
+
+function overviewFilteredCommits() {
+  const o = state.branchOverview.data;
+  if (!o) return [];
+  const q = (state.branchOverview.query || '').trim().toLowerCase();
+  return (o.commits || []).filter((c) => {
+    if (!q) return true;
+    return [c.subject, c.author, c.email, c.id, ...(c.refs || []).map((r) => r.name)]
+      .join(' ').toLowerCase().includes(q);
+  });
+}
+
+function overviewFilteredFiles() {
+  const o = state.branchOverview.data;
+  if (!o) return [];
+  const q = (state.branchOverview.query || '').trim().toLowerCase();
+  return (o.files || []).filter((f) => !q || f.path.toLowerCase().includes(q));
+}
+
+function bindOverviewList(root = el.branchOverviewBody) {
+  if (!root) return;
+  const ov = state.branchOverview;
+  const o = ov.data;
+  const board = state.board;
+  const graph = root.querySelector('[data-overview-graph]');
+  if (graph && o && ov.tab === 'commits') {
+    const commits = overviewFilteredCommits();
+    syncGraphColumnChrome(graph, { remount: false, headers: true, measure: false });
+    renderLinearHistory(graph, {
+      commits,
+      selectedCommit: ov.selectedSha,
+      currentBranch: laneByIndex(state.selectedLane)?.branch || null,
+      runningLanes: new Set((board?.lanes || []).filter((l) => l.running).map((l) => l.index)),
+      gravatar: state.prefs.gravatar !== false,
+      columns: graphColumnPrefs(),
+    });
+    syncGraphColumnChrome(graph, { remount: false, headers: false, measure: true });
+    graph.querySelectorAll('[data-overview-commit]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const sha = row.dataset.overviewCommit;
+        closeBranchOverview({ repaint: false });
+        jumpToCommitOnGraph(sha);
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          row.click();
+        }
+      });
+    });
+  }
+
+  root.querySelectorAll('[data-overview-file]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const filePath = btn.dataset.overviewFile;
+      const tip = o?.tipSha || o?.commits?.find((c) => c.isTip)?.id || o?.commits?.[0]?.id;
+      closeBranchOverview({ repaint: false });
+      if (tip) {
+        state.changes = { kind: 'commit', sha: tip };
+        state.filePane = { sha: tip, path: filePath, mode: 'diff' };
+        state.changesPaintKey = '';
+        toast('Opened at tip commit (file list is the full range vs compare)', '');
+      }
+      paint();
+    });
+  });
+}
+
+/** Re-filter commits/files without rebuilding the whole overview shell. */
+function refreshOverviewList() {
+  const root = el.branchOverviewBody;
+  if (!root || !state.branchOverview.data) return;
+  const ov = state.branchOverview;
+  const o = ov.data;
+  const q = (ov.query || '').trim().toLowerCase();
+  const count = root.querySelector('.bo-count');
+  if (ov.tab === 'files') {
+    const files = overviewFilteredFiles();
+    if (count) count.textContent = `${files.length} path${files.length === 1 ? '' : 's'}`;
+    const host = root.querySelector('.bo-files') || root.querySelector('[data-overview-list]');
+    const html = files.length
+      ? files.map((f) =>
+        `<button class="list-row bo-file" type="button" data-overview-file="${esc(f.path)}" title="Open at tip commit (range list is vs compare base)">
+            <span class="mono path">${esc(f.path)}</span>
+            <span class="stat mono"><span class="add">+${f.added}</span><span class="del">−${f.deleted}</span></span>
+          </button>`).join('')
+      : '';
+    if (host && host.classList.contains('bo-files')) {
+      host.innerHTML = html || `<p class="lede" style="padding:12px">${q ? 'No paths match.' : 'No file changes in this range.'}</p>`;
+      bindOverviewList(root);
+    } else {
+      paint();
+    }
+    return;
+  }
+  const commits = overviewFilteredCommits();
+  if (count) count.textContent = `Showing ${commits.length} of ${(o.commits || []).length}`;
+  const graph = root.querySelector('[data-overview-graph]');
+  if (!graph) {
+    paint();
+    return;
+  }
+  bindOverviewList(root);
+}
+
+function paintSettingsGraphPreview(root = el.settingsBody) {
+  const preview = root?.querySelector('.theme-preview');
+  const graph = preview?.querySelector('.graph');
+  if (!graph) return;
+  // Appearance preview stays on the shipping column layout; Graph page uses prefs.
+  const cols = state.settings.page === 'appearance' ? defaultGraphColumns() : graphColumnPrefs();
+  const gravatar = state.settings.page === 'appearance' ? false : state.prefs.gravatar !== false;
+  applyGraphColumnLayout(graph, cols, { widths: layout.widths, measure: false, headers: true });
+  renderGraph(preview, {
+    commits: PREVIEW_COMMITS,
+    selectedLane: 1,
+    selectedCommit: 'a1b2c3d',
+    currentBranch: 'feat/hover',
+    gravatar,
+    columns: cols,
+  });
+  applyGraphColumnLayout(graph, cols, { widths: layout.widths, measure: true, headers: false });
+}
+
+function bindGraphColumns(root) {
+  const save = async (next) => {
+    const normalized = normalizeGraphColumns(next);
+    if (graphColumnsSig(normalized) === graphColumnsSig()) return;
+    lastGraphColsSig = ''; // force board header rebuild on next paint
+    const top = el.settingsBody.scrollTop;
+    await setPref({ graphColumns: normalized }, false);
+    if (state.settings.open && state.settings.page === 'graph') {
+      renderSettings();
+      el.settingsBody.scrollTop = top;
+    }
+  };
+  root.querySelectorAll('[data-graph-col]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.getAttribute('aria-disabled') === 'true') {
+        toast('Keep at least one column on', 'warn');
+        return;
+      }
+      const id = btn.dataset.graphCol;
+      const on = btn.getAttribute('aria-checked') !== 'true';
+      const cur = graphColumnPrefs();
+      const next = setColumnOn(cur, id, on);
+      if (graphColumnsSig(next) === graphColumnsSig(cur)) {
+        toast('Keep at least one column on', 'warn');
+        return;
+      }
+      save(next).catch(() => {});
+    });
+  });
+  root.querySelectorAll('[data-col-move]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const id = btn.dataset.colMove;
+      const dir = Number(btn.dataset.dir) || 0;
+      const cur = graphColumnPrefs();
+      const next = moveColumn(cur, id, dir);
+      if (graphColumnsSig(next) === graphColumnsSig(cur)) return;
+      save(next).catch(() => {});
+    });
+  });
+  root.querySelector('[data-graph-cols-reset]')?.addEventListener('click', () => {
+    save(defaultGraphColumns()).catch(() => {});
+  });
+}
+
 function openSettings(page = state.settings.page) {
+  if (state.branchOverview.open) closeBranchOverview({ repaint: false });
   state.settings.open = true;
   state.settings.page = page;
   if (page === 'repositories') seedActiveRepoBoard();
@@ -5227,7 +5771,8 @@ function renderSettings() {
   el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   enhanceSelects(el.settingsBody);
-  if (page === 'appearance') renderGraph(el.settingsBody.querySelector('.theme-preview'), { commits: PREVIEW_COMMITS, selectedLane: 1, selectedCommit: 'a1b2c3d', currentBranch: 'feat/hover', gravatar: false });
+  if (page === 'appearance' || page === 'graph') paintSettingsGraphPreview(el.settingsBody);
+  if (page === 'graph') bindGraphColumns(el.settingsBody);
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);
   if (page === 'agents' && state.agents) bindAgents(el.settingsBody);
@@ -5242,6 +5787,7 @@ function renderSettings() {
   el.settingsNav.querySelector('[data-settings]')?.addEventListener('click', closeSettings);
   el.settingsNav.querySelectorAll('[data-page]').forEach((b) =>
     b.addEventListener('click', () => openSettings(b.dataset.page)));
+  layout.remountRails();
 }
 
 /** #104 unsent feedback (the local outbox main retries on launch and every 15 min). */
@@ -5315,7 +5861,19 @@ function paletteCommands() {
     { id: 'share', label: 'Share Plenum: copy a link for a friend', run: shareLink, match: ['invite', 'friend', 'colleague', 'recommend'] },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
+    { id: 'graph-cols', label: 'Graph columns…', run: () => openSettings('graph'), match: ['columns', 'sha', 'author', 'hide', 'reorder'] },
     { id: 'stats', label: 'Statistics: commits, authors, agents', run: () => openSettings('statistics'), when: !!state.board, match: ['stats', 'insights', 'contributors', 'activity'] },
+    {
+      id: 'overview',
+      label: lane?.branch ? `Branch overview: ${lane.branch}` : 'Branch overview…',
+      run: () => {
+        closePalette();
+        if (lane?.branch) openBranchOverview(lane.branch);
+        else toast('Select a lane or right-click a branch → Overview…', 'bad');
+      },
+      when: !!state.board && !!lane?.branch,
+      match: ['overview', 'investigate', 'compare branch', 'branch overview'],
+    },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
@@ -5425,6 +5983,7 @@ document.addEventListener('keydown', (e) => {
       if (el.sheetLayer.querySelector('form[data-sending="1"]')) return;
       closeSheet();
     }
+    else if (state.branchOverview.open) closeBranchOverview();
     else if (state.settings.open) {
       if (state.settings.page === 'setup') openSettings('repositories');
       else closeSettings();
@@ -5466,8 +6025,13 @@ async function openRepoPath(path) {
 }
 
 async function selectTab(id) {
-  if (id === state.store.activeId) { if (state.settings.open) closeSettings(); return; }
+  if (id === state.store.activeId) {
+    if (state.branchOverview.open) closeBranchOverview();
+    else if (state.settings.open) closeSettings();
+    return;
+  }
   const prevId = state.store.activeId;
+  if (state.branchOverview.open) closeBranchOverview({ repaint: false });
   const keepSettings = state.settings.open;
   // Cancel any prior cold-load chrome so a late timer cannot cover the new tab.
   setLoading(false);
@@ -5628,6 +6192,7 @@ async function saveQuietPrefs(partial) {
 function nudgeBusy() {
   const a = document.activeElement;
   return !document.hasFocus() || document.hidden || !state.board || state.loading || state.settings.open
+    || state.branchOverview.open
     || el.sheetLayer.classList.contains('open') || !el.paletteLayer.hidden || !el.toast.hidden
     || !!document.querySelector('.tour-layer, #nudge')
     || !!a?.matches?.('input, textarea, select, [contenteditable]');
@@ -5938,4 +6503,5 @@ el.graph.addEventListener('keydown', (e) => {
 });
 
 el.openRepo.addEventListener('click', openRepo);
+el.branchOverview?.querySelector('[data-overview-back]')?.addEventListener('click', () => closeBranchOverview());
 boot();

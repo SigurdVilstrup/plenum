@@ -367,7 +367,8 @@ function folderLabel(treePath, primary, branch) {
   return displayPath(treePath);
 }
 
-function pills(decoration, team, primaryBranch, laneBranches) {
+/** Parse `git log` %D decoration into graph ref pills. */
+export function pills(decoration, team, primaryBranch, laneBranches) {
   if (!decoration?.trim()) return [];
   const parsed = [];
   for (const raw of decoration.split(',')) {

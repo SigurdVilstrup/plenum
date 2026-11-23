@@ -294,10 +294,13 @@ input, textarea, [contenteditable="true"] {
   z-index: 5;
 }
 
+/* Author display: rules (e.g. #branch-overview { display: grid }) beat UA [hidden]
+   without !important — same treatment as #settings. */
 .loading-screen[hidden],
 .empty-screen[hidden],
 #panel[hidden],
 #settings[hidden],
+#branch-overview[hidden],
 #main[hidden],
 #changes[hidden],
 .palette-layer[hidden],
@@ -1028,10 +1031,10 @@ button.env-link {
 
 .tab .close { display: none !important; }
 
-/* Branch/Tag | Graph | avatar | Commit | SHA | When — tokens live on .graph */
+/* Column tracks from Settings → Graph; width tokens still on .graph */
 .window.app .graph-cols,
 .window.app .row {
-  grid-template-columns: var(--graph-labels-w, 148px) var(--graph-svg-w, 136px) 22px minmax(0, 1fr) 64px 110px;
+  grid-template-columns: var(--graph-tracks);
   gap: var(--graph-col-gap, 8px);
 }
 .window.app .row .time {
@@ -1109,9 +1112,15 @@ button.env-link {
 }
 
 .window.app .rows > svg {
-  left: calc(var(--graph-pad-l, 12px) + var(--graph-labels-w, 148px) + var(--graph-col-gap, 8px));
+  left: var(--graph-svg-left,
+    calc(var(--graph-pad-l, 12px) + var(--graph-labels-w, 148px) + var(--graph-col-gap, 8px)));
+  /* Synced with SVG width/viewBox in layout-widths — lanes never scale. */
   width: var(--graph-svg-w, 136px) !important;
+  overflow: hidden;
   z-index: 1; /* above row washes so edges stay continuous */
+}
+.window.app .graph.graph-no-svg .rows > svg {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1407,6 +1416,59 @@ html.feedback-redact .blame-line {
 :root {
   --rail-w: 300px;
   --changes-w: min(380px, 40vw);
+}
+
+/* Column / rail drag handles — hairline on hover, primary while dragging */
+.layout-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
+}
+.layout-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 120ms ease;
+}
+.layout-resizer:hover::after,
+.layout-resizer.is-active::after,
+body.is-col-resizing .layout-resizer.is-active::after {
+  background: var(--primary);
+}
+body.is-col-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+body.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+.graph-cols > span.has-resizer {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* match left-aligned cell text */
+}
+/* When dates are right-aligned — flex ignores text-align, so mirror with justify. */
+.graph-cols > [data-col="when"].has-resizer {
+  justify-content: flex-end;
+}
+/* Sit on the inner edge so overflow:hidden on the rail doesn’t clip the hit target */
+.panel > .layout-resizer,
+.settings-nav > .layout-resizer {
+  right: 0;
+  width: 6px;
 }
 .window.app .body {
   grid-template-columns: var(--rail-w) 1fr;
@@ -1939,12 +2001,11 @@ html.feedback-redact .blame-line {
   /* Enhanced into .pl-select; native stays clipped */
   font-size: 12px;
 }
-/* #69 / #100 panel filter — under Protected, above Lanes; same density as accordion rows */
+/* #69 / #100 panel filter — under Protected, above Lanes. No border-bottom: next .section draws it. */
 .window.app .panel .branch-search {
   /* Equal inset so the field sits centered between the hairlines */
   padding: 4px 8px;
   border-top: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
 }
 .window.app .panel .branch-search-box {
   display: flex;

@@ -113,3 +113,34 @@ test('feedback prompts default on; nudge state keeps only known fields', () => {
   assert.equal(p.feedbackPrompts, false);
   assert.deepEqual(p.nudge, { firstSeenAt: 5, seenVersion: '1.0.0', starAskedAt: 9 });
 });
+
+test('graphColumns default all on; sanitize order, junk, and last-on', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  const d = getPrefs(dir).graphColumns;
+  assert.deepEqual(d.map((c) => c.id), ['labels', 'graph', 'author', 'commit', 'sha', 'when']);
+  assert.ok(d.every((c) => c.on));
+
+  const p = setPrefs({
+    graphColumns: [
+      { id: 'sha', on: false },
+      { id: 'commit', on: true },
+      { id: 'nope', on: true },
+      { id: 'sha', on: true },
+      { id: 'when', on: false },
+    ],
+  }, dir);
+  assert.deepEqual(p.graphColumns.map((c) => [c.id, c.on]), [
+    ['sha', false],
+    ['commit', true],
+    ['when', false],
+    ['labels', true],
+    ['graph', true],
+    ['author', true],
+  ]);
+
+  const allOff = setPrefs({
+    graphColumns: p.graphColumns.map((c) => ({ ...c, on: false })),
+  }, dir);
+  assert.ok(allOff.graphColumns.some((c) => c.on));
+  assert.equal(allOff.graphColumns.find((c) => c.id === 'commit').on, true);
+});

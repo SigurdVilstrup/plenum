@@ -8,6 +8,7 @@
     <link rel="icon" href="./app-icon-16.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles/mock.css" />
     <link rel="stylesheet" href="./styles/app.css" />
+    <link rel="stylesheet" href="./styles/branch-overview.css" />
   </head>
   <body class="app-shell">
     <div class="window app">
@@ -77,7 +78,7 @@
         <main class="main" id="main" hidden>
           <section class="graph" aria-label="Commit graph">
             <div class="graph-cols" aria-hidden="true">
-              <span>Branch / Tag</span><span>Graph</span><span title="Author"></span><span>Commit</span><span>SHA</span><span>When</span>
+              <span data-col="labels">Branch / Tag</span><span data-col="graph">Graph</span><span data-col="author" title="Author"></span><span data-col="commit">Commit</span><span data-col="sha">SHA</span><span data-col="when">When</span>
             </div>
             <div class="rows" id="rows" role="table" aria-label="Commits, newest first"></div>
           </section>
@@ -87,6 +88,19 @@
         <div class="settings" id="settings" hidden>
           <nav class="settings-nav" id="settings-nav" aria-label="Settings sections"></nav>
           <section class="settings-body" id="settings-body"></section>
+        </div>
+        <div class="branch-overview" id="branch-overview" hidden>
+          <nav class="branch-overview-nav" aria-label="Branch overview">
+            <div class="branch-overview-nav-list">
+              <button class="navitem back" type="button" data-overview-back>
+                <svg class="icon" aria-hidden="true"><use href="#i-caret-right"></use></svg>
+                Board
+                <kbd>esc</kbd>
+              </button>
+              <div class="heading">Branch overview</div>
+            </div>
+          </nav>
+          <section class="branch-overview-body" id="branch-overview-body"></section>
         </div>
       </div>
 

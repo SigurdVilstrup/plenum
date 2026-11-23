@@ -833,6 +833,7 @@ a.iconbtn,
 }
 
 .panel {
+  position: relative;
   border-right: 1px solid var(--hairline);
   background: var(--surface-1);
   display: flex;
@@ -1832,6 +1833,31 @@ a.iconbtn,
 .settings-nav .navitem.back .icon {
   transform: rotate(180deg);
 }
+
+.icon.flip {
+  transform: rotate(180deg);
+}
+
+.col-pref-list .col-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+.col-pref-list .col-order .iconbtn {
+  width: 24px;
+  height: 24px;
+}
+.col-pref-list .col-order .iconbtn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.theme-preview.graph-col-preview {
+  min-height: 180px;
+}
+.theme-preview.graph-col-preview .file-pane-diff {
+  display: none;
+}
 .settings-nav .navitem.back kbd {
   margin-left: auto;
   font-size: 10px;
@@ -2248,8 +2274,13 @@ a.navitem.back {
 .graph {
   --graph-labels-w: 148px;
   --graph-svg-w: 136px;
+  --graph-who-w: 22px;
+  --graph-sha-w: 64px;
+  --graph-when-w: 110px;
   --graph-pad-l: 12px;
   --graph-col-gap: 8px;
+  /* Default tracks (all on). Commit is 1fr. JS overwrites when prefs hide/reorder. */
+  --graph-tracks: var(--graph-labels-w) var(--graph-svg-w) var(--graph-who-w) 1fr var(--graph-sha-w) var(--graph-when-w);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -2260,8 +2291,8 @@ a.navitem.back {
 
 .graph-cols {
   display: grid;
-  /* Branch/Tag | Graph | avatar | Commit | SHA | When */
-  grid-template-columns: var(--graph-labels-w) var(--graph-svg-w) 22px 1fr 64px 110px;
+  /* Must be only var(--graph-tracks) — a fallback with minmax(0, 1fr) is invalid CSS. */
+  grid-template-columns: var(--graph-tracks);
   gap: var(--graph-col-gap);
   padding: 0 16px 0 var(--graph-pad-l);
   height: 28px;
@@ -2273,11 +2304,12 @@ a.navitem.back {
   flex-shrink: 0;
 }
 
-.graph-cols > :first-child {
+/* Header alignment matches cell text: left by default, right for When. */
+.graph-cols > span {
   text-align: left;
 }
-
-.graph-cols span:last-child,
+.graph-cols > [data-col="when"],
+.row [data-col="when"],
 .row .time {
   text-align: right;
 }
@@ -2291,10 +2323,17 @@ a.navitem.back {
 
 .rows > svg {
   position: absolute;
-  /* Sit in the Graph column: pad + labels + gap */
-  inset: 0 auto auto calc(var(--graph-pad-l) + var(--graph-labels-w) + var(--graph-col-gap));
+  /* Left from --graph-svg-left (prefs order); fallback assumes Labels then Graph. */
+  inset: 0 auto auto var(--graph-svg-left,
+    calc(var(--graph-pad-l) + var(--graph-labels-w) + var(--graph-col-gap)));
+  /* Keep attribute/viewBox in sync (layout-widths.syncSvgCanvas) — never scale lanes. */
   width: var(--graph-svg-w);
+  overflow: hidden;
   pointer-events: none;
+}
+
+.graph.graph-no-svg .rows > svg {
+  display: none;
 }
 
 .rows .edge.dim,
@@ -2305,7 +2344,7 @@ a.navitem.back {
 
 .row {
   display: grid;
-  grid-template-columns: var(--graph-labels-w) var(--graph-svg-w) 22px 1fr 64px 110px;
+  grid-template-columns: var(--graph-tracks);
   gap: var(--graph-col-gap);
   align-items: center;
   height: var(--row-h);
@@ -2757,6 +2796,7 @@ button.ref.primary:hover {
 }
 
 .settings-nav {
+  position: relative;
   width: var(--rail-w, 300px);
   border-right: 1px solid var(--hairline);
   background: var(--surface-1);

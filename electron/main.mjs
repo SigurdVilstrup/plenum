@@ -8,6 +8,7 @@ import { loadRepoEnv } from './load-env.mjs';
 import { isPathUnderRepos } from './repo-favicon.mjs';
 import { loadStats } from './git/stats.mjs';
 import { loadBoard, loadCommitChanges, displayPath, setTeamBranch, setBaselines } from './git/board.mjs';
+import { loadBranchOverview } from './git/branch-overview.mjs';
 import { watchRepo, stopWatch, stopAllWatches } from './git/watch.mjs';
 import { loadFileDiff, loadFileHistory, loadFileBlame, loadFileShow, loadWorkingDiff, loadWorkingShow } from './git/file.mjs';
 import * as ops from './git/ops.mjs';
@@ -691,6 +692,14 @@ ipcMain.handle('branch.update', (_e, ...args) => withRoot((root, payload) => ops
 ipcMain.handle('branch.push', (_e, ...args) => withRoot((root, payload) => ops.pushBranchToRemote(root, payload || {}), ...args));
 ipcMain.handle('branch.rename', (_e, ...args) => withRoot(ops.renameBranch, ...args));
 ipcMain.handle('branch.delete', (_e, ...args) => withRoot(ops.deleteBranch, ...args));
+ipcMain.handle('branch.overview', (_e, ...args) => withRoot((root, payload = {}) => loadBranchOverview(root, {
+  branch: payload.branch,
+  vs: payload.vs,
+  limit: payload.limit,
+  team: payload.team,
+  primaryBranch: payload.primaryBranch,
+  laneBranches: payload.laneBranches,
+}), ...args));
 ipcMain.handle('lane.merge', async (_e, ...args) => {
   try {
     return await withRoot(ops.mergeLaneIntoMain, ...args);

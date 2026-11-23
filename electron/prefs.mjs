@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { defaultGraphColumns, normalizeGraphColumns } from '../app/lib/graph-columns-pref.js';
 
 const TTL_MIN = 30_000;
 const TTL_MAX = 600_000;
@@ -32,6 +33,7 @@ export function defaultPrefs() {
     warmTabTtlMs: 120_000,
     credentialHosts: [],
     repoOverrides: {},
+    graphColumns: defaultGraphColumns(),
   };
 }
 
@@ -81,6 +83,7 @@ export function getPrefs(userDataDir) {
   delete merged.accent;
   delete merged.lightPalette;
   if (!ENUMS.chroma.includes(merged.chroma)) merged.chroma = 'muted';
+  merged.graphColumns = normalizeGraphColumns(merged.graphColumns);
   return merged;
 }
 
@@ -112,6 +115,8 @@ function sanitize(partial) {
         if (o.protectedPicked === true) row.protectedPicked = true;
         if (Object.keys(row).length) out[k][root] = row;
       }
+    } else if (k === 'graphColumns') {
+      if (Array.isArray(v)) out[k] = normalizeGraphColumns(v);
     } else if (k === 'warmTabTtlMs' || k === 'zoom') out[k] = v;
   }
   return out;

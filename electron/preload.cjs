@@ -9,7 +9,7 @@ const ALLOWED = new Set([
   'os.pickFolder', 'os.reveal', 'os.openExternal', 'os.openEditor', 'os.openTerminal', 'os.displayPath',
   'lane.create', 'lane.remove', 'lane.commit', 'lane.revert', 'lane.push', 'lane.pull',
   'lane.rebase', 'lane.merge', 'lane.finish', 'lane.repair', 'lane.conflicts',
-  'branch.checkout', 'branch.update', 'branch.push', 'branch.rename', 'branch.delete',
+  'branch.checkout', 'branch.update', 'branch.push', 'branch.rename', 'branch.delete', 'branch.overview',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
   'lane.stash', 'lane.stashPop', 'lane.stashShow',
   'lane.up', 'lane.down', 'lane.test', 'lane.status',
