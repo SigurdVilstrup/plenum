@@ -678,7 +678,8 @@ export async function loadBoard(repoPath, { historyLimit = 120, fetch = false } 
     const onTeam = branch === team;
     let dirtyFiles = [];
     try {
-      dirtyFiles = await enrichDirtyFiles(tree.path, parseDirty(await git(['status', '--porcelain'], tree.path)));
+      // -uall: list every untracked file (not just the parent dir), so Diff/Read can open each path
+      dirtyFiles = await enrichDirtyFiles(tree.path, parseDirty(await git(['status', '--porcelain', '-uall'], tree.path)));
     } catch { /* empty */ }
     const dirty = dirtyFiles.length;
     const behind = hasCommit && tree.head ? await countRange(`HEAD..${teamRef}`, tree.path) : 0;

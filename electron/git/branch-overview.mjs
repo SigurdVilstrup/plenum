@@ -51,7 +51,7 @@ async function worktreeDirtyForBranch(cwd, branch) {
   flush();
   if (!path) return null;
   try {
-    const porcelain = await git(['status', '--porcelain'], path);
+    const porcelain = await git(['status', '--porcelain', '-uall'], path);
     const lines = porcelain.split('\n').filter(Boolean);
     return { dirty: lines.length, path };
   } catch {

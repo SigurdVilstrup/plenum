@@ -106,6 +106,29 @@ test('loadBoard: worktree ahead dirty assisted', async () => {
   }
 });
 
+test('loadBoard: untracked directory expands to files', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
+  try {
+    git(['init', '-b', 'main'], root);
+    git(['config', 'user.email', 't@example.com'], root);
+    git(['config', 'user.name', 'Tester'], root);
+    git(['config', 'commit.gpgsign', 'false'], root);
+    fs.writeFileSync(path.join(root, 'README'), 'hello');
+    git(['add', 'README'], root);
+    git(['commit', '-m', 'init'], root);
+    fs.mkdirSync(path.join(root, 'skill', 'nested'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'skill', 'SKILL.md'), '# skill\n');
+    fs.writeFileSync(path.join(root, 'skill', 'nested', 'note.txt'), 'hi\n');
+
+    const board = await loadBoard(root);
+    const files = board.lanes[0].dirtyFiles.map((f) => f.path).sort();
+    assert.deepEqual(files, ['skill/SKILL.md', 'skill/nested/note.txt']);
+    assert.ok(board.lanes[0].dirtyFiles.every((f) => f.code === '??'));
+    assert.ok(!files.some((p) => p.endsWith('/') || p === 'skill'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('loadBoard: unpushed tracks origin/branch, not team ahead', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-'));
