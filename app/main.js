@@ -7060,9 +7060,9 @@ function armNudgeFade(card, onFade) {
   }, { once: true });
 }
 
-function showStarAsk(card) {
+function showStarAsk(card, title = 'Glad it’s working.') {
   const head = card.querySelector('.nudge-head');
-  head.innerHTML = `<div><strong>Glad it’s working.</strong>
+  head.innerHTML = `<div><strong>${esc(title)}</strong>
       <p class="nudge-sub">A star on GitHub helps a lot.</p></div>
       <button class="iconbtn" type="button" data-nudge-x aria-label="Dismiss" title="Dismiss">${iconHTML('x', 'sm')}</button>`;
   const body = card.querySelector('.nudge-body');
@@ -7129,6 +7129,11 @@ function showNudge(kind) {
       <button class="nudge-off" type="button" data-nudge-off title="Settings → General turns them back on">Stop asking</button>
     </div>`;
   (document.querySelector('.window.app') || document.body).appendChild(card);
+  // First post-update ask goes straight to the star; once asked, updates get the rating instead.
+  if (kind === 'update' && !state.prefs.nudge?.starAskedAt) {
+    card.setAttribute('aria-label', 'Star Plenum on GitHub');
+    return showStarAsk(card, 'Enjoying Plenum?');
+  }
   armNudgeFade(card);
   card.querySelector('[data-nudge-off]').addEventListener('click', async () => {
     hideNudge();

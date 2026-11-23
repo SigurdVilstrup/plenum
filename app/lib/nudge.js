@@ -6,7 +6,7 @@ const DAY = 24 * 60 * MIN;
 
 export const NUDGE = {
   idleMs: 15_000,          // no key / click / scroll for this long
-  afterUpdateMs: 10 * MIN, // app open this long before the post-update ask
+  afterUpdateMs: 15 * MIN, // app open this long before the post-update ask
   checkinSessionMs: 20 * MIN,
   pathSessionMs: 2 * MIN,  // app open this long before the one-time PATH hint
   gapMs: 3 * DAY,          // between any two prompts
