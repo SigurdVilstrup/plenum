@@ -1661,18 +1661,8 @@ function paintPanel() {
     });
   });
   el.panel.querySelectorAll('[data-branch-name]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      // Lane tip → select that worktree. Otherwise switch the selected lane onto this tip.
-      const br = branchByName(btn.dataset.branchName);
-      if (!br) return;
-      if (br.hasLane) {
-        state.selectedLane = br.laneIndex;
-        paint();
-        return;
-      }
-      checkoutBranchRow(br.name);
-    });
+    // Left-click is inert — switch / check out / open as lane live on the context menu (#126).
+    btn.addEventListener('click', (e) => { e.stopPropagation(); });
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1777,7 +1767,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
     br.name,
     refreshing ? 'list refreshing' : null,
     isCurrent ? 'checked out here' : where,
-    br.hasLane ? 'Click to select this worktree' : (br.remote ? 'Click to check out (creates/switches local tip)' : 'Click to switch this lane onto this branch'),
+    'Right-click to switch, check out, or open as lane',
     br.upstream ? `tracks ${br.upstream}` : 'no upstream',
     drift && (drift.behind || drift.ahead)
       ? `vs ${drift.ref}: ${drift.behind} behind, ${drift.ahead} ahead`
@@ -1786,12 +1776,10 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
   const mark = isCurrent
     ? iconHTML('check-circle', 'sm current')
     : iconHTML(pinned ? 'push-pin' : br.remote ? 'cloud-arrow-down' : 'git-branch', 'sm');
-  // Keep lane selection clickable while the list refreshes; block checkout targets only.
-  const block = refreshing && !br.hasLane;
   const kind = br.remote ? 'remote' : 'local';
-  // #126 delete is right-click only (context menu); kind stays on the wrap for styling/copy
+  // #126 actions are right-click only (context menu); kind stays on the wrap for styling/copy
   return `<div class="branch-row-wrap${isCurrent ? ' current' : ''}${refreshing ? ' refreshing' : ''}${pinned ? ' pinned' : ''}" data-branch-kind="${kind}">
-    <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}"${block ? ' disabled' : ''}>
+    <button class="lane-row branch-row${isCurrent ? ' selected current' : ''}${refreshing ? ' refreshing' : ''}" type="button" title="${esc(title)}" data-branch-name="${esc(br.name)}" aria-current="${isCurrent ? 'true' : 'false'}">
       ${mark}
       <span class="lane-main"><span class="name">${esc(label)}</span>${branchMetaHTML(br, board)}</span>
     </button>
@@ -2940,21 +2928,10 @@ async function checkoutBranchRow(name) {
     toast(holder?.isPrimary ? `Selected primary (${br.short || br.name})` : `Selected lane ${holder?.name || br.short || br.name}`, 'ok');
     return;
   }
-  let lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
+  // Switch the selected worktree onto this tip — including Protected/primary.
+  // Open as lane stays a separate verb (right-click / Worktrees).
+  const lane = laneByIndex(state.selectedLane) || state.board?.lanes?.[0];
   if (!lane) return;
-  // Primary stays on the protected tip - feature tips check out in a lane (#23).
-  const team = state.board?.teamBranch;
-  const isTeam = br.isTeam || br.short === team || br.name === team;
-  if (lane.isPrimary && !isTeam) {
-    const alt = (state.board?.lanes || []).find((l) => !l.isPrimary);
-    if (alt) {
-      lane = alt;
-      state.selectedLane = alt.index;
-    } else {
-      toast('Opening as a lane. Primary stays put.', 'ok');
-      return openLaneFromBranch(br.name);
-    }
-  }
   const tabId = beginOp('checkout', br.short || br.name);
   if (!tabId) return;
   const root = state.board?.root;
@@ -3039,7 +3016,10 @@ function openBranchCtxMenu(x, y, name) {
   const canRename = !br.remote && !br.isTeam && !br.isPrimary;
   const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
   const { menu, add } = ctxMenuAt(x, y);
-  add(br.hasLane ? 'Select worktree' : 'Switch branch', () => checkoutBranchRow(br.name));
+  add(
+    br.hasLane ? 'Select worktree' : (br.remote ? 'Check out' : 'Switch branch'),
+    () => checkoutBranchRow(br.name),
+  );
   add('Copy name', () => copyText(br.name, 'branch name'));
   const root = state.board?.root;
   add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); });
@@ -3216,7 +3196,7 @@ function openCreateLane() {
         ${iconHTML('shield-check')}
         <div><strong>Team step.</strong> Base is current <span class="mono">${esc(team)}</span>. When that tip moves, this lane shows as behind.</div>
       </div>
-      <p class="lede" style="margin:0">Already have a branch? Click it to check out, or right-click → <strong>Open as lane</strong>.</p>
+      <p class="lede" style="margin:0">Already have a branch? Right-click it → <strong>Switch branch</strong> or <strong>Open as lane</strong>.</p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn primary" type="submit">${iconHTML('arrow-square-out', 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>

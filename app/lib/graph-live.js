@@ -38,7 +38,7 @@ const refPill = (r, { running = false, current = false } = {}) => {
   if (r.tag) return `<span class="${cls}">${body}</span>`;
   const title = current
     ? `${esc(r.name)} · checked out here`
-    : `${esc(r.name)} · Right-click to check out`;
+    : `${esc(r.name)} · Right-click to switch, check out, or open as lane`;
   return `<button type="button" class="${cls}" data-branch-name="${esc(r.name)}" title="${title}">${body}</button>`;
 };
 
