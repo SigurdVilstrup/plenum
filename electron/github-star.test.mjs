@@ -1,12 +1,39 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ghCandidates, starPlenumRepo, PLENUM_GITHUB } from './github-star.mjs';
+import { ghCandidates, resolveGhBin, starPlenumRepo, PLENUM_GITHUB } from './github-star.mjs';
 
 test('ghCandidates prefers PATH then Homebrew locations', () => {
   const c = ghCandidates('/Users/me');
   assert.equal(c[0], 'gh');
   assert.ok(c.includes('/opt/homebrew/bin/gh'));
   assert.ok(c.includes('/Users/me/.local/bin/gh'));
+});
+
+test('resolveGhBin skips bare gh when PATH is slim and uses Homebrew', () => {
+  // Dock-launched Electron: PATH has no Homebrew, but the absolute binary exists.
+  const bin = resolveGhBin({
+    home: '/Users/me',
+    pathEnv: '/usr/bin:/bin',
+    existsSync: (p) => p === '/opt/homebrew/bin/gh',
+  });
+  assert.equal(bin, '/opt/homebrew/bin/gh');
+});
+
+test('resolveGhBin uses PATH when gh is present there', () => {
+  const bin = resolveGhBin({
+    home: '/Users/me',
+    pathEnv: '/custom/bin:/usr/bin',
+    existsSync: (p) => p === '/custom/bin/gh',
+  });
+  assert.equal(bin, '/custom/bin/gh');
+});
+
+test('resolveGhBin returns null when nothing exists', () => {
+  assert.equal(resolveGhBin({
+    home: '/Users/me',
+    pathEnv: '/usr/bin',
+    existsSync: () => false,
+  }), null);
 });
 
 test('starPlenumRepo uses gh when the API call succeeds', async () => {
