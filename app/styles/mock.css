@@ -2246,6 +2246,10 @@ a.navitem.back {
 
 /* Graph table */
 .graph {
+  --graph-labels-w: 148px;
+  --graph-svg-w: 136px;
+  --graph-pad-l: 12px;
+  --graph-col-gap: 8px;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -2256,9 +2260,10 @@ a.navitem.back {
 
 .graph-cols {
   display: grid;
-  grid-template-columns: 136px 22px 1fr 64px 110px;
-  gap: 8px;
-  padding: 0 16px 0 12px;
+  /* Branch/Tag | Graph | avatar | Commit | SHA | When */
+  grid-template-columns: var(--graph-labels-w) var(--graph-svg-w) 22px 1fr 64px 110px;
+  gap: var(--graph-col-gap);
+  padding: 0 16px 0 var(--graph-pad-l);
   height: 28px;
   align-items: center;
   color: var(--ink-tertiary);
@@ -2266,6 +2271,10 @@ a.navitem.back {
   font-weight: 500;
   border-bottom: 1px solid var(--hairline);
   flex-shrink: 0;
+}
+
+.graph-cols > :first-child {
+  text-align: left;
 }
 
 .graph-cols span:last-child,
@@ -2282,8 +2291,9 @@ a.navitem.back {
 
 .rows > svg {
   position: absolute;
-  inset: 0 auto auto 12px;
-  width: 136px;
+  /* Sit in the Graph column: pad + labels + gap */
+  inset: 0 auto auto calc(var(--graph-pad-l) + var(--graph-labels-w) + var(--graph-col-gap));
+  width: var(--graph-svg-w);
   pointer-events: none;
 }
 
@@ -2295,13 +2305,129 @@ a.navitem.back {
 
 .row {
   display: grid;
-  grid-template-columns: 136px 22px 1fr 64px 110px;
-  gap: 8px;
+  grid-template-columns: var(--graph-labels-w) var(--graph-svg-w) 22px 1fr 64px 110px;
+  gap: var(--graph-col-gap);
   align-items: center;
   height: var(--row-h);
-  padding: 0 16px 0 12px;
+  padding: 0 16px 0 var(--graph-pad-l);
   color: var(--ink);
   transition: background 120ms ease, color 120ms ease;
+}
+
+.row .labels {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: visible; /* allow +N popover; pill itself ellipsizes */
+  height: 100%;
+}
+.row .labels > .ref {
+  flex: none;
+  width: max-content;
+  max-width: 100%;
+}
+.row .labels:has(.ref-more) > .ref {
+  max-width: calc(100% - 28px); /* leave room for +N */
+}
+
+/* WIP lane mark — lane icon (shield = protected, tree = lane) + name. */
+.wip-lane {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  pointer-events: none;
+  color: var(--ink-tertiary);
+}
+.wip-lane .icon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--row-lane, var(--warning));
+  opacity: 0.9;
+}
+.wip-lane-name {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-more {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  z-index: 1;
+}
+/* Lift this row above the next ones so the menu isn’t stolen by sibling hit-testing. */
+.row:has(.ref-more:hover),
+.row:has(.ref-more:focus-within) {
+  position: relative;
+  z-index: 5;
+}
+.ref-more:hover,
+.ref-more:focus-within {
+  z-index: 6;
+}
+/* Hover dropdown: top padding is an invisible bridge so the pointer can travel
+   from +N into the menu without dropping :hover. */
+.ref-more-pop {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% - 2px);
+  z-index: 7;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 100%;
+  padding: 6px 0 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.ref-more-pop-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 6px;
+  box-shadow: var(--shadow-pop);
+}
+.ref-more:hover .ref-more-pop,
+.ref-more:focus-within .ref-more-pop {
+  display: flex;
+}
+/* Same type chrome as the column: primary / remote dashed / tag / lane icons. */
+.ref-more-pop .ref {
+  max-width: none;
+  width: max-content;
+}
+.ref-more-pop .ref.remote {
+  border-style: dashed;
+  color: var(--ink-subtle);
+}
+.ref-more-pop .ref.tag {
+  border-color: transparent;
+  background: var(--surface-3);
+  color: var(--ink-subtle);
+}
+.ref-more-pop .ref.primary {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+  color: var(--ink);
+}
+.ref-more-pop .ref.primary .icon {
+  color: var(--primary-hover);
+  opacity: 1;
+}
+.ref-more-pop .ref.worktree .icon {
+  opacity: 1;
 }
 
 .row:hover {
@@ -2395,6 +2521,7 @@ a.navitem.back {
   align-items: center;
   gap: 4px;
   height: 18px;
+  max-width: 100%;
   padding: 0 6px 0 5px;
   border-radius: 4px;
   border: 1px solid var(--hairline-strong);
@@ -2402,6 +2529,15 @@ a.navitem.back {
   color: var(--ink-muted);
   font-family: var(--mono);
   font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+.ref .ref-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -2452,6 +2588,9 @@ button.ref.primary:hover {
   padding: 0 5px;
   color: var(--ink-subtle);
   font-variant-numeric: tabular-nums;
+  cursor: default;
+  border-color: var(--hairline);
+  background: var(--surface-1);
 }
 
 .row.wip {

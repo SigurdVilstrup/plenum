@@ -8,6 +8,8 @@ import { visibleRefs } from './graph-refs.js';
 const ROW = 30;
 const COL_X0 = 14;
 const COL_W = 24;
+/** Must match `--graph-svg-w` on `.graph` (mock.css / app.css). */
+export const GRAPH_SVG_W = 136;
 const laneColor = (c) => `var(--lane-${c})`;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -18,12 +20,13 @@ const icon = (name, cls = '') => {
   return `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${safe}"></use></svg>`;
 };
 
-const refPill = (r, { running = false, current = false } = {}) => {
+const refPill = (r, { running = false, current = false, readonly = false } = {}) => {
   const cls = [
     'ref',
     r.primary && 'primary',
     r.remote && 'remote',
     r.tag && 'tag',
+    r.worktree && 'worktree',
     running && 'running',
     current && 'current',
   ].filter(Boolean).join(' ');
@@ -34,13 +37,19 @@ const refPill = (r, { running = false, current = false } = {}) => {
         : r.worktree ? 'tree-structure'
           : 'git-branch';
   const dot = running ? '<i class="run-dot" title="Running"></i>' : '';
-  const body = `${icon(ic)}${esc(r.name)}${dot}`;
-  if (r.tag) return `<span class="${cls}">${body}</span>`;
+  const body = `${icon(ic)}<span class="ref-name">${esc(r.name)}</span>${dot}`;
+  // Tags stay inert spans; branch pills (incl. overflow menu) are buttons for right-click.
+  if (r.tag || readonly) {
+    return `<span class="${cls}" title="${esc(r.name)}">${body}</span>`;
+  }
   const title = current
     ? `${esc(r.name)} · checked out here`
     : `${esc(r.name)} · Right-click to switch, check out, or open as lane`;
   return `<button type="button" class="${cls}" data-branch-name="${esc(r.name)}" title="${title}">${body}</button>`;
 };
+
+/** Keep type order in +N menus: primary → lane → local → remote → tag. */
+const refKindRank = (r) => (r.primary ? 0 : r.worktree ? 1 : r.tag ? 4 : r.remote ? 3 : 2);
 
 /** Uniform row centers - no day-divider gaps. */
 export function layoutGraphRows(commits) {
@@ -53,7 +62,7 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
   const scrollTop = rowsEl.scrollTop;
   const index = new Map(commits.map((c, i) => [c.id, i]));
   // Fixed canvas width so switching lanes never nudges the grid.
-  const width = 136;
+  const width = GRAPH_SVG_W;
   const x = (lane) => COL_X0 + Math.min(lane, 4) * COL_W;
   const { rows: layout, height } = layoutGraphRows(commits);
   const y = (i) => layout[i].cy;
@@ -116,15 +125,23 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     const sel = c.lane === selectedLane ? ' selected-lane' : ' dim';
     if (c.isWIP) {
       const on = selectedCommit === `wip-${c.lane}` ? ' active-commit' : '';
-      const laneStyle = on ? ` style="--row-lane: ${laneColor(c.lane)}"` : '';
+      const laneStyle = ` style="--row-lane: ${laneColor(c.lane)}"`;
       const n = Number(c.dirtyCount) || 0;
       const files = `${n} file${n === 1 ? '' : 's'}`;
-      parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Review uncommitted changes">
+      const laneLabel = c.laneName || `lane ${c.lane}`;
+      // Protected: blank. Lane: stack. Plain worktree: tree-structure.
+      let wipLabel = '';
+      if (!c.danger) {
+        const wipIc = c.prepared === false ? 'tree-structure' : 'stack';
+        wipLabel = `<span class="wip-lane" title="Uncommitted on ${esc(laneLabel)}">${icon(wipIc)}<span class="wip-lane-name mono">${esc(laneLabel)}</span></span>`;
+      }
+      parts.push(`<div class="row wip${c.danger ? ' danger' : ''}${sel}${on}"${laneStyle} role="button" tabindex="0" data-wip-lane="${c.lane}" title="Review uncommitted changes${c.danger ? '' : ` · ${esc(laneLabel)}`}">
+          <span class="labels">${wipLabel}</span>
           <span></span>
           <span class="who" title="Uncommitted changes">${icon('circle-dashed', 'wip-mark')}</span>
           <span class="msg">
             <span class="wip-compose">
-              <input class="wip-msg" type="text" data-wip-msg="${c.lane}" placeholder="Work In Progress" aria-label="Commit message" autocomplete="off" spellcheck="true" />
+              <input class="wip-msg" type="text" data-wip-msg="${c.lane}" placeholder="Work In Progress" aria-label="Commit message for ${esc(laneLabel)}" autocomplete="off" spellcheck="true" />
               <span class="wip-files" title="${esc(files)}">${icon('pencil-simple', 'sm')}<span class="wip-count mono">${esc(String(n))}</span></span>
             </span>
           </span>
@@ -135,11 +152,18 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
     }
     const list = c.refs || [];
     const { shown, overflow } = visibleRefs(list, { currentBranch });
-    const refs = shown.map((r) => refPill(r, {
+    const hidden = overflow
+      ? list.filter((r) => !shown.includes(r)).slice().sort((a, b) => refKindRank(a) - refKindRank(b) || a.name.localeCompare(b.name))
+      : [];
+    const pillOpts = (r) => ({
       running: r.worktree && !r.primary && runningLanes.has(c.lane),
       current: !!currentBranch && r.name === currentBranch,
-    })).join('') + (overflow
-      ? `<span class="ref overflow" title="${esc(list.filter((r) => !shown.includes(r)).map((r) => r.name).join(', '))}">+${overflow}</span>`
+    });
+    const refs = shown.map((r) => refPill(r, pillOpts(r))).join('') + (overflow
+      ? `<span class="ref-more">
+          <span class="ref overflow" aria-label="${overflow} more refs">+${overflow}</span>
+          <span class="ref-more-pop" role="menu"><span class="ref-more-pop-inner">${hidden.map((r) => refPill(r, pillOpts(r))).join('')}</span></span>
+        </span>`
       : '');
     const tip = tips.has(c.id);
     const kind = authorLabel[c.kind] ? c.kind : 'human';
@@ -162,10 +186,12 @@ export function renderGraph(root, { commits, selectedLane = 0, selectedCommit = 
       ? `${new Date(c.at * 1000).toISOString()}${c.unpushed ? ' · not on remote' : ''} · Show commit changes`
       : (c.unpushed ? 'Not on remote · Show commit changes' : 'Show commit changes');
     // Keep author tooltip on `.who` only - a title on the row steals hover from the avatar.
+    // Refs: content-sized pill + optional +N (hover menu of the rest).
     parts.push(`<div class="row clickable${sel}${on}${unpushed}"${laneStyle} role="button" tabindex="0" data-commit="${esc(c.id)}">
+        <span class="labels">${refs}</span>
         <span></span>
         <span class="who" title="${esc(whoTitle)}">${who}</span>
-        <span class="msg" title="${esc(whenTitle)}">${refs}<span class="text">${esc(c.subject)}</span></span>
+        <span class="msg" title="${esc(whenTitle)}"><span class="text">${esc(c.subject)}</span></span>
         <span class="sha" title="${esc(whenTitle)}">${sha}</span>
         <span class="time" title="${esc(whenTitle)}">${esc(c.when)}</span>
       </div>`);

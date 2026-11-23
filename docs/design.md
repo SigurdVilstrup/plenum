@@ -28,9 +28,9 @@ Icons: Phosphor Regular, 16px, `currentColor`, vendored in `app/icons.svg`. No t
 - Title bar (~52px): traffic lights, mark, tab strip; live sync + ⌘K on the right.
 - Lanes panel (~260px): compact Protected, then accordion Lanes / Worktrees / Local / Remote; Settings at the bottom. Selected runnable lane (including Protected) expands Start / Stop / Test / services / Finish.
 - Board toolbar above panel + graph: lane facts left; Commit / Stash / Pop / Pull / Push, then Finder and Open in editor.
-- Graph owns the rest of the window: column header, 30px rows, SVG edges/nodes. Signature detail: the WIP row — dashed node above a tip with change count and Open.
+- Graph owns the rest of the window: column header, 30px rows, SVG edges/nodes. Columns: Branch / Tag (~148px) | Graph (136px) | Author | Commit | SHA | When. Branch and tag pills sit left-aligned in the left lane, sized to the name (one pill + optional +N; hover +N opens a menu of the rest, still right-clickable), not inline with the subject. Signature detail: WIP rows (one per dirty worktree) — prepared lanes show stack + name, plain worktrees show tree-structure + name (lane color); protected WIP leaves Branch / Tag blank. Dashed node + change count as before.
 
-Nothing is a card. Structure is list + full-height graph; Plenum facts (behind team branch, protected primary, authorship, running) are marks and pills on that structure.
+Nothing is a card. Structure is list + full-height graph; Plenum facts (behind team branch, protected primary, authorship, running) are marks and pills on that structure — refs in the Branch/Tag lane, the rest on the row.
 
 ## Agent UI work
 

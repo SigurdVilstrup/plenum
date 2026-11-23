@@ -5845,8 +5845,10 @@ async function boot() {
 
 el.graph.addEventListener('click', (e) => {
   if (e.target.closest('[data-wip-msg]')) return;
-  // Branch pills: checkout / switch is right-click only (matches the sidebar).
+  // Branch pills (incl. overflow menu): checkout / switch is right-click only.
   if (e.target.closest('[data-branch-name]')) return;
+  // Clicking the +N chrome itself shouldn’t open the commit.
+  if (e.target.closest('.ref-more')) return;
   const wip = e.target.closest('[data-wip-lane]');
   if (wip && el.graph.contains(wip)) {
     const lane = laneByIndex(Number(wip.dataset.wipLane));
@@ -5875,6 +5877,12 @@ el.graph.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
     openBranchCtxMenu(e.clientX, e.clientY, ref.dataset.branchName);
+    return;
+  }
+  // Right-click on +N chrome (not a branch pill) — ignore.
+  if (e.target.closest('.ref-more')) {
+    e.preventDefault();
+    e.stopPropagation();
     return;
   }
   const row = e.target.closest('[data-commit]');

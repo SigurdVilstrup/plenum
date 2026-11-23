@@ -845,11 +845,11 @@ button.env-link {
 
 .tab .close { display: none !important; }
 
-/* Graph | avatar | Commit (flex, ellipsis only when tight) | SHA | When */
+/* Branch/Tag | Graph | avatar | Commit | SHA | When — tokens live on .graph */
 .window.app .graph-cols,
 .window.app .row {
-  grid-template-columns: 136px 22px minmax(0, 1fr) 64px 110px;
-  gap: 8px;
+  grid-template-columns: var(--graph-labels-w, 148px) var(--graph-svg-w, 136px) 22px minmax(0, 1fr) 64px 110px;
+  gap: var(--graph-col-gap, 8px);
 }
 .window.app .row .time {
   white-space: nowrap;
@@ -926,7 +926,8 @@ button.env-link {
 }
 
 .window.app .rows > svg {
-  width: 136px !important;
+  left: calc(var(--graph-pad-l, 12px) + var(--graph-labels-w, 148px) + var(--graph-col-gap, 8px));
+  width: var(--graph-svg-w, 136px) !important;
   z-index: 1; /* above row washes so edges stay continuous */
 }
 
@@ -1621,8 +1622,8 @@ html.feedback-redact .blame-line {
   justify-content: center;
   gap: 8px;
   min-height: 28px;
-  /* Center under Commit/Author/SHA/When, not under the SVG gutter */
-  padding-left: 146px;
+  /* Skip Branch/Tag + Graph gutters; center under Author/Commit/SHA/When */
+  padding-left: calc(var(--graph-pad-l, 12px) + var(--graph-labels-w, 148px) + var(--graph-col-gap, 8px) + var(--graph-svg-w, 136px));
   padding-right: 16px;
 }
 .window.app .load-older[aria-busy="true"] {

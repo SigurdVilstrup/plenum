@@ -611,6 +611,7 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
       wips.push({
         id: `wip-${lane.index}`,
         lane: lane.index,
+        laneName: lane.name,
         subject: 'Working tree',
         dirtyCount: lane.dirty,
         author: '',
@@ -623,6 +624,8 @@ async function history(cwd, lanes, team, teamRef, { limit = 120 } = {}) {
         isMerge: false,
         isTip: false,
         danger: lane.isPrimary,
+        // Prepared → lane mark; unprepared worktree → tree mark; primary stays blank in UI.
+        prepared: Boolean(lane.prepared),
         refs: [],
       });
     }
