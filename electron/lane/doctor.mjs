@@ -4,7 +4,7 @@ import path from 'node:path';
 import { git } from '../git/run.mjs';
 import { parseDirty } from '../git/board.mjs';
 import { writeManifestDir, manifestPath } from '../paths.mjs';
-import { loadManifest } from './manifest.mjs';
+import { loadManifest, dumpManifest, normalizeManifestInput } from './manifest.mjs';
 import {
   scourPortHits,
   loadAllowlist,
@@ -204,6 +204,25 @@ export async function acceptManifest(repoPath, yaml, opts = {}) {
   return dest;
 }
 
+/**
+ * Write a normalized manifest object (Settings → Lane form).
+ * Validates snapshot services have a seed command before dump.
+ * @param {string} repoPath
+ * @param {object} obj
+ */
+export async function writeManifest(repoPath, obj) {
+  const m = normalizeManifestInput(obj);
+  if (typeof m.run !== 'string' || !m.run.trim()) {
+    throw new Error('manifest must be version 1 with a run command');
+  }
+  for (const [name, svc] of Object.entries(m.services || {})) {
+    if (svc?.mode === 'snapshot' && !(svc.snapshot || m.data?.snapshot)) {
+      throw new Error(`service ${name}: mode snapshot needs a snapshot command (or data.snapshot)`);
+    }
+  }
+  return acceptManifest(repoPath, dumpManifest(m));
+}
+
 function pmCmd(pm, script) {
   if (script === 'test' && pm === 'npm') return 'npm test';
   if (pm === 'npm') return `npm run ${script}`;
@@ -287,40 +306,6 @@ async function findNamed(root, basename, maxDepth) {
   }
   await walk(root, 0, '');
   return out;
-}
-
-function dumpManifest(m) {
-  const lines = [`version: ${m.version}`];
-  if (m.setup) lines.push(`setup: ${yamlScalar(m.setup)}`);
-  if (m.run) lines.push(`run: ${yamlScalar(m.run)}`);
-  if (m.test) lines.push(`test: ${yamlScalar(m.test)}`);
-  lines.push('env:');
-  lines.push('  copy:');
-  for (const p of m.env?.copy || []) lines.push(`    - ${yamlScalar(p)}`);
-  const set = m.env?.set && typeof m.env.set === 'object' ? m.env.set : {};
-  if (Object.keys(set).length) {
-    lines.push('  set:');
-    for (const [k, v] of Object.entries(set)) {
-      lines.push(`    ${k}: ${yamlScalar(v)}`);
-    }
-  }
-  lines.push('ports:');
-  lines.push(`  offset: ${m.ports?.offset ?? 100}`);
-  lines.push('  expose:');
-  for (const [k, v] of Object.entries(m.ports?.expose || {})) {
-    lines.push(`    ${k}: ${v}`);
-  }
-  return lines.join('\n') + '\n';
-}
-
-/** Quote when the scalar would break our tiny YAML subset (colon, #, whitespace edges, quotes, newlines). */
-function yamlScalar(s) {
-  const str = String(s);
-  if (/[\n\r]/.test(str)) throw new Error('yaml scalar cannot contain newlines');
-  if (/[:#"'\\\s]/.test(str) || str === '' || /[{}\[\],&*!|>%@`]/.test(str)) {
-    return JSON.stringify(str);
-  }
-  return str;
 }
 
 async function readJson(file) {

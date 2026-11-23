@@ -3545,6 +3545,26 @@ a.navitem {
 .setup pre .c {
   color: var(--ink-tertiary);
 }
+.settings-body .lane-foot {
+  position: sticky;
+  bottom: -40px; /* sit flush with the settings-body bottom padding */
+  padding-bottom: 14px;
+  background: var(--canvas);
+}
+.settings-body.lane .list-row > .input { width: 420px; }
+.settings-body.lane .setup-port-row { grid-template-columns: 1fr auto; align-items: center; }
+.settings-body.lane .setup-port-row .input { min-width: 0; }
+.settings-body.lane .setup-port-row.port { grid-template-columns: 1fr 140px auto; }
+.settings-body.lane .setup-port-row.pair { grid-template-columns: 1fr 2fr auto; }
+.settings-body.lane .col-head { margin-top: 18px; }
+.settings-body.lane .group-head + .col-head { margin-top: 0; }
+.settings-body.lane .list + .btn { margin-top: 10px; }
+.settings-body .lane-foot[hidden] { display: none; }
+.settings-body .lane-empty {
+  padding: 2px 0 4px;
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
 .setup pre .shared {
   color: var(--primary-hover);
 }

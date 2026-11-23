@@ -97,6 +97,9 @@ const state = {
   accounts: null,
   repoBoards: new Map(),
   setup: null,
+  /** Settings → Lane: live .plenum/lane.yaml editor (keyed by board.root). */
+  lane: null,
+  laneByRoot: new Map(),
   identityScope: 'global',
   warmTtlMs: 120000,
   settings: { open: false, page: 'general', setupRoot: null, setupTabId: null },
@@ -4357,6 +4360,7 @@ const SETTINGS_NAV = [
   ['graph', 'tree-structure', 'Graph'],
   ['accounts', 'key', 'Accounts'],
   ['repositories', 'folder-simple', 'Repository'],
+  ['lane', 'stack', 'Lane'],
   ['agents', 'robot', 'Agents'],
   ['statistics', 'git-commit', 'Statistics'],
 ];
@@ -4587,34 +4591,28 @@ const SETTINGS_PAGES = {
   repositories: () => {
     const tabs = state.store.tabs;
     if (!tabs.length) {
-      return `<h1>Repository</h1><p class="lede">Team branch, lanes folder, and Run for the open tab.</p>
+      return `<h1>Repository</h1><p class="lede">Team branch and lanes folder for the open tab.</p>
       <div class="list">${settingsRow('folder-simple', 'No repository open', '', 'Open one from the empty screen or ⌘P.', '', 'These settings follow the open tab.')}</div>`;
     }
-    const head = `<h1>Repository</h1><p class="lede">Team branch, lanes folder, and Run for the tab you’re on. Switch tabs to configure another checkout.</p>`;
+    const head = `<h1>Repository</h1><p class="lede">Team branch and lanes folder for the tab you’re on. Switch tabs to configure another checkout. Start / Test commands live under Lane.</p>`;
     const t = tabs.find((x) => x.id === state.store.activeId) || tabs[0];
     const b = state.repoBoards.get(t.path);
     const root = b?.root || t.path;
     const folder = state.prefs.repoOverrides?.[root]?.lanesFolder || '';
-    const m = b?.manifestSummary;
-    const setupStatus = !b ? '<span class="status"><i></i>Loading…</span>'
-      : b.hasManifest ? '<span class="status on"><i></i>Runnable</span>' : '<span class="status warn"><i></i>Not runnable</span>';
-    const runDetail = m?.run
-      ? `run <span class="mono">${esc(m.run)}</span>${m.test ? ` · test <span class="mono">${esc(m.test)}</span>` : ''} · ports <span class="mono">+${esc(m.offset)}</span>`
-      : (b?.hasManifest ? 'Manifest present.' : 'No .plenum/lane.yaml yet. Lanes still show, they just can’t start.');
-    const svc = (m?.services || []).map((s) => `${esc(s.name)} (${esc(s.mode)})`).join(', ');
-    const edit = b?.hasManifest
-      ? `<button class="btn" type="button" data-edit-manifest="${esc(root)}" title="Open .plenum/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button>`
-      : '';
+    const laneDetail = !b ? '…'
+      : b.hasManifest
+        ? `<span class="mono">.plenum/lane.yaml</span>${b.manifestSummary?.run ? ` · run <span class="mono">${esc(b.manifestSummary.run)}</span>` : ''}`
+        : 'No lane.yaml yet — open Lane to run setup.';
     return `${head}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
         ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
         ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b ? baselinesControlHTML(b, root, t.title) : 'Open a repository first.', '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Local header. Stored as local git config plenum.baseline.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'This repo only. Relative paths sit under the checkout; absolute paths are fine.')}
-        ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
-        ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared = one instance for every lane; snapshot seeds a copy before Run.')}
+        ${settingsRow('stack', 'Lane recipe', 'Start, Test, ports, services', laneDetail, '<button class="btn" type="button" data-open-lane>Open Lane</button>', 'Opens Settings → Lane to edit .plenum/lane.yaml as a form, or run Lane setup when the file is missing.')}
       </div>`;
   },
+  lane: () => lanePageHTML(),
   setup: () => setupWizardHTML(),
   statistics: () => statsPageHTML(),
   agents: () => {
@@ -4680,6 +4678,391 @@ function openLaneSetup(root = state.board?.root) {
   state.settings.setupRoot = root;
   state.settings.setupTabId = state.store.activeId;
   openSettings('setup');
+}
+
+function manifestToDraft(m) {
+  const services = m?.services && typeof m.services === 'object' ? m.services : {};
+  return {
+    setup: m?.setup || '',
+    run: m?.run || '',
+    test: m?.test || '',
+    env: {
+      copy: [...(m?.env?.copy || [])],
+      set: { ...(m?.env?.set || {}) },
+    },
+    ports: {
+      offset: m?.ports?.offset ?? 100,
+      expose: { ...(m?.ports?.expose || {}) },
+    },
+    services: Object.entries(services).map(([name, svc]) => ({
+      name,
+      mode: svc?.mode || 'shared',
+      snapshot: svc?.snapshot || '',
+      teardown: svc?.teardown || '',
+    })),
+    data: {
+      migrations: m?.data?.migrations || '',
+      snapshot: m?.data?.snapshot || '',
+    },
+  };
+}
+
+function draftToWritePayload(d) {
+  const services = {};
+  for (const svc of d.services || []) {
+    const name = String(svc.name || '').trim();
+    if (!name) continue;
+    services[name] = {
+      mode: svc.mode || 'shared',
+      snapshot: svc.snapshot || undefined,
+      teardown: svc.teardown || undefined,
+    };
+  }
+  return {
+    version: 1,
+    setup: d.setup || undefined,
+    run: d.run || undefined,
+    test: d.test || undefined,
+    env: {
+      copy: [...(d.env?.copy || [])].map(String).filter(Boolean),
+      set: { ...(d.env?.set || {}) },
+    },
+    ports: {
+      offset: Number(d.ports?.offset ?? 100),
+      expose: { ...(d.ports?.expose || {}) },
+    },
+    services,
+    data: {
+      migrations: d.data?.migrations || undefined,
+      snapshot: d.data?.snapshot || undefined,
+    },
+  };
+}
+
+function laneDraftDirty(lane = state.lane) {
+  if (!lane?.draft || !lane.lastLoadedDraft) return false;
+  return JSON.stringify(lane.draft) !== JSON.stringify(lane.lastLoadedDraft);
+}
+
+function rememberLaneDraft(lane = state.lane) {
+  if (!lane?.root) return;
+  state.laneByRoot.set(lane.root, {
+    draft: lane.draft ? structuredClone(lane.draft) : null,
+    lastLoadedText: lane.lastLoadedText,
+    lastLoadedDraft: lane.lastLoadedDraft ? structuredClone(lane.lastLoadedDraft) : null,
+  });
+}
+
+function activeLaneRoot() {
+  const t = activeTab();
+  if (!t) return null;
+  const b = state.repoBoards.get(t.path);
+  if (b?.root) return b.root;
+  if (state.board?.root) return state.board.root;
+  return t.path;
+}
+
+async function loadLane({ force = false } = {}) {
+  seedActiveRepoBoard();
+  const t = activeTab();
+  if (!t) {
+    state.lane = null;
+    if (state.settings.open && state.settings.page === 'lane') renderSettings();
+    return;
+  }
+  const root = activeLaneRoot();
+  const cached = state.laneByRoot.get(root);
+  const keepDirty = !force && cached?.draft && cached.lastLoadedDraft
+    && JSON.stringify(cached.draft) !== JSON.stringify(cached.lastLoadedDraft);
+  state.lane = {
+    root,
+    loading: true,
+    path: null,
+    text: null,
+    error: null,
+    diskChanged: false,
+    draft: keepDirty ? structuredClone(cached.draft) : null,
+    lastLoadedText: cached?.lastLoadedText ?? null,
+    lastLoadedDraft: keepDirty ? structuredClone(cached.lastLoadedDraft) : null,
+  };
+  if (state.settings.open && state.settings.page === 'lane') renderSettings();
+  const seq = state.switchSeq;
+  try {
+    const res = await invoke('repo.getManifest', root);
+    if (seq !== state.switchSeq || activeLaneRoot() !== root) return;
+    const nextDraft = res.manifest ? manifestToDraft(res.manifest) : null;
+    if (keepDirty && state.lane.draft) {
+      state.lane = {
+        ...state.lane,
+        loading: false,
+        path: res.path,
+        text: res.text,
+        error: res.error,
+        diskChanged: !!(res.text != null && state.lane.lastLoadedText != null && res.text !== state.lane.lastLoadedText),
+      };
+    } else {
+      state.lane = {
+        root,
+        loading: false,
+        path: res.path,
+        text: res.text,
+        error: res.error,
+        diskChanged: false,
+        draft: nextDraft,
+        lastLoadedText: res.text,
+        lastLoadedDraft: nextDraft ? structuredClone(nextDraft) : null,
+      };
+      rememberLaneDraft(state.lane);
+    }
+  } catch {
+    if (seq !== state.switchSeq || activeLaneRoot() !== root) return;
+    state.lane = { ...state.lane, loading: false, error: 'Could not read lane.yaml' };
+  }
+  if (state.settings.open && state.settings.page === 'lane' && activeLaneRoot() === root) renderSettings();
+}
+
+function lanePageHTML() {
+  const tabs = state.store.tabs;
+  if (!tabs.length) {
+    return `<h1>Lane</h1><p class="lede">Edit <span class="mono">.plenum/lane.yaml</span> for the open repository — Start, Test, ports, env, and services.</p>
+      <div class="list">${settingsRow('folder-simple', 'No repository open', '', 'Open one from the empty screen or ⌘P.', '', 'Lane settings follow the open tab’s primary checkout.')}</div>`;
+  }
+  const t = tabs.find((x) => x.id === state.store.activeId) || tabs[0];
+  const b = state.repoBoards.get(t.path);
+  const lane = state.lane;
+  const head = `<h1>Lane</h1><p class="lede">Recipe for Start / Stop / Test on this repo (<span class="mono">.plenum/lane.yaml</span>). Edits apply to every worktree.</p>
+    <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || lane?.root || t.path)}</small></div>`;
+  if (!lane || lane.loading) {
+    return `${head}<div class="list">${settingsRow('stack', 'Lane recipe', '', '', '<span class="status"><i></i>Loading…</span>', 'Reads the live manifest from the primary checkout.')}</div>`;
+  }
+  if (!lane.text && !lane.error) {
+    return `${head}<div class="list">${settingsRow('stethoscope', 'Lane recipe', 'No .plenum/lane.yaml yet', 'Lanes still show; they just can’t start until you write a recipe.', `<span class="row-actions"><span class="status warn"><i></i>Not runnable</span><button class="btn primary" type="button" data-setup-root="${esc(lane.root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}Lane setup…</button></span>`, 'Doctor reads the repo and proposes a manifest. Write from the setup page.')}</div>`;
+  }
+  if (lane.error || !lane.draft) {
+    return `${head}
+      <div class="list">${settingsRow('warning-circle', 'Can’t parse lane.yaml', '', esc(lane.error || 'Invalid manifest'), `<span class="row-actions"><span class="status warn"><i></i>Not runnable</span><button class="btn" type="button" data-edit-manifest="${esc(lane.root)}" title="Open .plenum/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button><button class="btn" type="button" data-lane-reload>Reload</button></span>`, 'Fix the file in your editor, then Reload. This page only form-edits a parseable v1 manifest.')}</div>
+      <div class="group-head">Raw file</div>
+      <pre class="setup-yaml mono" tabindex="0">${esc(lane.text || '')}</pre>`;
+  }
+  const d = lane.draft;
+  const dirty = laneDraftDirty(lane);
+  const status = `<span class="status on"><i></i>Runnable</span>`;
+  const disk = lane.diskChanged
+    ? settingsRow('arrows-clockwise', 'File changed on disk', '', 'Your form has unsaved edits. Reload drops them and takes the file.', '<button class="btn" type="button" data-lane-reload>Reload</button>', 'Someone (or Edit file) changed .plenum/lane.yaml while this form was open.')
+    : '';
+  const exposeEntries = Object.entries(d.ports.expose || {});
+  const exposeRows = (exposeEntries.length ? exposeEntries : [['', '']]).map(([name, port], i) =>
+    `<div class="setup-port-row port"><input class="input mono" data-lane-expose-name="${i}" value="${esc(name)}" placeholder="web" aria-label="Port name ${i + 1}" /><input class="input mono" data-lane-expose-port="${i}" value="${esc(port)}" placeholder="5173" aria-label="Base port ${i + 1}" /><button class="iconbtn" type="button" data-lane-row-remove title="Remove" aria-label="Remove ${i + 1}">${iconHTML('x', 'sm')}</button></div>`).join('');
+  const copyList = (d.env.copy || []).length
+    ? (d.env.copy || []).map((p, i) =>
+      `<div class="setup-port-row"><input class="input mono" data-lane-copy="${i}" value="${esc(p)}" placeholder=".env" aria-label="Env copy ${i + 1}" /><button class="iconbtn" type="button" data-lane-copy-remove="${i}" title="Remove" aria-label="Remove env copy">${iconHTML('x', 'sm')}</button></div>`).join('')
+    : `<div class="lane-empty">None yet — copy untracked env files into each lane on prepare.</div>`;
+  const setEntries = Object.entries(d.env.set || {});
+  const setRows = (setEntries.length ? setEntries : [['', '']]).map(([k, v], i) =>
+    `<div class="setup-port-row pair"><input class="input mono" data-lane-set-key="${i}" value="${esc(k)}" placeholder="VITE_API_URL" aria-label="Env key ${i + 1}" /><input class="input mono" data-lane-set-val="${i}" value="${esc(v)}" placeholder="http://127.0.0.1:{port.api}" aria-label="Env value ${i + 1}" /><button class="iconbtn" type="button" data-lane-row-remove title="Remove" aria-label="Remove ${i + 1}">${iconHTML('x', 'sm')}</button></div>`).join('');
+  const svcRows = (d.services || []).map((svc, i) => {
+    const mode = svc.mode || 'shared';
+    const modeSel = `<select class="select" data-lane-svc-mode="${i}" aria-label="Mode for ${esc(svc.name || `service ${i + 1}`)}">${[['shared', 'shared'], ['snapshot', 'snapshot'], ['isolated', 'isolated']].map(([v, t]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    return `${settingsRow('database', esc(svc.name || `Service ${i + 1}`), 'Name + mode', '', `<span class="row-actions"><input class="input mono" data-lane-svc-name="${i}" value="${esc(svc.name || '')}" placeholder="db" aria-label="Service name" />${modeSel}<button class="iconbtn" type="button" data-lane-svc-remove="${i}" title="Remove service" aria-label="Remove service">${iconHTML('x', 'sm')}</button></span>`, 'shared = one instance for every lane; snapshot seeds a copy before Start; isolated is reserved for future per-lane data.')}
+      ${settingsRow('database', 'Snapshot', 'Command before Start', '', `<input class="input mono" data-lane-svc-snap="${i}" value="${esc(svc.snapshot || '')}" placeholder="pg_dump …" aria-label="Snapshot command" />`, 'Required when mode is snapshot (or set data.snapshot below).')}
+      ${settingsRow('arrow-counter-clockwise', 'Teardown', 'Optional', '', `<input class="input mono" data-lane-svc-tear="${i}" value="${esc(svc.teardown || '')}" placeholder="dropdb …" aria-label="Teardown command" />`, 'Parsed today; not run automatically yet.')}`;
+  }).join('');
+  const foot = `<div class="foot lane-foot"${dirty ? '' : ' hidden'}><div class="row-end"><button class="btn" type="button" data-lane-revert>Revert</button><button class="btn primary" type="button" data-lane-save>${iconHTML('files', 'sm')}Save</button></div></div>`;
+  return `${head}
+    <div class="list">
+      ${settingsRow('stack', 'Lane recipe', '<span class="mono">.plenum/lane.yaml</span>', `<span data-lane-state>${dirty ? 'Unsaved changes' : 'Saved'}</span>`, `<span class="row-actions">${status}<button class="btn" type="button" data-edit-manifest="${esc(lane.root)}" title="Open .plenum/lane.yaml in your editor">${iconHTML('pencil-simple', 'sm')}Edit file</button><button class="btn" type="button" data-setup-root="${esc(lane.root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}Re-run setup</button></span>`, 'Save writes the form to disk. Re-run setup replaces the file from a doctor proposal (comments in the yaml are lost).')}
+      ${disk}
+    </div>
+    <div class="group-head">Commands</div>
+    <div class="list">
+      ${settingsRow('play', 'run', 'Required — Start', '', `<input class="input mono" data-lane-field="run" value="${esc(d.run || '')}" placeholder="npm run dev -- --port {port.web}" aria-label="run" />`, 'What Plenum runs when you press Start. Use {port.web} for the lane port.')}
+      ${settingsRow('check-circle', 'test', 'Optional', '', `<input class="input mono" data-lane-field="test" value="${esc(d.test || '')}" placeholder="npm test" aria-label="test" />`, 'Lane Test button / lane.test.')}
+      ${settingsRow('gear-six', 'setup', 'On create / Open as lane', '', `<input class="input mono" data-lane-field="setup" value="${esc(d.setup || '')}" placeholder="npm install" aria-label="setup" />`, 'Runs once when preparing a worktree.')}
+    </div>
+    <div class="group-head">Ports<small>Base + offset × lane index. Protected is index 0.</small></div>
+    <div class="list">
+      ${settingsRow('plugs-connected', 'Offset', '', '', `<input class="input mono" data-lane-field="offset" type="number" min="0" value="${esc(d.ports.offset ?? 100)}" aria-label="Port offset" />`, 'Each lane adds offset × index to every exposed base port.')}
+    </div>
+    <div class="col-head">Expose</div>
+    <div class="setup-ports" data-lane-expose-list>${exposeRows}</div>
+    <button class="btn" type="button" data-lane-add-port>${iconHTML('plus', 'sm')}Add port</button>
+    <div class="group-head">Environment<small>Don’t put secrets in env.set — prefer env.copy of untracked files.</small></div>
+    <div class="col-head">env.copy</div>
+    <div class="setup-ports">${copyList}</div>
+    <button class="btn" type="button" data-lane-add-copy>${iconHTML('plus', 'sm')}Add path</button>
+    <div class="col-head">env.set</div>
+    <div class="setup-ports">${setRows}</div>
+    <button class="btn" type="button" data-lane-add-set>${iconHTML('plus', 'sm')}Add variable</button>
+    <div class="group-head">Services<small>shared by default; snapshot seeds before Start.</small></div>
+    <div class="list">${svcRows || settingsRow('database', 'No named services', '', 'Add one if you need snapshot isolation.', '', 'Without services, data is shared across lanes.')}</div>
+    <button class="btn" type="button" data-lane-add-svc>${iconHTML('plus', 'sm')}Add service</button>
+    <div class="group-head">Data</div>
+    <div class="list">
+      ${settingsRow('files', 'Migrations', 'Relative path', '', `<input class="input mono" data-lane-field="migrations" value="${esc(d.data.migrations || '')}" placeholder="db/migrations" aria-label="Migrations path" />`, 'When set with shared services, Start gates on pending migrations.')}
+      ${settingsRow('database', 'Default snapshot', 'Fallback seed', '', `<input class="input mono" data-lane-field="dataSnapshot" value="${esc(d.data.snapshot || '')}" placeholder="echo seed" aria-label="Data snapshot command" />`, 'Used when a snapshot service has no per-service snapshot command.')}
+    </div>
+    ${foot}`;
+}
+
+function syncLaneDraftFromDom(root) {
+  const lane = state.lane;
+  if (!lane?.draft) return;
+  const d = lane.draft;
+  const field = (key) => root.querySelector(`[data-lane-field="${key}"]`);
+  if (field('run')) d.run = field('run').value;
+  if (field('test')) d.test = field('test').value;
+  if (field('setup')) d.setup = field('setup').value;
+  if (field('offset')) d.ports.offset = Number(field('offset').value) || 0;
+  if (field('migrations')) d.data.migrations = field('migrations').value;
+  if (field('dataSnapshot')) d.data.snapshot = field('dataSnapshot').value;
+  const expose = {};
+  root.querySelectorAll('[data-lane-expose-name]').forEach((n) => {
+    const i = n.dataset.laneExposeName;
+    const port = root.querySelector(`[data-lane-expose-port="${i}"]`)?.value;
+    const name = n.value.trim();
+    if (name && port !== '' && port != null) expose[name] = Number(port);
+  });
+  d.ports.expose = expose;
+  const copy = [];
+  root.querySelectorAll('[data-lane-copy]').forEach((n) => {
+    const v = n.value.trim();
+    if (v) copy.push(v);
+  });
+  d.env.copy = copy;
+  const set = {};
+  root.querySelectorAll('[data-lane-set-key]').forEach((n) => {
+    const i = n.dataset.laneSetKey;
+    const key = n.value.trim();
+    const val = root.querySelector(`[data-lane-set-val="${i}"]`)?.value ?? '';
+    if (key) set[key] = val;
+  });
+  d.env.set = set;
+  root.querySelectorAll('[data-lane-svc-name]').forEach((n) => {
+    const i = Number(n.dataset.laneSvcName);
+    if (!d.services[i]) return;
+    d.services[i].name = n.value;
+    d.services[i].mode = root.querySelector(`[data-lane-svc-mode="${i}"]`)?.value || 'shared';
+    d.services[i].snapshot = root.querySelector(`[data-lane-svc-snap="${i}"]`)?.value || '';
+    d.services[i].teardown = root.querySelector(`[data-lane-svc-tear="${i}"]`)?.value || '';
+  });
+  rememberLaneDraft(lane);
+}
+
+function bindLane(root) {
+  const rerender = () => {
+    rememberLaneDraft();
+    renderSettings();
+  };
+  const bump = () => {
+    syncLaneDraftFromDom(root);
+    rememberLaneDraft();
+    // Toggle in place: a remount here would steal focus from the field being typed in.
+    const dirty = laneDraftDirty();
+    const foot = root.querySelector('.lane-foot');
+    if (foot) foot.hidden = !dirty;
+    const label = root.querySelector('[data-lane-state]');
+    if (label) label.textContent = dirty ? 'Unsaved changes' : 'Saved';
+  };
+  root.querySelectorAll('[data-open-lane]').forEach((b) => b.addEventListener('click', () => openSettings('lane')));
+  root.querySelectorAll('[data-setup-root]').forEach((b) => b.addEventListener('click', () => openLaneSetup(b.dataset.setupRoot)));
+  root.querySelectorAll('[data-edit-manifest]').forEach((b) => b.addEventListener('click', () => {
+    const file = `${b.dataset.editManifest}/.plenum/lane.yaml`;
+    invoke('os.openEditor', file).catch(() => {});
+  }));
+  root.querySelector('[data-lane-reload]')?.addEventListener('click', () => {
+    state.laneByRoot.delete(state.lane?.root);
+    loadLane({ force: true });
+  });
+  root.querySelector('[data-lane-revert]')?.addEventListener('click', () => {
+    if (!state.lane?.lastLoadedDraft) return;
+    state.lane.draft = structuredClone(state.lane.lastLoadedDraft);
+    state.lane.diskChanged = false;
+    rememberLaneDraft();
+    renderSettings();
+    toast('Reverted', 'ok');
+  });
+  root.querySelector('[data-lane-save]')?.addEventListener('click', async () => {
+    syncLaneDraftFromDom(root);
+    const d = state.lane?.draft;
+    if (!d?.run?.trim()) {
+      toast('Needs a run command', 'warn');
+      return;
+    }
+    try {
+      const board = await invoke('repo.writeManifest', draftToWritePayload(d), state.lane.root);
+      state.repoBoards.delete(state.lane.root);
+      if (board.root === state.board?.root) applyBoard(board);
+      else {
+        board.displayRoot = await prettyPath(board.root);
+        state.repoBoards.set(activeTab()?.path || state.lane.root, board);
+      }
+      const next = manifestToDraft(draftToWritePayload(d));
+      state.lane = {
+        ...state.lane,
+        draft: next,
+        lastLoadedDraft: structuredClone(next),
+        lastLoadedText: null,
+        diskChanged: false,
+        error: null,
+      };
+      // Refresh text from disk for future disk-change detection.
+      try {
+        const res = await invoke('repo.getManifest', state.lane.root);
+        state.lane.lastLoadedText = res.text;
+        state.lane.text = res.text;
+        state.lane.path = res.path;
+      } catch { /* keep form */ }
+      rememberLaneDraft();
+      toast('Saved .plenum/lane.yaml', 'ok');
+      renderSettings();
+    } catch { /* toasted */ }
+  });
+  root.querySelector('[data-lane-add-port]')?.addEventListener('click', () => {
+    syncLaneDraftFromDom(root);
+    const expose = state.lane.draft.ports.expose;
+    let n = 1;
+    while (expose[`port${n}`]) n += 1;
+    expose[`port${n}`] = 3000;
+    rerender();
+  });
+  root.querySelector('[data-lane-add-copy]')?.addEventListener('click', () => {
+    syncLaneDraftFromDom(root);
+    state.lane.draft.env.copy.push('.env');
+    rerender();
+  });
+  root.querySelectorAll('[data-lane-copy-remove]').forEach((b) => b.addEventListener('click', () => {
+    syncLaneDraftFromDom(root);
+    state.lane.draft.env.copy.splice(Number(b.dataset.laneCopyRemove), 1);
+    rerender();
+  }));
+  root.querySelectorAll('[data-lane-row-remove]').forEach((b) => b.addEventListener('click', () => {
+    b.closest('.setup-port-row').remove(); // sync rebuilds expose / env.set from the rows left in the DOM
+    syncLaneDraftFromDom(root);
+    rerender();
+  }));
+  root.querySelector('[data-lane-add-set]')?.addEventListener('click', () => {
+    syncLaneDraftFromDom(root);
+    const set = state.lane.draft.env.set;
+    let k = 'VAR';
+    let n = 1;
+    while (set[k]) { k = `VAR${n}`; n += 1; }
+    set[k] = '';
+    rerender();
+  });
+  root.querySelector('[data-lane-add-svc]')?.addEventListener('click', () => {
+    syncLaneDraftFromDom(root);
+    state.lane.draft.services.push({ name: 'db', mode: 'shared', snapshot: '', teardown: '' });
+    rerender();
+  });
+  root.querySelectorAll('[data-lane-svc-remove]').forEach((b) => b.addEventListener('click', () => {
+    syncLaneDraftFromDom(root);
+    state.lane.draft.services.splice(Number(b.dataset.laneSvcRemove), 1);
+    rerender();
+  }));
+  root.querySelectorAll('input, select').forEach((n) => {
+    n.addEventListener('input', bump);
+    n.addEventListener('change', bump);
+  });
 }
 
 /** Seed Repository settings from the live board so controls never stay on the previous tab. */
@@ -4769,7 +5152,7 @@ function setupWizardHTML() {
   const s = state.setup;
   const tab = state.store.tabs.find((t) => t.path === s?.root);
   const step = Math.max(0, Math.min(SETUP_STEPS.length - 1, s?.step || 0));
-  const crumbs = `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Repository</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>`;
+  const crumbs = `<nav class="crumbs" aria-label="Breadcrumb"><a href="#" data-crumb>Lane</a>${iconHTML('caret-right', 'sm')}<span>${esc(tab?.title || s?.root || '')}</span></nav>`;
   if (!s || s.loading) {
     return `${crumbs}<h1>Lane setup</h1><p class="lede">Reading the repo…</p>`;
   }
@@ -4876,7 +5259,7 @@ function syncSetupDraft(root) {
 
 function bindSetup(root) {
   const s = state.setup;
-  root.querySelectorAll('[data-crumb]').forEach((n) => n.addEventListener('click', (e) => { e.preventDefault(); openSettings('repositories'); }));
+  root.querySelectorAll('[data-crumb]').forEach((n) => n.addEventListener('click', (e) => { e.preventDefault(); openSettings('lane'); }));
   root.querySelectorAll('[data-goto-step]').forEach((btn) => {
     btn.addEventListener('click', () => {
       syncSetupDraft(root);
@@ -4954,8 +5337,9 @@ function bindSetup(root) {
       const board = await invoke('repo.acceptManifest', s.proposedYaml, s.root);
       state.repoBoards.delete(s.root);
       if (board.root === state.board?.root) applyBoard(board);
+      state.laneByRoot.delete(s.root);
       toast('Wrote .plenum/lane.yaml', 'ok');
-      openSettings('repositories');
+      openSettings('lane');
     } catch { /* toasted */ }
   });
 }
@@ -5024,6 +5408,7 @@ function baselinesControlHTML(board, root, title) {
 }
 
 function bindRepos(root) {
+  root.querySelectorAll('[data-open-lane]').forEach((b) => b.addEventListener('click', () => openSettings('lane')));
   const saveBaselines = async (rootPath, change, msg) => {
     try {
       const cur = (state.repoBoards.get(rootPath)?.baselines || []).map((x) => x.name);
@@ -5831,11 +6216,12 @@ function openSettings(page = state.settings.page) {
   if (state.branchOverview.open) closeBranchOverview({ repaint: false });
   state.settings.open = true;
   state.settings.page = page;
-  if (page === 'repositories') seedActiveRepoBoard();
+  if (page === 'repositories' || page === 'lane') seedActiveRepoBoard();
   paint();
   renderSettings();
   if (page === 'accounts') { loadIdentity(); loadAccounts(); }
   if (page === 'repositories') loadRepos();
+  if (page === 'lane') loadLane();
   if (page === 'agents') loadAgents();
   if (page === 'statistics') loadStats();
   if (page === 'setup') loadSetup(state.settings.setupRoot || state.board?.root);
@@ -5848,19 +6234,20 @@ function closeSettings() {
 
 function renderSettings() {
   const { page } = state.settings;
-  const lit = page === 'setup' ? 'repositories' : page; // Lane setup lives under Repository
+  const lit = page === 'setup' ? 'lane' : page; // Lane setup wizard lives under Lane
   const nav = SETTINGS_NAV.map(([id, ic, label]) =>
     `<button class="navitem${id === lit ? ' active' : ''}" type="button" data-page="${id}"${id === lit ? ' aria-current="page"' : ''}>${iconHTML(ic)}${label}</button>`).join('');
   el.settingsNav.innerHTML = `<div class="settings-nav-list"><button class="navitem back" type="button" data-board>${iconHTML('caret-right')}Board<kbd>esc</kbd></button>
     <div class="heading">Settings</div>${nav}</div>${panelFootHTML(true)}`;
   closeSelectMenus();
-  el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : ''}`;
+  el.settingsBody.className = `settings-body${page === 'setup' ? ' setup' : page === 'lane' ? ' setup lane' : ''}`;
   el.settingsBody.innerHTML = (SETTINGS_PAGES[page] || SETTINGS_PAGES.general)();
   enhanceSelects(el.settingsBody);
   if (page === 'appearance' || page === 'graph') paintSettingsGraphPreview(el.settingsBody);
   if (page === 'graph') bindGraphColumns(el.settingsBody);
   if (page === 'accounts') { bindIdentity(el.settingsBody); bindAccounts(el.settingsBody); }
   if (page === 'repositories') bindRepos(el.settingsBody);
+  if (page === 'lane') bindLane(el.settingsBody);
   if (page === 'agents' && state.agents) bindAgents(el.settingsBody);
   if (page === 'statistics') bindStats(el.settingsBody);
   if (page === 'setup') bindSetup(el.settingsBody);
@@ -5918,7 +6305,7 @@ function syncSettingsAfterTabSwitch({ afterSelect = true } = {}) {
     if (!activeTab() || (setupTabId && state.store.activeId !== setupTabId)) {
       state.settings.setupRoot = null;
       state.settings.setupTabId = null;
-      openSettings('repositories');
+      openSettings('lane');
       toast('Lane setup closed. Switched repository.');
       return;
     }
@@ -5934,6 +6321,12 @@ function syncSettingsAfterTabSwitch({ afterSelect = true } = {}) {
     if (afterSelect) loadRepos();
     return;
   }
+  if (page === 'lane') {
+    seedActiveRepoBoard();
+    renderSettings();
+    if (afterSelect) loadLane();
+    return;
+  }
   if (page === 'statistics') { renderSettings(); if (afterSelect) loadStats(); return; }
   if (page === 'setup') renderSettings();
 }
@@ -5947,6 +6340,7 @@ function paletteCommands() {
     { id: 'share', label: 'Share Plenum: copy a link for a friend', run: shareLink, match: ['invite', 'friend', 'colleague', 'recommend'] },
     { id: 'feedback', label: 'Feedback…', run: () => { closePalette(); openFeedbackSheet(); }, match: ['tell me', 'report', 'feedback'] },
     { id: 'settings', label: 'Settings…', run: () => openSettings() },
+    { id: 'lane-settings', label: 'Lane: edit lane.yaml…', run: () => openSettings('lane'), when: !!state.board, match: ['manifest', 'lane.yaml', 'run command', 'ports'] },
     { id: 'graph-cols', label: 'Graph columns…', run: () => openSettings('graph'), match: ['columns', 'sha', 'author', 'hide', 'reorder'] },
     { id: 'stats', label: 'Statistics: commits, authors, agents', run: () => openSettings('statistics'), when: !!state.board, match: ['stats', 'insights', 'contributors', 'activity'] },
     {
@@ -6071,7 +6465,7 @@ document.addEventListener('keydown', (e) => {
     }
     else if (state.branchOverview.open) closeBranchOverview();
     else if (state.settings.open) {
-      if (state.settings.page === 'setup') openSettings('repositories');
+      if (state.settings.page === 'setup') openSettings('lane');
       else closeSettings();
     }
     else if (state.filePane) {
@@ -6080,6 +6474,10 @@ document.addEventListener('keydown', (e) => {
       paintChanges();
     }
     else if (state.changes) { closeChanges(); paint(); }
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 's' && state.settings.open && state.settings.page === 'lane') {
+    e.preventDefault();
+    el.settingsBody.querySelector('[data-lane-save]')?.click();
   }
 });
 

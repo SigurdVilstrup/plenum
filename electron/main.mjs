@@ -15,7 +15,8 @@ import * as ops from './git/ops.mjs';
 import * as undo from './git/undo.mjs';
 import * as tabs from './tabs.mjs';
 import * as supervisor from './lane/supervisor.mjs';
-import { doctor, acceptManifest } from './lane/doctor.mjs';
+import { doctor, acceptManifest, writeManifest } from './lane/doctor.mjs';
+import { getManifest } from './lane/manifest.mjs';
 import { getPrefs, setPrefs } from './prefs.mjs';
 import { getIdentity, setIdentity } from './git/identity.mjs';
 import * as creds from './git/credentials.mjs';
@@ -461,6 +462,17 @@ ipcMain.handle('repo.acceptManifest', async (_e, yaml, rootArg) => {
   const root = tabRoot(rootArg);
   if (!root) throw new Error('No repository open.');
   await acceptManifest(root, yaml);
+  return loadBoard(root);
+});
+ipcMain.handle('repo.getManifest', async (_e, rootArg) => {
+  const root = tabRoot(rootArg);
+  if (!root) throw new Error('No repository open.');
+  return getManifest(root);
+});
+ipcMain.handle('repo.writeManifest', async (_e, obj, rootArg) => {
+  const root = tabRoot(rootArg);
+  if (!root) throw new Error('No repository open.');
+  await writeManifest(root, obj || {});
   return loadBoard(root);
 });
 ipcMain.handle('repo.allowlistPort', async (_e, entry, rootArg) => {

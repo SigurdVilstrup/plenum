@@ -16,7 +16,7 @@ Or open any repo from the empty screen / ⌘K. See [`CONTRIBUTING.md`](CONTRIBUT
 
 ### Lane manifest
 
-Hand-write a minimal manifest (or use Settings → Repositories → Lane setup → Write):
+Hand-write a minimal manifest, or use **Settings → Lane** to edit the live file as a form (or Lane setup → Write when the repo has none):
 
 ```yaml
 # .plenum/lane.yaml
