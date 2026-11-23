@@ -64,6 +64,9 @@ const state = {
   branchesOpen: true,
   /** Remotes fold-out - collapsed by default; locals are the active work. */
   remotesOpen: false,
+  /** Lanes / Worktrees accordion - open by default so the board reads full. */
+  lanesOpen: true,
+  worktreesOpen: true,
   /** Session expand/collapse for branch path folders (#21). */
   collapsedBranchFolders: new Set(),
   /** Remote path folders start collapsed (#62); keys here are the ones the user opened. */
@@ -1487,10 +1490,11 @@ function paintPanel() {
     ? `${iconHTML('warning-circle')}`
     : `${iconHTML('shield-check')}`;
   const primarySelected = selected === 0;
-  let html = `<div class="section">
-    <div class="section-head" title="Integration branch. You still commit and push here; Start works when the repo has a lane recipe.">Protected</div>
+  const lanesOpen = state.lanesOpen;
+  const worktreesOpen = state.worktreesOpen;
+  let html = `<div class="section section-protected">
     <div class="lane-block${primarySelected ? ' selected' : ''}">
-      <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0">
+      <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0" title="Protected · Integration branch. You still commit and push here; Start works when the repo has a lane recipe.">
         <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
         <span class="lane-main"><span class="name" title="${esc(primary.name)}">${esc(primary.name)}</span><span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>${laneAgentsHTML(primary)}</span>
       </button>
@@ -1498,38 +1502,48 @@ function paintPanel() {
     </div>
   </div>`;
 
-  html += `<div class="section">
-    <div class="section-head">
-      <span title="Worktrees with Plenum runner setup.">Lanes <span class="count">${laneList.length}</span></span>
+  const lanesBody = laneList.length
+    ? laneList.map((l) => laneRowHTML(l, b, selected)).join('')
+    : `<div class="empty-note">${hasManifest
+      ? 'None yet — use + or Open as lane on a worktree'
+      : `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup first</button>`}</div>`;
+  html += `<div class="section section-accordion">
+    <div class="branch-head">
+      <button class="lane-row branch-toggle" type="button" data-lanes aria-expanded="${lanesOpen}" title="Worktrees with Plenum runner setup.">
+        <span class="mark">${iconHTML('caret-right')}</span>
+        <span class="section-icon">${iconHTML('stack', 'sm')}</span>
+        <span class="name">Lanes</span>
+        <span class="meta">${laneList.length}</span>
+      </button>
       <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
     </div>
-    ${laneList.length
-      ? laneList.map((l) => laneRowHTML(l, b, selected)).join('')
-      : `<div class="empty-note">${hasManifest
-        ? 'None yet — use + or Open as lane on a worktree'
-        : `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup first</button>`}</div>`}
+    <div class="section-body"${lanesOpen ? '' : ' hidden'}>${lanesBody}</div>
   </div>`;
 
-  html += `<div class="section">
-    <div class="section-head">
-      <span title="Worktrees without runner setup yet.">Worktrees <span class="count">${worktrees.length}</span></span>
-    </div>
-    ${worktrees.length
-      ? worktrees.map((l) => {
-        const isSelected = l.index === selected;
-        const cta = hasManifest
-          ? `<button class="btn primary" type="button" data-act="openAsLane">${iconHTML('play', 'sm')}Open as lane</button>`
-          : laneSetupLink();
-        return `<div class="lane-block${isSelected ? ' selected' : ''}">
-          <button class="lane-row${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
-            <span class="mark">${iconHTML('git-branch')}</span>
-            <span class="lane-main"><span class="name">${esc(l.name)}</span><span class="meta">not a lane</span></span>
-            ${l.folder ? `<span class="folder">${esc(l.folder)}</span>` : ''}
-          </button>
-          ${isSelected ? `<div class="lane-run">${cta}</div>` : ''}
-        </div>`;
-      }).join('')
-      : '<div class="empty-note">None</div>'}
+  const worktreesBody = worktrees.length
+    ? worktrees.map((l) => {
+      const isSelected = l.index === selected;
+      const cta = hasManifest
+        ? `<button class="btn primary" type="button" data-act="openAsLane">${iconHTML('play', 'sm')}Open as lane</button>`
+        : laneSetupLink();
+      return `<div class="lane-block${isSelected ? ' selected' : ''}">
+        <button class="lane-row${isSelected ? ' selected' : ''}" type="button" data-lane="${l.index}" aria-pressed="${isSelected}" title="${esc(l.name)}">
+          <span class="mark">${iconHTML('git-branch')}</span>
+          <span class="lane-main"><span class="name">${esc(l.name)}</span><span class="meta">not a lane</span></span>
+          ${l.folder ? `<span class="folder">${esc(l.folder)}</span>` : ''}
+        </button>
+        ${isSelected ? `<div class="lane-run">${cta}</div>` : ''}
+      </div>`;
+    }).join('')
+    : '<div class="empty-note">None</div>';
+  html += `<div class="section section-accordion">
+    <button class="lane-row branch-toggle" type="button" data-worktrees aria-expanded="${worktreesOpen}" title="Worktrees without runner setup yet.">
+      <span class="mark">${iconHTML('caret-right')}</span>
+      <span class="section-icon">${iconHTML('tree-structure', 'sm')}</span>
+      <span class="name">Worktrees</span>
+      <span class="meta">${worktrees.length}</span>
+    </button>
+    <div class="section-body"${worktreesOpen ? '' : ' hidden'}>${worktreesBody}</div>
   </div>`;
 
   const allBranches = b.branches || [];
@@ -1543,7 +1557,7 @@ function paintPanel() {
     : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
   const remoteBody = remotes.length
     ? renderBranchListHTML(remotes, b, selected, refreshing, true)
-    : `<div class="empty-note">None</div>`;
+    : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
   const vsRef = branchVsRef(b);
   const branchMeta = refreshing
     ? `<i class="spinner btn-spin" aria-hidden="true"></i><span class="sr-only">Refreshing</span>`
@@ -1563,35 +1577,28 @@ function paintPanel() {
     </div>`;
   }
   html += `<div class="section branch-search">
-    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Filter branches" aria-label="Filter local and remote branches" spellcheck="false" autocomplete="off" /></label>
+    <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Filter" aria-label="Filter local and remote branches" spellcheck="false" autocomplete="off" /></label>
   </div>`;
-  html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
+  html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
     <div class="branch-head">
     <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen || !!q}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs protected tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
-      <span class="name">Branches</span>
+      <span class="section-icon">${iconHTML('desktop', 'sm')}</span>
+      <span class="name">Local</span>
       <span class="meta">${branchMeta}</span>
     </button>
     ${branchVsSelectHTML(b)}
     </div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
-  html += `<div class="section section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen || !!q}" title="Tips that exist only on the remote (no local branch of the same name). Tracking remotes like origin/${esc(b.teamBranch || 'main')} live under Branches once you have a local tip.">
+  html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen || !!q}" title="Tips that exist only on the remote. Tracking remotes like origin/${esc(b.teamBranch || 'main')} live under Local once you have a local tip.">
       <span class="mark">${iconHTML('caret-right')}</span>
-      <span class="name">Remote-only</span>
+      <span class="section-icon">${iconHTML('cloud', 'sm')}</span>
+      <span class="name">Remote</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="section-note">${remotes.length
-      ? 'No local branch with this name yet'
-      : (origin?.display
-        ? `None · tracking tips are under Branches · origin <span class="mono">${esc(origin.display)}</span>`
-        : 'None · tracking tips show under Branches')}</div>
-    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${
-      remotes.length
-        ? remoteBody
-        : `<div class="empty-note">${origin?.display ? `Local tips already cover origin · <span class="mono">${esc(origin.display)}</span>` : 'No remote-only tips'}</div>`
-    }</div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${remoteBody}</div>
   </div>`;
 
   el.panel.innerHTML = `<div class="panel-scroll">${html}</div>${panelFootHTML()}`;
@@ -1629,7 +1636,18 @@ function paintPanel() {
       handleAction(btn.dataset.act, lane, btn.dataset.url);
     });
   });
-  el.panel.querySelector('[data-new-lane]')?.addEventListener('click', openCreateLane);
+  el.panel.querySelector('[data-new-lane]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCreateLane();
+  });
+  el.panel.querySelector('[data-lanes]')?.addEventListener('click', () => {
+    state.lanesOpen = !state.lanesOpen;
+    paint();
+  });
+  el.panel.querySelector('[data-worktrees]')?.addEventListener('click', () => {
+    state.worktreesOpen = !state.worktreesOpen;
+    paint();
+  });
   el.panel.querySelector('[data-branches]')?.addEventListener('click', () => {
     state.branchesOpen = !state.branchesOpen;
     paint();
@@ -1757,7 +1775,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
     : br.hasLane
       ? 'lane'
       : br.remote
-        ? 'remote-only'
+        ? 'remote'
         : 'local';
   const current = laneByIndex(selectedLane);
   const isCurrent = (br.hasLane && br.laneIndex === selectedLane)
@@ -1806,8 +1824,9 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false,
     const key = remote ? `r:${entry.key}` : entry.key;
     const open = state.branchFilter.trim() || (remote ? state.openRemoteFolders.has(key) : !state.collapsedBranchFolders.has(key));
     parts.push(`<button class="lane-row branch-folder" type="button" data-branch-folder="${esc(key)}" aria-expanded="${open}">
-      <span class="mark">${iconHTML('caret-right', 'sm')}</span>
+      <span class="mark">${iconHTML('folder-simple', 'sm')}</span>
       <span class="name">${esc(entry.key)}/</span>
+      <span class="meta">${entry.items.length}</span>
     </button>`);
     if (open) {
       const kids = [...entry.items].sort((a, b) => a.label.localeCompare(b.label));
@@ -4348,7 +4367,7 @@ const SETTINGS_PAGES = {
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
         ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
-        ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b ? baselinesControlHTML(b, root, t.title) : 'Open a repository first.', '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Branches header. Stored as local git config plenum.baseline.')}
+        ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b ? baselinesControlHTML(b, root, t.title) : 'Open a repository first.', '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Local header. Stored as local git config plenum.baseline.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'This repo only. Relative paths sit under the checkout; absolute paths are fine.')}
         ${settingsRow(b && !b.hasManifest ? 'stethoscope' : 'play', 'Lane setup', b?.hasManifest ? '.plenum/lane.yaml' : 'Missing lane.yaml', runDetail, `<span class="row-actions">${setupStatus}${edit}<button class="btn${b && !b.hasManifest ? ' primary' : ''}" type="button" data-setup-root="${esc(root)}" title="Doctor the repo and review a proposed lane.yaml">${iconHTML('stethoscope', 'sm')}${b?.hasManifest ? 'Re-run setup' : 'Lane setup…'}</button></span>`, 'Doctor reads the repo and proposes .plenum/lane.yaml. Write from the setup page. Edit file opens the yaml in your editor.')}
         ${settingsRow('database', 'Services', 'Shared unless the file says otherwise', svc || (b?.hasManifest ? 'No named services in the manifest.' : 'Set up a manifest to declare services.'), '', 'From lane.yaml services.*. shared = one instance for every lane; snapshot seeds a copy before Run.')}

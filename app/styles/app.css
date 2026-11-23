@@ -1271,6 +1271,8 @@ html.feedback-redact .blame-line {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* Reserve gutter so the thin scrollbar never shoves the rail content sideways */
+  scrollbar-gutter: stable;
   /* #128 thin lanes scrollbar — hairline thumb, no chunky OS chrome */
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
@@ -1303,6 +1305,36 @@ html.feedback-redact .blame-line {
 .window.app .panel .section-head {
   padding: 10px 12px 6px;
   letter-spacing: 0;
+}
+/* Protected sits tight at the top — no section label, just the row */
+.window.app .panel .section.section-protected {
+  padding: 6px 8px 2px;
+}
+.window.app .panel .section.section-protected .lane-row {
+  min-height: 30px;
+  padding: 4px 8px 4px 10px;
+}
+.window.app .panel .section.section-accordion {
+  padding: 4px 8px 2px;
+}
+.window.app .panel .section.section-accordion + .section.section-accordion {
+  border-top: 1px solid var(--hairline);
+  margin-top: 2px;
+  padding-top: 4px;
+}
+.window.app .panel .section-body[hidden] {
+  display: none !important;
+}
+.window.app .panel .section-body {
+  padding: 0 0 4px 4px;
+}
+.window.app .panel .branch-toggle .section-icon {
+  display: inline-flex;
+  color: var(--ink-muted);
+}
+.window.app .panel .branch-toggle .section-icon .icon {
+  width: 14px;
+  height: 14px;
 }
 .window.app .panel .lane-row .name {
   font-size: 13px;
@@ -1360,14 +1392,27 @@ html.feedback-redact .blame-line {
   font-weight: 500;
   letter-spacing: -0.01em;
 }
+/* Folder glyph stays upright (GitKraken-style); only section carets rotate */
+.window.app .panel .branch-folder .mark,
 .window.app .panel .branch-folder[aria-expanded="true"] .mark {
-  transform: rotate(90deg);
+  transform: none;
+  color: var(--ink-tertiary);
+}
+.window.app .panel .branch-folder .meta {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-weight: 500;
 }
 .window.app .panel .branch-folder-kids {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  /* #63 caret (14px) + gap (6px): child icons line up under the folder name */
+  /* folder (14px) + gap (6px): child icons line up under the folder name */
   padding-left: 20px;
 }
 .window.app .panel .branch-row.current .icon.current,
@@ -1485,27 +1530,21 @@ html.feedback-redact .blame-line {
 }
 
 .window.app .section.section-branches {
-  padding: 6px 8px 2px;
+  padding: 4px 8px 2px;
 }
-/* #110 a hairline above Remotes so the two lists read as separate blocks */
-.window.app .section.section-branches + .section.section-branches {
-  border-top: 1px solid var(--hairline);
-  margin-top: 4px;
-  padding-top: 6px;
-}
-/* #107 three columns (caret · name · count): the count no longer wraps under the caret */
+/* caret · icon · name · count — GitKraken-style accordion headers */
 .window.app .panel .branch-toggle {
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  min-height: 28px;
-  padding: 3px 6px 3px 8px;
+  grid-template-columns: 14px 16px minmax(0, 1fr) auto;
+  min-height: 26px;
+  padding: 2px 6px 2px 6px;
 }
 .window.app .panel .branch-toggle .mark {
-  color: var(--ink);
+  color: var(--ink-muted);
 }
 .window.app .panel .branch-toggle .name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink); /* #75 / #110 headers stand out when eye-scanning */
 }
@@ -1634,6 +1673,17 @@ html.feedback-redact .blame-line {
 .window.app .panel .branch-head .branch-toggle {
   flex: 1;
   min-width: 0;
+}
+.window.app .panel .branch-head .iconbtn.add {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+.window.app .panel .branch-head .iconbtn.add:hover {
+  background: var(--surface-3);
+  color: var(--ink);
 }
 .window.app .panel .branch-vs-wrap {
   position: relative;
