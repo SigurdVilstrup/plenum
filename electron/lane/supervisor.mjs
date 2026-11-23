@@ -2,18 +2,23 @@ import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { git } from '../git/run.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
 import { driftError, listPendingMigrations, usesSharedData } from './drift.mjs';
 import { manifestPath, runDir } from '../paths.mjs';
 
+const LOG_TEE = fileURLToPath(new URL('./log-tee.mjs', import.meta.url));
+
 const LOG_LINES = 200;
+const DISPLAY_LOG_LINES = 500;
+const LOG_TAIL_BYTES = 512 * 1024;
 const TEST_LOG_LINES = 50;
 const TEST_TIMEOUT_MS = 10 * 60 * 1000;
 const RUN_DIR = runDir();
 
-/** In-process child handles + logs (not shared across CLI/Electron). */
-/** @type {Map<string, { child: import('node:child_process').ChildProcess, logs: { stdout: string[], stderr: string[] }, pid: number, root: string, laneIndex: number }>} */
+/** In-process child handles (run logs live on disk — survive CLI exit). */
+/** @type {Map<string, { child: import('node:child_process').ChildProcess, logs: { stdout: string[], stderr: string[] }, pid: number, root: string, laneIndex: number, command?: string }>} */
 const children = new Map();
 /** @type {Map<string, { ok: boolean, code: number|null, at: number, log: string[] }>} */
 const lastTests = new Map();
@@ -30,10 +35,70 @@ function procKey(root, laneIndex) {
   return `${absRoot(root)}#${laneIndex}`;
 }
 
+function rootHash(root) {
+  return crypto.createHash('sha256').update(absRoot(root)).digest('hex').slice(0, 16);
+}
+
 /** Shared pid registry path for a repo root (CLI + Electron). */
 export function registryPathFor(root) {
-  const hash = crypto.createHash('sha256').update(absRoot(root)).digest('hex').slice(0, 16);
-  return path.join(RUN_DIR, `${hash}.json`);
+  return path.join(RUN_DIR, `${rootHash(root)}.json`);
+}
+
+/** Per-lane run log path (stdout+stderr merged; survives CLI exit via inherited FD). */
+export function logPathFor(root, laneIndex) {
+  return path.join(RUN_DIR, `${rootHash(root)}-${Number(laneIndex)}.log`);
+}
+
+function logMetaPath(root, laneIndex) {
+  return path.join(RUN_DIR, `${rootHash(root)}-${Number(laneIndex)}.meta.json`);
+}
+
+function writeLogMeta(root, laneIndex, meta) {
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+  fs.writeFileSync(logMetaPath(root, laneIndex), JSON.stringify(meta));
+}
+
+function readLogMeta(root, laneIndex) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(logMetaPath(root, laneIndex), 'utf8'));
+    if (raw && typeof raw === 'object') return raw;
+  } catch { /* missing */ }
+  return null;
+}
+
+/**
+ * Tail last N lines from a log file without loading the whole file.
+ * @param {string} file
+ * @param {number} maxLines
+ */
+function tailLogLines(file, maxLines = DISPLAY_LOG_LINES) {
+  if (!fs.existsSync(file)) return { lines: [], truncated: false };
+  let stat;
+  try {
+    stat = fs.statSync(file);
+  } catch {
+    return { lines: [], truncated: false };
+  }
+  if (!stat.size) return { lines: [], truncated: false };
+
+  const readBytes = Math.min(stat.size, LOG_TAIL_BYTES);
+  const buf = Buffer.alloc(readBytes);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, buf, 0, readBytes, stat.size - readBytes);
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  let text = buf.toString('utf8');
+  if (stat.size > readBytes) {
+    const nl = text.indexOf('\n');
+    if (nl >= 0) text = text.slice(nl + 1);
+  }
+  const all = text.split(/\r?\n/);
+  if (all.length && all.at(-1) === '') all.pop();
+  const truncated = all.length > maxLines || stat.size > readBytes;
+  return { lines: all.slice(-maxLines), truncated };
 }
 
 function readReg(root) {
@@ -79,7 +144,9 @@ function snapshot(stored, local, { running } = {}) {
     pid: stored.pid,
     startedAt: stored.startedAt,
     urls: stored.urls ?? {},
+    command: stored.command || local?.command || '',
     running: isRunning,
+    // Run output lives in logPathFor; keep empty rings so board payloads stay light.
     logs: {
       stdout: local?.logs?.stdout?.slice() ?? [],
       stderr: local?.logs?.stderr?.slice() ?? [],
@@ -99,6 +166,7 @@ function getStored(root, laneIndex) {
       pid: raw.pid,
       startedAt: raw.startedAt,
       urls: raw.urls ?? {},
+      command: raw.command ?? '',
     },
   };
 }
@@ -109,6 +177,7 @@ function setStored(root, laneIndex, entry) {
     pid: entry.pid,
     startedAt: entry.startedAt,
     urls: entry.urls ?? {},
+    command: entry.command ?? '',
   };
   writeReg(root, data);
 }
@@ -141,6 +210,47 @@ export function getProc(root, laneIndex) {
 /** Last one-shot test result for board / IPC. */
 export function getLastTest(root, laneIndex) {
   return lastTests.get(procKey(root, laneIndex)) ?? null;
+}
+
+/**
+ * Read the durable run log for a lane (file-backed; works after CLI `up` exits).
+ * @param {string} root
+ * @param {number} laneIndex
+ * @param {{ maxLines?: number }} [opts]
+ */
+export function readLogs(root, laneIndex, { maxLines = DISPLAY_LOG_LINES } = {}) {
+  const top = absRoot(root);
+  const file = logPathFor(top, laneIndex);
+  const { lines, truncated } = tailLogLines(file, maxLines);
+  const proc = getProc(top, laneIndex);
+  const meta = readLogMeta(top, laneIndex);
+  return {
+    running: proc?.running ?? false,
+    pid: proc?.pid ?? meta?.pid ?? null,
+    startedAt: proc?.startedAt ?? meta?.startedAt ?? null,
+    command: proc?.command || meta?.command || '',
+    lines,
+    truncated,
+  };
+}
+
+/**
+ * Truncate the durable log in place (running child keeps writing to the same inode).
+ * Meta (command / pid) is kept.
+ * @param {string} root
+ * @param {number} laneIndex
+ */
+export function clearLogs(root, laneIndex) {
+  const top = absRoot(root);
+  const file = logPathFor(top, laneIndex);
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+  try {
+    if (fs.existsSync(file)) fs.truncateSync(file, 0);
+    else fs.writeFileSync(file, '');
+  } catch (err) {
+    throw new Error(`Couldn’t clear log: ${err.message || err}`);
+  }
+  return readLogs(top, laneIndex);
 }
 
 async function prepareLane(root, laneIndex) {
@@ -239,12 +349,17 @@ export async function up(root, laneIndex, { force = false } = {}) {
 
   await runSnapshots(manifest, cwd, ctx, env);
 
-  const child = spawn(renderTemplate(String(manifest.run), ctx), {
-    shell: true,
+  // Durable timestamped log via log-tee (survives CLI `up` exit). Truncate only on new spawn.
+  const command = renderTemplate(String(manifest.run), ctx);
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+  const logFile = logPathFor(top, laneIndex);
+  fs.writeFileSync(logFile, '');
+  const child = spawn(process.execPath, [LOG_TEE, logFile, command], {
+    shell: false,
     detached: true,
     cwd,
     env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: 'ignore',
   });
 
   await new Promise((resolve, reject) => {
@@ -272,11 +387,8 @@ export async function up(root, laneIndex, { force = false } = {}) {
     pid: child.pid,
     root: top,
     laneIndex,
+    command,
   };
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (d) => pushLog(local.logs.stdout, d));
-  child.stderr.on('data', (d) => pushLog(local.logs.stderr, d));
   child.on('error', () => {
     if (children.get(key) === local) children.delete(key);
     clearStored(top, laneIndex);
@@ -287,13 +399,11 @@ export async function up(root, laneIndex, { force = false } = {}) {
   });
 
   children.set(key, local);
-  setStored(top, laneIndex, { pid: child.pid, startedAt, urls });
-  // CLI must exit after up; unref child + pipes so they don't pin the event loop.
-  // Electron stays alive via app - pipes still deliver log data after unref.
+  setStored(top, laneIndex, { pid: child.pid, startedAt, urls, command });
+  writeLogMeta(top, laneIndex, { pid: child.pid, startedAt, command });
+  // CLI must exit after up; unref so the child does not pin the event loop.
   child.unref();
-  child.stdout.unref();
-  child.stderr.unref();
-  return snapshot({ root: top, laneIndex, pid: child.pid, startedAt, urls }, local, { running: true });
+  return snapshot({ root: top, laneIndex, pid: child.pid, startedAt, urls, command }, local, { running: true });
 }
 
 /**

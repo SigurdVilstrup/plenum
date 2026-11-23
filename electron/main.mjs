@@ -761,6 +761,8 @@ ipcMain.handle('lane.down', (_e, ...args) => withRoot(async (root, idx) => {
   return loadBoard(root);
 }, ...args));
 ipcMain.handle('lane.status', (_e, ...args) => withRoot((root, idx) => supervisor.getProc(root, idx), ...args));
+ipcMain.handle('lane.logs', (_e, ...args) => withRoot((root, idx) => supervisor.readLogs(root, idx), ...args));
+ipcMain.handle('lane.clearLogs', (_e, ...args) => withRoot((root, idx) => supervisor.clearLogs(root, idx), ...args));
 ipcMain.handle('lane.test', (_e, ...args) => withRoot(async (root, idx) => {
   await supervisor.test(root, idx);
   return loadBoard(root);

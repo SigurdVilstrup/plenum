@@ -83,6 +83,8 @@ const state = {
   /** Remote path folders start collapsed (#62); keys here are the ones the user opened. */
   openRemoteFolders: new Set(),
   changes: null, // { kind:'wip', laneIndex } | { kind:'commit', sha }
+  runLog: null, // { laneIndex } | null — bottom drawer; independent of changes
+  runLogStick: true, // auto-scroll to bottom unless user scrolled up
   branchFilter: '', // #69 panel filter across lanes, worktrees, local + remote
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
@@ -148,6 +150,7 @@ const el = {
   panel: document.getElementById('panel'),
   main: document.getElementById('main'),
   changes: document.getElementById('changes'),
+  runLog: document.getElementById('run-log'),
   fileStage: document.getElementById('file-stage'),
   settings: document.getElementById('settings'),
   settingsNav: document.getElementById('settings-nav'),
@@ -646,6 +649,7 @@ function resetViewChrome() {
   el.fileStage.hidden = true;
   el.fileStage.innerHTML = '';
   el.body.classList.remove('with-file-pane');
+  closeRunLog();
 }
 
 function restoreViewChrome(entry) {
@@ -983,11 +987,13 @@ function paint() {
   el.body.classList.toggle('branch-overview-open', overviewOpen);
   if (state.settings.open) {
     // Settings owns the body; the board repaints on close.
+    closeRunLog();
     for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
     if (el.branchOverview) el.branchOverview.hidden = true;
     return;
   }
   if (overviewOpen) {
+    closeRunLog();
     for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
     renderBranchOverview();
     return;
@@ -1002,6 +1008,7 @@ function paint() {
     el.panel.hidden = true;
     el.main.hidden = true;
     closeChanges();
+    closeRunLog();
     return;
   }
   if (!state.board) {
@@ -1010,6 +1017,7 @@ function paint() {
     el.panel.hidden = true;
     el.main.hidden = true;
     closeChanges();
+    closeRunLog();
     el.loading.hidden = false;
     if (!state.loading) {
       el.loadingTitle.textContent = 'Opening repository…';
@@ -1026,6 +1034,8 @@ function paint() {
   paintHeader();
   paintBoardGraph();
   if (state.changes) paintChanges();
+  // Drawer picks its own lane via the header select — do not snap to board selection.
+  if (state.runLog) paintRunLog().catch(() => {});
   const op = state.opsByTab.get(state.store.activeId);
   if (op?.act) setActionBusy(op.act, true);
 }
@@ -2124,6 +2134,8 @@ function laneRunHTML(l) {
     ? `Test · last ${l.lastTest.ok ? 'passed' : 'failed'}`
     : 'Run tests';
   const services = `<button class="iconbtn" type="button" data-act="servicesMenu" aria-haspopup="menu" title="Open a service">${iconHTML('globe-simple')}${iconHTML('caret-down', 'sm')}</button>`;
+  const logOpen = state.runLog?.laneIndex === l.index;
+  const logs = `<button class="iconbtn${logOpen ? ' log-open' : ''}" type="button" data-act="logs" title="Run log" aria-label="Run log" aria-pressed="${logOpen ? 'true' : 'false'}">${iconHTML('terminal-window')}</button>`;
   const dataTitle = l.dataMode === 'snapshot'
     ? 'Snapshot data: seeds its own copy via services.*.snapshot before Start.'
     : 'Shared data: local throwaway DBs shared across lanes — not staging or production.';
@@ -2137,6 +2149,7 @@ function laneRunHTML(l) {
     ${runToggle}
     <button class="iconbtn" type="button" data-act="test" title="${esc(testTitle)}" aria-label="Test">${iconHTML('flask')}</button>
     ${services}
+    ${logs}
     ${dataIcon}
     ${finish}
   </div>`;
@@ -2291,6 +2304,13 @@ async function handleAction(act, lane, url) {
     }
     if (act === 'down') {
       return runGit('lane.down', lane.index, `Stopped ${lane.name}`, 'down');
+    }
+    if (act === 'logs') {
+      // Select first so paint() retarget does not snap back to the prior lane.
+      state.selectedLane = lane.index;
+      toggleRunLog(lane.index);
+      paint();
+      return;
     }
     if (act === 'test') {
       const tabId = beginOp('test');
@@ -3210,6 +3230,7 @@ function openLaneCtxMenu(x, y, lane) {
   if (lane.runnable && (lane.prepared !== false || lane.isPrimary)) {
     if (lane.running) add('Stop', () => handleAction('down', lane));
     else add('Start', () => handleAction('up', lane));
+    add('Run log', () => handleAction('logs', lane));
   }
   if (!lane.isPrimary) {
     if (lane.prepared === false && lane.runnable) add('Repair', () => handleAction('repair', lane));
@@ -3684,6 +3705,304 @@ function closeChanges() {
   el.changes.innerHTML = '';
   el.body.classList.remove('with-changes');
   clearFileStage();
+}
+
+/** @type {ReturnType<typeof setInterval> | null} */
+let runLogTimer = null;
+let runLogPaintGen = 0;
+const RUN_LOG_H_KEY = 'plenum.runLogHeight';
+const RUN_LOG_H_DEFAULT = 180;
+const RUN_LOG_H_MIN = 100;
+
+function runLogHeightMax() {
+  return Math.max(RUN_LOG_H_MIN + 40, Math.round(window.innerHeight * 0.7));
+}
+
+function clampRunLogHeight(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return RUN_LOG_H_DEFAULT;
+  return Math.round(Math.min(runLogHeightMax(), Math.max(RUN_LOG_H_MIN, v)));
+}
+
+function readRunLogHeight() {
+  try {
+    return clampRunLogHeight(localStorage.getItem(RUN_LOG_H_KEY) || RUN_LOG_H_DEFAULT);
+  } catch {
+    return RUN_LOG_H_DEFAULT;
+  }
+}
+
+function applyRunLogHeight(px = readRunLogHeight()) {
+  const h = clampRunLogHeight(px);
+  document.documentElement.style.setProperty('--run-log-h', `${h}px`);
+  return h;
+}
+
+function persistRunLogHeight(px) {
+  const h = applyRunLogHeight(px);
+  try { localStorage.setItem(RUN_LOG_H_KEY, String(h)); } catch { /* session only */ }
+  return h;
+}
+
+function closeRunLog() {
+  state.runLog = null;
+  state.runLogStick = true;
+  runLogPaintGen += 1;
+  if (runLogTimer) {
+    clearInterval(runLogTimer);
+    runLogTimer = null;
+  }
+  if (el.runLog) {
+    el.runLog.hidden = true;
+    el.runLog.innerHTML = '';
+  }
+  el.body?.classList.remove('with-run-log');
+}
+
+function openRunLog(laneIndex) {
+  const idx = Number(laneIndex);
+  const retarget = state.runLog && state.runLog.laneIndex !== idx;
+  state.runLog = { laneIndex: idx };
+  state.runLogStick = true;
+  applyRunLogHeight();
+  el.body.classList.add('with-run-log');
+  if (el.runLog) el.runLog.hidden = false;
+  if (runLogTimer) clearInterval(runLogTimer);
+  runLogTimer = setInterval(() => { paintRunLog().catch(() => {}); }, 750);
+  paintRunLog({ loading: true, force: retarget || !el.runLog?.querySelector('.run-log-body') }).catch(() => {});
+}
+
+function toggleRunLog(laneIndex) {
+  if (state.runLog && state.runLog.laneIndex === Number(laneIndex)) {
+    closeRunLog();
+    return;
+  }
+  openRunLog(laneIndex);
+}
+
+function runLogNearBottom(node, px = 24) {
+  if (!node) return true;
+  return node.scrollHeight - node.scrollTop - node.clientHeight < px;
+}
+
+function runLogLaneOptions(cur) {
+  const lanes = (state.board?.lanes || []).filter((l) => l.runnable && (l.prepared !== false || l.isPrimary));
+  const list = lanes.length ? lanes : (state.board?.lanes || []);
+  return list.map((l) =>
+    `<option value="${l.index}"${Number(l.index) === Number(cur) ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
+}
+
+/** Start/Stop · Test · services — same as the lane panel row, for the drawer header. */
+function runLogActsHTML(l) {
+  if (!l?.runnable) return '';
+  if (l.prepared === false && !l.isPrimary) {
+    return `<div class="run-log-acts lane-run"><button class="btn" type="button" data-act="repair" title="Repair">${iconHTML('gear-six', 'sm')}Repair</button></div>`;
+  }
+  const runToggle = l.running
+    ? `<button class="iconbtn danger" type="button" data-act="down" title="Stop" aria-label="Stop">${iconHTML('stop')}</button>`
+    : `<button class="iconbtn primary" type="button" data-act="up" title="Start" aria-label="Start">${iconHTML('play')}</button>`;
+  const testTitle = l.lastTest
+    ? `Test · last ${l.lastTest.ok ? 'passed' : 'failed'}`
+    : 'Run tests';
+  const services = `<button class="iconbtn" type="button" data-act="servicesMenu" aria-haspopup="menu" title="Open a service">${iconHTML('globe-simple')}${iconHTML('caret-down', 'sm')}</button>`;
+  return `<div class="run-log-acts lane-run">${runToggle}<button class="iconbtn" type="button" data-act="test" title="${esc(testTitle)}" aria-label="Test">${iconHTML('flask')}</button>${services}</div>`;
+}
+
+function bindRunLogActs() {
+  const lane = laneByIndex(state.runLog?.laneIndex);
+  if (!lane || !el.runLog) return;
+  el.runLog.querySelectorAll('.run-log-acts [data-act]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.act === 'servicesMenu') {
+        openServicesMenu(btn, lane);
+        return;
+      }
+      handleAction(btn.dataset.act, lane, btn.dataset.url);
+    });
+  });
+}
+
+function bindRunLogResize(handle) {
+  if (!handle || handle.dataset.bound === '1') return;
+  handle.dataset.bound = '1';
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startH = readRunLogHeight();
+    handle.classList.add('is-active');
+    document.body.classList.add('is-row-resizing');
+    const onMove = (ev) => {
+      // Dragging the top edge up grows the drawer.
+      persistRunLogHeight(startH + (startY - ev.clientY));
+    };
+    const onUp = () => {
+      handle.classList.remove('is-active');
+      document.body.classList.remove('is-row-resizing');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  });
+  handle.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    persistRunLogHeight(RUN_LOG_H_DEFAULT);
+  });
+}
+
+async function paintRunLog({ loading = false, force = false } = {}) {
+  if (!state.runLog || !el.runLog) return;
+  const gen = ++runLogPaintGen;
+  const laneIndex = state.runLog.laneIndex;
+
+  const shell = (bodyHtml, metaHtml = '', actsHtml = '') => `
+    <i class="run-log-resize" data-run-log-resize title="Drag to resize · double-click to reset" aria-hidden="true"></i>
+    <div class="run-log-head">
+      <div class="title">Run log</div>
+      <label class="run-log-lane">
+        <select class="select mono" data-run-log-lane aria-label="Lane">${runLogLaneOptions(laneIndex)}</select>
+      </label>
+      ${metaHtml}
+      <span class="spacer"></span>
+      ${actsHtml}
+      <button class="btn" type="button" data-clear-run-log title="Clear log">Clear</button>
+      <button class="iconbtn" type="button" data-close-run-log title="Close" aria-label="Close">${iconHTML('x')}</button>
+    </div>
+    ${bodyHtml}`;
+
+  const bindChrome = () => {
+    bindRunLogResize(el.runLog.querySelector('[data-run-log-resize]'));
+    enhanceSelects(el.runLog);
+    bindRunLogActs();
+    el.runLog.querySelector('[data-close-run-log]')?.addEventListener('click', () => {
+      closeRunLog();
+      paint();
+    });
+    el.runLog.querySelector('[data-clear-run-log]')?.addEventListener('click', async () => {
+      try {
+        await invoke('lane.clearLogs', ...pin(state.runLog.laneIndex));
+        state.runLogStick = true;
+        await paintRunLog({ force: true });
+      } catch (err) {
+        toast(String(err?.message || err || 'Couldn’t clear log'), 'bad');
+      }
+    });
+    el.runLog.querySelector('[data-run-log-lane]')?.addEventListener('change', (e) => {
+      const next = Number(e.target.value);
+      if (!Number.isFinite(next) || next === state.runLog?.laneIndex) return;
+      openRunLog(next);
+      paint();
+    });
+  };
+
+  const lane = laneByIndex(laneIndex);
+  const actsHtml = () => runLogActsHTML(laneByIndex(state.runLog?.laneIndex) || lane);
+
+  if (loading || force) {
+    el.runLog.innerHTML = shell(`<div class="run-log-body is-empty">Loading…</div>`, '', actsHtml());
+    bindChrome();
+  }
+
+  let data;
+  try {
+    data = await invoke('lane.logs', ...pin(laneIndex));
+  } catch (err) {
+    if (gen !== runLogPaintGen || !state.runLog) return;
+    toast(String(err?.message || err || 'Couldn’t read log file'), 'bad');
+    el.runLog.innerHTML = shell(`<div class="run-log-body is-empty">Couldn’t read log file.</div>`, '', actsHtml());
+    bindChrome();
+    return;
+  }
+  if (gen !== runLogPaintGen || !state.runLog || state.runLog.laneIndex !== laneIndex) return;
+
+  const lines = data?.lines || [];
+  const boardLane = laneByIndex(laneIndex);
+  const running = !!(boardLane?.running ?? data?.running);
+  const truncated = !!data?.truncated;
+  const cmd = data?.command ? String(data.command) : '';
+  const pid = data?.pid != null ? `pid ${data.pid}` : '';
+  const status = running ? 'running' : (lines.length || cmd ? 'stopped' : '');
+  const metaBits = [
+    status || pid || cmd || truncated
+      ? `<span class="dot${running ? ' on' : ''}" aria-hidden="true"></span>`
+      : '',
+    status,
+    pid,
+    cmd,
+    truncated ? 'Last 500 lines' : '',
+  ].filter(Boolean);
+  const metaHtml = metaBits.length
+    ? `<span class="run-log-meta" title="${esc([pid, cmd].filter(Boolean).join(' · '))}">${metaBits.map((b, i) => (i === 0 ? b : esc(b))).join(' · ')}</span>`
+    : '';
+  const acts = runLogActsHTML(boardLane);
+
+  const body = el.runLog.querySelector('.run-log-body');
+  const stick = state.runLogStick || runLogNearBottom(body);
+  const jump = !stick && lines.length
+    ? `<button class="btn run-log-jump" type="button" data-jump-log>Jump to latest</button>`
+    : '';
+
+  const formatLogLine = (l) => {
+    const m = String(l).match(/^(\d{2}:\d{2}:\d{2}) (.*)$/s);
+    if (!m) return esc(l);
+    return `<span class="ts">${esc(m[1])}</span> ${esc(m[2])}`;
+  };
+  let bodyHtml;
+  if (!lines.length) {
+    bodyHtml = `<div class="run-log-body is-empty">No output yet.<br/>Start the lane to capture the run log.</div>${jump}`;
+  } else {
+    bodyHtml = `<div class="run-log-body">${lines.map(formatLogLine).join('\n')}</div>${jump}`;
+  }
+
+  const prev = body?.textContent || '';
+  const nextText = lines.length ? lines.join('\n') : 'No output yet.\nStart the lane to capture the run log.';
+  const needShell = !el.runLog.querySelector('.run-log-head');
+  const laneSel = el.runLog.querySelector('[data-run-log-lane]');
+  const laneSelOk = laneSel && Number(laneSel.value) === Number(laneIndex);
+  const actsNode = el.runLog.querySelector('.run-log-acts');
+  const wantDown = !!boardLane?.running;
+  const haveDown = !!el.runLog.querySelector('.run-log-acts [data-act="down"]');
+  const runToggleStale = !!acts && (!actsNode || wantDown !== haveDown);
+
+  if (needShell || !laneSelOk || prev !== nextText || !!el.runLog.querySelector('[data-jump-log]') !== !!jump || runToggleStale) {
+    el.runLog.innerHTML = shell(bodyHtml, metaHtml, acts);
+    const nextBody = el.runLog.querySelector('.run-log-body');
+    nextBody?.addEventListener('scroll', () => {
+      state.runLogStick = runLogNearBottom(nextBody);
+    }, { passive: true });
+    bindChrome();
+    el.runLog.querySelector('[data-jump-log]')?.addEventListener('click', () => {
+      state.runLogStick = true;
+      const b = el.runLog.querySelector('.run-log-body');
+      if (b) b.scrollTop = b.scrollHeight;
+      paintRunLog().catch(() => {});
+    });
+    if (stick && nextBody && !nextBody.classList.contains('is-empty')) {
+      nextBody.scrollTop = nextBody.scrollHeight;
+    } else if (!stick && body && nextBody && !nextBody.classList.contains('is-empty')) {
+      nextBody.scrollTop = body.scrollTop;
+    }
+  } else {
+    const headMeta = el.runLog.querySelector('.run-log-meta');
+    const afterLane = el.runLog.querySelector('.run-log-lane');
+    if (metaHtml) {
+      if (headMeta) headMeta.outerHTML = metaHtml;
+      else afterLane?.insertAdjacentHTML('afterend', metaHtml);
+    } else if (headMeta) {
+      headMeta.remove();
+    }
+    if (actsNode) {
+      actsNode.outerHTML = acts;
+      bindRunLogActs();
+    }
+    if (stick && body) body.scrollTop = body.scrollHeight;
+  }
 }
 
 function jumpToCommitOnGraph(sha) {
@@ -6367,6 +6686,7 @@ function paletteCommands() {
     { id: 'conflicts', label: 'Resolve conflicts…', run: () => handleAction('conflicts', lane), when: !!lane },
     { id: 'up', label: 'Start lane', run: () => handleAction('up', lane), when: lane && lane.runnable && !lane.running && (lane.prepared !== false || lane.isPrimary) },
     { id: 'down', label: 'Stop lane', run: () => handleAction('down', lane), when: lane && lane.running },
+    { id: 'logs', label: 'Run log', run: () => handleAction('logs', lane), when: lane && lane.runnable && (lane.prepared !== false || lane.isPrimary) },
     { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && lane.runnable && (lane.prepared !== false || lane.isPrimary) },
     { id: 'repair', label: 'Repair lane', run: () => handleAction('repair', lane), when: lane && !lane.isPrimary && lane.runnable && lane.prepared === false },
     { id: 'reveal', label: 'Reveal in Finder', run: () => handleAction('reveal', lane), when: !!lane },
@@ -6474,6 +6794,7 @@ document.addEventListener('keydown', (e) => {
       paintChanges();
     }
     else if (state.changes) { closeChanges(); paint(); }
+    else if (state.runLog) { closeRunLog(); paint(); }
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 's' && state.settings.open && state.settings.page === 'lane') {
     e.preventDefault();
@@ -6860,6 +7181,7 @@ async function startNudges() {
 }
 
 async function boot() {
+  applyRunLogHeight();
   if (api) {
     try {
       state.prefs = await invoke('prefs.get');

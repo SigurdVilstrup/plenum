@@ -1416,6 +1416,7 @@ html.feedback-redact .blame-line {
 :root {
   --rail-w: 300px;
   --changes-w: min(380px, 40vw);
+  --run-log-h: 180px;
 }
 
 /* Column / rail drag handles — hairline on hover, primary while dragging */
@@ -1508,6 +1509,147 @@ body.is-col-resizing * {
   border-left: 1px solid var(--hairline-strong);
   background: var(--surface-1);
   min-width: 0;
+}
+.window.app .body.with-run-log {
+  grid-template-rows: auto minmax(0, 1fr) var(--run-log-h);
+}
+.window.app .body.with-run-log #run-log {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-top: 1px solid var(--hairline-strong);
+  background: var(--surface-1);
+  z-index: 2;
+}
+.window.app #run-log[hidden] {
+  display: none !important;
+}
+.window.app .run-log-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 4;
+}
+.window.app .run-log-resize.is-active,
+.window.app .run-log-resize:hover {
+  background: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+body.is-row-resizing {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+body.is-row-resizing * {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+.window.app .run-log-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+.window.app .run-log-head .title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.window.app .run-log-lane {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 220px;
+}
+.window.app .run-log-lane .select,
+.window.app .run-log-lane .pl-select {
+  min-width: 0;
+  max-width: 220px;
+}
+.window.app .run-log-lane .pl-select-trigger {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: var(--surface-2);
+}
+.window.app .run-log-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.window.app .run-log-meta .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+.window.app .run-log-meta .dot.on {
+  background: var(--success);
+}
+.window.app .run-log-head .spacer { flex: 1; }
+.window.app .run-log-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.window.app .run-log-acts.lane-run {
+  margin: 0;
+  padding: 0;
+  flex-wrap: nowrap;
+}
+.window.app .run-log-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.window.app .run-log-body .ts {
+  color: var(--ink-tertiary);
+  user-select: none;
+}
+.window.app .run-log-body.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--ink-tertiary);
+  white-space: normal;
+}
+.window.app .run-log-jump {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 1;
+}
+.window.app #run-log {
+  position: relative;
+}
+.window.app .lane-run .iconbtn.log-open {
+  color: var(--primary);
+  background: var(--primary-bg);
+  outline: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
 }
 .window.app .panel {
   min-height: 0;

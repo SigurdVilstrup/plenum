@@ -12,7 +12,7 @@ const ALLOWED = new Set([
   'branch.checkout', 'branch.update', 'branch.push', 'branch.rename', 'branch.delete', 'branch.overview',
   'lane.conflictStage', 'lane.conflictContinue', 'lane.conflictAbort',
   'lane.stash', 'lane.stashPop', 'lane.stashShow',
-  'lane.up', 'lane.down', 'lane.test', 'lane.status',
+  'lane.up', 'lane.down', 'lane.test', 'lane.status', 'lane.logs', 'lane.clearLogs',
   'commit.changes', 'file.workingDiff', 'file.workingShow',
   'file.diff', 'file.history', 'file.blame', 'file.show',
   'accounts.list', 'accounts.setHttps', 'accounts.removeHttps',

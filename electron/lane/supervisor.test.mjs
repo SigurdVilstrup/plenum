@@ -368,3 +368,102 @@ test('up skips drift gate when all services are snapshot', async () => {
     fs.rmSync(wt, { recursive: true, force: true });
   }
 });
+
+test('readLogs tails durable file and keeps content after down', async () => {
+  const run = 'node -e "process.stdout.write(\'hello-log\\n\'); process.stderr.write(\'warn-line\\n\'); setInterval(()=>{}, 1000)"';
+  const { root, wt } = await fixture({ run });
+  try {
+    await supervisor.up(root, 1);
+    let logs = { lines: [] };
+    for (let i = 0; i < 80; i++) {
+      logs = supervisor.readLogs(root, 1);
+      if (logs.lines.some((l) => l.includes('hello-log'))) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(logs.running);
+    assert.ok(logs.lines.some((l) => l.includes('hello-log')));
+    assert.ok(logs.lines.some((l) => l.includes('warn-line')));
+    assert.ok(logs.lines.some((l) => /^\d{2}:\d{2}:\d{2} /.test(l)), 'lines are timestamp-prefixed');
+    assert.match(String(logs.command), /hello-log|node/);
+
+    const logFile = supervisor.logPathFor(root, 1);
+    assert.ok(fs.existsSync(logFile));
+
+    await supervisor.down(root, 1);
+    const after = supervisor.readLogs(root, 1);
+    assert.equal(after.running, false);
+    assert.ok(after.lines.some((l) => l.includes('hello-log')));
+    assert.ok(after.command);
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('new up truncates prior run log; idempotent up does not', async () => {
+  const runA = 'node -e "console.log(\'FIRST-RUN-MARKER\'); setInterval(()=>{}, 1000)"';
+  const { root, wt } = await fixture({ run: runA });
+  try {
+    const first = await supervisor.up(root, 1);
+    for (let i = 0; i < 80; i++) {
+      const logs = supervisor.readLogs(root, 1);
+      if (logs.lines.some((l) => l.includes('FIRST-RUN-MARKER'))) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(supervisor.readLogs(root, 1).lines.some((l) => l.includes('FIRST-RUN-MARKER')));
+
+    const again = await supervisor.up(root, 1);
+    assert.equal(again.pid, first.pid);
+    assert.ok(supervisor.readLogs(root, 1).lines.some((l) => l.includes('FIRST-RUN-MARKER')));
+
+    await supervisor.down(root, 1);
+    fs.writeFileSync(
+      path.join(root, '.plenum', 'lane.yaml'),
+      [
+        'version: 1',
+        'run: node -e "console.log(\'SECOND-RUN-MARKER\'); setInterval(()=>{}, 1000)"',
+        'test: node -e "process.exit(0)"',
+        'ports:',
+        '  offset: 100',
+        '  expose:',
+        '    web: 5001',
+        '',
+      ].join('\n'),
+    );
+    await supervisor.up(root, 1);
+    let second = { lines: [] };
+    for (let i = 0; i < 80; i++) {
+      second = supervisor.readLogs(root, 1);
+      if (second.lines.some((l) => l.includes('SECOND-RUN-MARKER'))) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(second.lines.some((l) => l.includes('SECOND-RUN-MARKER')));
+    assert.equal(second.lines.some((l) => l.includes('FIRST-RUN-MARKER')), false);
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
+
+test('clearLogs truncates durable file while keeping meta', async () => {
+  const run = 'node -e "console.log(\'KEEP-THEN-CLEAR\'); setInterval(()=>{}, 1000)"';
+  const { root, wt } = await fixture({ run });
+  try {
+    await supervisor.up(root, 1);
+    for (let i = 0; i < 80; i++) {
+      if (supervisor.readLogs(root, 1).lines.some((l) => l.includes('KEEP-THEN-CLEAR'))) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.ok(supervisor.readLogs(root, 1).lines.some((l) => l.includes('KEEP-THEN-CLEAR')));
+    const cleared = supervisor.clearLogs(root, 1);
+    assert.equal(cleared.lines.length, 0);
+    assert.ok(cleared.command);
+    assert.equal(fs.readFileSync(supervisor.logPathFor(root, 1), 'utf8'), '');
+  } finally {
+    try { await supervisor.down(root, 1); } catch { /* already down */ }
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(wt, { recursive: true, force: true });
+  }
+});
