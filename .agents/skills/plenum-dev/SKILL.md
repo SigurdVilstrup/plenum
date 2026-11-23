@@ -144,3 +144,4 @@ node <skill>/scripts/squash-draft.mjs <lane> --check
 - Squash messages that list every WIP commit instead of stating the added feature.
 - Commit messages that would embarrass the project on a public changelog.
 - Merging without asking now-or-wait.
+- Cutting a desktop release without `.agents/skills/plenum-release` / `npm run release:check` (OTA must stay alive — a broken update cannot be fixed over the air).

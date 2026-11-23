@@ -60,6 +60,19 @@ jobs:
         # APPLE_API_KEY is the file path from the previous step (GITHUB_ENV).
         run: npm run build && npx electron-builder --mac --publish never
 
+      # OTA self-heal: if this build cannot launch or update, we cannot fix the fleet.
+      - name: OTA survival smoke (launch + updater + feed artifacts)
+        run: |
+          set -euo pipefail
+          APP=$(find release -type d -name 'Plenum.app' | head -1)
+          test -n "$APP"
+          node .agents/skills/plenum-release/scripts/pack-imports-check.mjs --app "$APP"
+          node .agents/skills/plenum-release/scripts/pack-launch-smoke.mjs --app "$APP" --ms 10000
+          node .agents/skills/plenum-release/scripts/ota-health-check.mjs \
+            --app "$APP" \
+            --artifacts release \
+            --live-feed
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

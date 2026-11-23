@@ -40,6 +40,7 @@ Protected (index 0) uses base ports (`8000`). Lane 1 gets `web` on `8100` (`8000
 | `npm run smoke:init` | Fresh multi-worktree fixture with a local bare remote |
 | `npm start` | Production build + Electron |
 | `npm run pack` | Unsigned `Plenum.app` in `release/mac*` |
+| `npm run release:check` | Tests + pack + launch + OTA/updater invariants (required before tagging) |
 | `npm run dist` | Same + `.dmg` + updater `.zip` / `latest-mac.yml` |
 | `npm run icons` | Rebuild `build/icon.icns` from `branding/app-icon-1024.png` |
 | `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |

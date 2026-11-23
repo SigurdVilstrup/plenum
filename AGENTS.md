@@ -67,6 +67,7 @@ Tools: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.
 ## Skills
 
 - `plenum-dev` — feature vs small-fix lanes, commits-as-updates, plan → review → implement → subagent tests → squash ask. See `.agents/skills/plenum-dev/SKILL.md`.
+- `plenum-release` — ship desktop updates without breaking OTA self-heal: `npm run release:check` (pack + launch + updater/feed invariants) before any version tag; CI blocks publish if the loop is broken; verify https://plenum.sh/updates/. See `.agents/skills/plenum-release/SKILL.md`.
 - `avoid-ai-design` — audit/rewrite frontend that reads as generic AI UI. See `.agents/skills/avoid-ai-design/SKILL.md`.
 
 ## Design

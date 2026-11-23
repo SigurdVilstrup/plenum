@@ -10,8 +10,11 @@ reads a **generic** electron-updater feed:
 On each `v*` tag, [`.github/workflows/release.yml`](../.github/workflows/release.yml):
 
 1. Builds Mac `.dmg` + updater `.zip` / `.blockmap` + `latest-mac.yml`
-2. Publishes a GitHub Release (archive / notes)
-3. FTPs the public feed into `FTP_UPDATES_DIR` on your host
+2. OTA survival smoke — packaged launch, updater present in asar, `latest-mac.yml` + zip + blockmap, version not older than the live feed — fails the job before publish if self-heal would break
+3. Publishes a GitHub Release (archive / notes)
+4. FTPs the public feed into `FTP_UPDATES_DIR` on your host
+
+Local preflight (required before tagging): `npm run release:check` — see [`.agents/skills/plenum-release/SKILL.md`](../.agents/skills/plenum-release/SKILL.md). The point is not “asar looks fine”; it is **never ship a build that cannot update itself**.
 
 ### GitHub Actions secrets
 
