@@ -21,6 +21,34 @@ export function ghCandidates(home = process.env.HOME || '') {
   ].filter(Boolean);
 }
 
+/**
+ * Resolve a usable `gh` binary. Bare `gh` is only accepted when PATH actually
+ * contains it — Dock-launched Electron often has a slim PATH, so we fall through
+ * to Homebrew / ~/.local absolute candidates instead of returning `gh` and
+ * dying with spawn ENOENT later.
+ */
+export function resolveGhBin({
+  home = process.env.HOME || '',
+  existsSync = fs.existsSync,
+  pathEnv = process.env.PATH || '',
+  bins = null,
+} = {}) {
+  const list = bins || ghCandidates(home);
+  const ghName = process.platform === 'win32' ? 'gh.exe' : 'gh';
+  for (const b of list) {
+    if (b === 'gh' || b === 'gh.exe') {
+      for (const dir of String(pathEnv).split(path.delimiter)) {
+        if (!dir) continue;
+        const abs = path.join(dir, ghName);
+        if (existsSync(abs)) return abs;
+      }
+      continue;
+    }
+    if (existsSync(b)) return b;
+  }
+  return null;
+}
+
 async function starWithGh(bin, execFileImpl) {
   await execFileImpl(bin, [
     'api',
@@ -41,7 +69,9 @@ export async function starPlenumRepo({
   bins = null,
 } = {}) {
   if (typeof openExternal !== 'function') throw new Error('openExternal required');
-  const list = bins || ghCandidates(home).filter((b) => b === 'gh' || existsSync(b));
+  // Prefer a resolved absolute path; if the caller injects `bins`, try each in order
+  // (tests / overrides) and keep ENOENT fallthrough for missing stubs.
+  const list = bins || [resolveGhBin({ home, existsSync })].filter(Boolean);
   for (const bin of list) {
     try {
       await starWithGh(bin, execFileImpl);

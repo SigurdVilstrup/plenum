@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { ghCandidates, PLENUM_GITHUB } from './github-star.mjs';
+import { resolveGhBin, PLENUM_GITHUB } from './github-star.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -49,18 +49,9 @@ export function feedbackIssueTitle(comment) {
   return c.length > 72 ? `${c.slice(0, 69)}…` : c;
 }
 
-async function resolveGhBin({
-  home = process.env.HOME || '',
-  existsSync = fs.existsSync,
-  bins = null,
-} = {}) {
-  const list = bins || ghCandidates(home).filter((b) => b === 'gh' || existsSync(b));
-  return list[0] || null;
-}
-
 /** True when a `gh` binary is on disk (Dock-launched Electron PATH included). */
 export async function ghFeedbackAvailable(opts = {}) {
-  return Boolean(await resolveGhBin(opts));
+  return Boolean(resolveGhBin(opts));
 }
 
 /**
@@ -70,10 +61,11 @@ export async function ghFeedbackAvailable(opts = {}) {
 export async function createFeedbackIssueViaGh(meta, {
   home = process.env.HOME || '',
   existsSync = fs.existsSync,
+  pathEnv = process.env.PATH || '',
   execFileImpl = execFileAsync,
   bins = null,
 } = {}) {
-  const bin = await resolveGhBin({ home, existsSync, bins });
+  const bin = resolveGhBin({ home, existsSync, pathEnv, bins });
   if (!bin) throw new Error('GitHub CLI (`gh`) is not available.');
   const title = feedbackIssueTitle(meta.comment);
   const body = buildFeedbackIssueBody(meta, { viaGh: true });

@@ -39,6 +39,14 @@ test('ghFeedbackAvailable is false when no bins exist', async () => {
   assert.equal(await ghFeedbackAvailable({ bins: [], existsSync: () => false }), false);
 });
 
+test('ghFeedbackAvailable is true via Homebrew when PATH lacks gh (#130)', async () => {
+  assert.equal(await ghFeedbackAvailable({
+    home: '/Users/me',
+    pathEnv: '/usr/bin:/bin',
+    existsSync: (p) => p === '/opt/homebrew/bin/gh',
+  }), true);
+});
+
 test('createFeedbackIssueViaGh posts via gh api and returns the issue', async () => {
   const calls = [];
   const out = await createFeedbackIssueViaGh({
@@ -75,6 +83,29 @@ test('createFeedbackIssueViaGh posts via gh api and returns the issue', async ()
   assert.equal(fs.existsSync(input), false);
 });
 
+test('createFeedbackIssueViaGh uses Homebrew when bare gh is missing from PATH (#130)', async () => {
+  const calls = [];
+  const out = await createFeedbackIssueViaGh({
+    comment: 'spawn gh ENOENT',
+    appVersion: '0.2.16',
+    platform: 'darwin',
+  }, {
+    home: '/Users/me',
+    pathEnv: '/usr/bin:/bin',
+    existsSync: (p) => p === '/opt/homebrew/bin/gh',
+    execFileImpl: async (bin, args) => {
+      calls.push({ bin, args });
+      return {
+        stdout: JSON.stringify({
+          html_url: 'https://github.com/SigurdVilstrup/plenum/issues/130',
+          number: 130,
+        }),
+      };
+    },
+  });
+  assert.equal(calls[0].bin, '/opt/homebrew/bin/gh');
+  assert.equal(out.issueNumber, 130);
+});
 test('createFeedbackIssueViaGh surfaces gh failures', async () => {
   await assert.rejects(
     () => createFeedbackIssueViaGh({ comment: 'x' }, {
