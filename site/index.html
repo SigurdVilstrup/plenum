@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Plenum: git for parallel work in teams</title>
-<meta name="description" content="Plenum is a git client for parallel work in teams, on Mac. See every lane against the team.">
+<title>Plenum: Mac git client with lanes</title>
+<meta name="description" content="Plenum is a Mac git client with lanes — parallel checkouts you can start, stop, and test — so every lane sits against the team.">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script>
@@ -87,8 +87,15 @@
   .js .link { display: inline-flex; align-items: center; gap: 6px; }
   .link:hover { color: #fff; }
   .link:focus-visible { outline: 2px solid var(--primary-hover); outline-offset: 3px; border-radius: 6px; }
-  .chev { display: inline-block; transition: transform .25s ease; }
-  .link[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  /* Two paths in one box — no rotate, so up/down share the same optical center. */
+  .chev {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 12px; height: 12px; flex: 0 0 auto;
+  }
+  .chev svg { display: block; width: 12px; height: 12px; }
+  .chev .up { visibility: hidden; }
+  .link[aria-expanded="true"] .chev .down { visibility: hidden; }
+  .link[aria-expanded="true"] .chev .up { visibility: visible; }
   .note { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-subtle); }
   .note b { font-weight: 500; color: var(--ink-muted); }
   .req { margin-top: 10px; min-height: 1.2em; font: 12px var(--mono); color: var(--ink-tertiary); }
@@ -147,12 +154,12 @@
 <main>
   <h1 aria-label="Work in plenum.sh"><span class="prompt" aria-hidden="true">$</span><span id="tx" aria-hidden="true">Work in <span class="name"><span class="acc">plenum</span>.sh</span><span class="who" id="who"></span></span><span class="cur" id="cur" aria-hidden="true"></span></h1>
   <p class="gloss rev"><b>in plenum</b>, <i>adv.</i> with everyone present. You, your agents, every lane on one screen.</p>
-  <p class="sub rev">A git client for parallel work in teams.</p>
+  <p class="sub rev">A Mac git client with lanes: parallel checkouts you start, stop, and test.</p>
   <div class="rev">
     <div class="actions">
       <button class="btn send" id="send" type="button">Send link to my Mac</button>
       <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
-      <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true">⌄</span></button>
+      <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path class="down" d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path class="up" d="M2.5 7.75L6 4.25L9.5 7.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
     </div>
     <p class="macnote">Plenum is a Mac app (Apple Silicon). Send yourself the link and open it on your Mac.</p>
     <p class="note"><b>Early-stage beta.</b> Free while it's open. Expect rough edges and frequent updates.</p>
@@ -160,15 +167,14 @@
   </div>
   <div class="panel" id="why"><div>
     <ul class="why">
-    <li><h3>Free in the open beta</h3><p>Download it and use it. It costs nothing while the beta is open.</p></li>
+    <li><h3>Lanes you can run</h3><p>Each lane is its own checkout with its own ports. Start, stop, and test from the board — next to protected main.</p></li>
     <li><h3>A real overview</h3><p>Every lane in one view: how far behind main it is, what's uncommitted, and who wrote the last commit. You, an agent, or both.</p></li>
-    <li><h3>Run several lanes at once</h3><p>Each lane is its own worktree with its own ports. Start, stop and test it from the board.</p></li>
-    <li><h3>Built for busy team repos</h3><p>Main stays protected and untouched. Every lane is measured against the team's branch, so you see drift before it hurts.</p></li>
-    <li><h3>More than one repo</h3><p>Every repo gets its own tab, with its own lanes.</p></li>
+    <li><h3>Built for busy team repos</h3><p>Main stays protected. Every lane is measured against the team's branch, so you see drift before it hurts.</p></li>
     <li><h3>Agents get lanes, not your git</h3><p>A CLI and a local MCP server let Claude Code, Cursor and Codex create, start and test lanes. Commits, pushes and merges stay with you.</p></li>
+    <li><h3>More than one repo</h3><p>Every repo gets its own tab, with its own lanes.</p></li>
   </ul>
   </div></div>
-  <figure class="shot rev"><img src="/board.jpg" width="2160" height="1350" alt="Plenum on a busy repo: protected main, six lanes with behind counts and authorship, one lane running, and the commit graph"></figure>
+  <figure class="shot rev"><img src="/board.jpg" width="2160" height="1350" alt="Plenum on a demo repo: protected main, two lanes with behind counts and authorship, one lane running, and the commit graph"></figure>
 </main>
 
 <script>
@@ -197,7 +203,7 @@
 
   // Share sheet where there is one (phones, Edge/Chrome on Windows), otherwise a pre-filled email.
   $('send').addEventListener('click', async function () {
-    var url = location.origin + '/' + location.search, text = 'Plenum, a git client for parallel work in teams. Open this on your Mac:';
+    var url = location.origin + '/' + location.search, text = 'Plenum, a Mac git client with lanes for parallel work. Open this on your Mac:';
     try {
       if (navigator.share) { await navigator.share({ title: 'Plenum', text: text, url: url }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
