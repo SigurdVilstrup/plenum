@@ -233,7 +233,9 @@ function paintBoardGraph() {
   }
   layout.refresh(); // re-sync SVG canvas width/viewBox after paint
   bindWipCommitFields();
-  attachOlderSentinel(el.graph.querySelector('.rows'));
+  const rowsEl = el.graph.querySelector('.rows');
+  bindGraphScrollReveal(rowsEl);
+  attachOlderSentinel(rowsEl);
 }
 
 const layout = bindLayoutResizers({
@@ -1044,6 +1046,54 @@ let olderObserver = null;
 let olderScrollBound = null;
 let olderRetryTimer = null;
 let olderFailStreak = 0;
+/** Overlay a thin scrollbar — no reserved gutter; only while scrolling. */
+function bindOverlayScrollThumb(scroller, host, thumbClass) {
+  if (!scroller || !host) return;
+  let thumb = host.querySelector(`:scope > .${thumbClass}`);
+  if (!thumb) {
+    thumb = document.createElement('div');
+    thumb.className = thumbClass;
+    thumb.setAttribute('aria-hidden', 'true');
+    host.appendChild(thumb);
+  }
+  // Rows persist across paints; panel-scroll is recreated — skip only when already bound.
+  if (scroller.dataset.overlayScrollBound === thumbClass) return;
+  scroller.dataset.overlayScrollBound = thumbClass;
+
+  let hideTimer = null;
+  const syncThumb = () => {
+    const { scrollTop, scrollHeight, clientHeight } = scroller;
+    if (scrollHeight <= clientHeight + 1) {
+      thumb.classList.remove('is-visible');
+      return;
+    }
+    const topOffset = scroller.offsetTop;
+    const trackH = clientHeight;
+    const thumbH = Math.max(20, Math.round(trackH * (clientHeight / scrollHeight)));
+    const maxTop = Math.max(0, trackH - thumbH);
+    const range = scrollHeight - clientHeight;
+    const top = topOffset + (range > 0 ? (scrollTop / range) * maxTop : 0);
+    thumb.style.height = `${thumbH}px`;
+    thumb.style.transform = `translateY(${top}px)`;
+    thumb.classList.add('is-visible');
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      thumb.classList.remove('is-visible');
+      hideTimer = null;
+    }, 900);
+  };
+
+  scroller.addEventListener('scroll', syncThumb, { passive: true });
+}
+
+function bindGraphScrollReveal(rowsEl) {
+  const graph = rowsEl?.closest('.graph') || el.graph;
+  bindOverlayScrollThumb(rowsEl, graph, 'graph-scroll-thumb');
+}
+
+function bindPanelScrollReveal(scrollEl) {
+  bindOverlayScrollThumb(scrollEl, el.panel, 'panel-scroll-thumb');
+}
 
 /** True when the graph scroller is within `px` of the bottom (load-older trigger). */
 function nearOlderBottom(rowsEl, px = 96) {
@@ -1685,14 +1735,16 @@ function paintPanel() {
     <label class="branch-search-box">${iconHTML('magnifying-glass', 'sm')}<input type="search" data-branch-filter value="${esc(state.branchFilter)}" placeholder="Filter" aria-label="Filter lanes, worktrees, and branches" spellcheck="false" autocomplete="off" /></label>
   </div>`;
 
+  // Count already says 0 — skip the redundant "None" label; keep real CTAs / filter misses.
+  const emptyNote = (msg) => (msg ? `<div class="empty-note">${msg}</div>` : '');
   const lanesEmpty = q
     ? 'No match'
     : (hasManifest
-      ? 'None'
+      ? ''
       : `<button class="env-link" type="button" data-act="doctor">${iconHTML('gear-six', 'sm')}Lane setup first</button>`);
   const lanesBody = visibleLanes.length
     ? visibleLanes.map((l) => laneRowHTML(l, b, selected)).join('')
-    : `<div class="empty-note">${lanesEmpty}</div>`;
+    : emptyNote(lanesEmpty);
   html += `<div class="section section-accordion">
     <div class="branch-head">
       <button class="lane-row branch-toggle" type="button" data-lanes aria-expanded="${lanesOpen}" title="Worktrees with Plenum runner setup.">
@@ -1721,7 +1773,7 @@ function paintPanel() {
         ${isSelected ? `<div class="lane-run">${cta}</div>` : ''}
       </div>`;
     }).join('')
-    : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
+    : emptyNote(q ? 'No match' : '');
   html += `<div class="section section-accordion">
     <button class="lane-row branch-toggle" type="button" data-worktrees aria-expanded="${worktreesOpen}" title="Worktrees without runner setup yet.">
       <span class="mark">${iconHTML('caret-right')}</span>
@@ -1739,10 +1791,10 @@ function paintPanel() {
   const refreshing = state.loudRefreshByTab.has(state.store.activeId);
   const localBody = locals.length
     ? renderBranchListHTML(locals, b, selected, refreshing)
-    : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
+    : emptyNote(q ? 'No match' : '');
   const remoteBody = remotes.length
     ? renderBranchListHTML(remotes, b, selected, refreshing, true)
-    : `<div class="empty-note">${q ? 'No match' : 'None'}</div>`;
+    : emptyNote(q ? 'No match' : '');
   const vsRef = branchVsRef(b);
   const branchMeta = refreshing
     ? `<i class="spinner btn-spin" aria-hidden="true"></i><span class="sr-only">Refreshing</span>`
@@ -1872,6 +1924,7 @@ function paintPanel() {
     });
   });
   layout.remountRails();
+  bindPanelScrollReveal(el.panel.querySelector('.panel-scroll'));
 }
 
 // #117 pinned branches per repo (right-click → Pin to top). Per-viewer convenience, like the baseline pick.

@@ -1465,11 +1465,17 @@ body.is-col-resizing * {
 .graph-cols > [data-col="when"].has-resizer {
   justify-content: flex-end;
 }
-/* Sit on the inner edge so overflow:hidden on the rail doesn’t clip the hit target */
+/* Sit inside overflow:hidden; hairline on the panel/main seam (not inset) */
 .panel > .layout-resizer,
 .settings-nav > .layout-resizer {
   right: 0;
-  width: 6px;
+  width: 8px;
+}
+.panel > .layout-resizer::after,
+.settings-nav > .layout-resizer::after {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 .window.app .body {
   grid-template-columns: var(--rail-w) 1fr;
@@ -1659,25 +1665,11 @@ body.is-row-resizing * {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  /* Reserve gutter so the thin scrollbar never shoves the rail content sideways */
-  scrollbar-gutter: stable;
-  /* #128 thin lanes scrollbar — hairline thumb, no chunky OS chrome */
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
+  /* Overlay thumb in JS — no gutter so section hairlines reach the rail edge */
+  scrollbar-width: none;
 }
 .window.app .panel-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.window.app .panel-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.window.app .panel-scroll::-webkit-scrollbar-thumb {
-  background: var(--hairline-strong);
-  border-radius: 3px;
-}
-.window.app .panel-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-tertiary);
+  display: none;
 }
 .window.app .panel .panel-foot {
   flex-shrink: 0;
@@ -1694,31 +1686,45 @@ body.is-row-resizing * {
   padding: 10px 12px 6px;
   letter-spacing: 0;
 }
-/* Protected sits tight at the top — no section label, just the row */
+/* Protected / accordion: no section chrome — padding lives inside the row so
+   hover/selection washes edge-to-edge and divider-to-divider. */
 .window.app .panel .section.section-protected {
-  padding: 6px 8px 2px;
+  padding: 0;
 }
 .window.app .panel .section.section-protected .lane-row {
-  min-height: 30px;
-  padding: 4px 8px 4px 10px;
+  min-height: 28px;
+  padding: 6px 12px 4px 12px;
+}
+.window.app .panel .lane-row,
+.window.app .panel .lane-row:hover,
+.window.app .panel .lane-row.selected {
+  border-radius: 0;
+}
+.window.app .panel .lane-block,
+.window.app .panel .lane-block.selected {
+  margin: 0;
+  border-radius: 0;
+}
+.window.app .panel .lane-run {
+  padding: 0 12px 8px 34px;
 }
 .window.app .panel .section.section-accordion {
-  padding: 4px 8px 2px;
+  padding: 0;
 }
 .window.app .panel .section.section-accordion + .section.section-accordion {
   border-top: 1px solid var(--hairline);
-  margin-top: 2px;
-  padding-top: 4px;
+  margin-top: 0;
+  padding-top: 0;
 }
 .window.app .panel .section-body[hidden] {
   display: none !important;
 }
 .window.app .panel .section-body {
-  padding: 0 0 2px 4px;
+  padding: 0;
 }
 .window.app .panel .section-body .empty-note,
 .window.app .panel .branch-list .empty-note {
-  padding: 2px 8px 4px 28px;
+  padding: 4px 12px 6px 28px;
   font-size: 11px;
   color: var(--ink-tertiary);
   line-height: 1.2;
@@ -1757,8 +1763,9 @@ body.is-row-resizing * {
 .window.app .panel .branch-row {
   grid-template-columns: 14px minmax(0, 1fr) auto;
   column-gap: 6px;
-  min-height: 22px;
-  padding: 1px 6px 1px 8px;
+  min-height: 24px;
+  padding: 4px 12px 4px 12px;
+  border-radius: 0;
 }
 .window.app .panel .branch-row .name {
   font-size: 12px;
@@ -1777,10 +1784,11 @@ body.is-row-resizing * {
 .window.app .panel .branch-folder {
   grid-template-columns: 14px minmax(0, 1fr) auto;
   column-gap: 6px;
-  min-height: 22px;
-  padding: 1px 6px 1px 8px;
+  min-height: 24px;
+  padding: 4px 12px 4px 12px;
   width: 100%;
   color: var(--ink-subtle);
+  border-radius: 0;
 }
 .window.app .panel .branch-folder .name {
   font-size: 12px;
@@ -1807,8 +1815,8 @@ body.is-row-resizing * {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  /* folder (14px) + gap (6px): child icons line up under the folder name */
-  padding-left: 20px;
+  /* indent under folder name; rows keep their own full-bleed padding */
+  padding-left: 14px;
 }
 .window.app .panel .branch-row.current .icon.current,
 .window.app .panel .branch-row.current .name {
@@ -1816,6 +1824,7 @@ body.is-row-resizing * {
 }
 .window.app .panel .branch-row.current {
   background: var(--surface-3);
+  border-radius: 0;
 }
 
 /* Working tree - not a commit; make the expected action obvious (wash only - no left-edge flag). */
@@ -1925,40 +1934,70 @@ body.is-row-resizing * {
 }
 
 .window.app .section.section-branches {
-  padding: 4px 8px 2px;
+  padding: 0;
 }
-/* caret · icon · name · count — GitKraken-style accordion headers */
+/* caret · icon · name · count — full-bleed header rows between hairlines */
 .window.app .panel .branch-toggle {
   grid-template-columns: 14px 16px minmax(0, 1fr) auto;
-  min-height: 26px;
-  padding: 2px 6px 2px 6px;
+  min-height: 28px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border-radius: 0;
 }
 .window.app .panel .branch-toggle .mark {
   color: var(--ink-muted);
 }
 .window.app .panel .branch-toggle .name {
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ink); /* #75 / #110 headers stand out when eye-scanning */
+  color: var(--ink-muted);
 }
 .window.app .panel .branch-toggle .meta {
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--ink-muted);
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-tertiary);
   font-size: 11px;
-  font-weight: 600;
-  text-align: center;
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .window.app .branch-list {
-  padding: 0 0 4px 4px;
+  /* Room under the last tip so it doesn’t kiss the next section hairline */
+  padding: 0 0 8px;
 }
 
 .window.app .graph {
   position: relative;
+}
+/* Hide native scrollbars so content stays full-bleed; overlay thumbs are drawn in JS */
+.window.app .graph .rows {
+  scrollbar-width: none;
+}
+.window.app .graph .rows::-webkit-scrollbar {
+  display: none;
+}
+.window.app .graph-scroll-thumb,
+.window.app .panel-scroll-thumb {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  width: 3px;
+  border-radius: 1.5px;
+  background: var(--hairline-strong);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition: opacity 120ms ease;
+  will-change: transform, opacity;
+}
+.window.app .graph-scroll-thumb.is-visible,
+.window.app .panel-scroll-thumb.is-visible {
+  opacity: 1;
 }
 .window.app .op-busy {
   position: absolute;
@@ -2083,26 +2122,41 @@ body.is-row-resizing * {
   border: 0;
 }
 
-/* #46 / #107 - baseline picker: icon button beside the Branches toggle; native select overlays it */
+/* #46 / #107 - baseline picker / + live in the head; head owns the hover wash */
 .window.app .panel .branch-head {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
+  padding: 0;
+}
+.window.app .panel .branch-head:hover,
+.window.app .panel .branch-head:focus-within {
+  background: var(--surface-2);
 }
 .window.app .panel .branch-head .branch-toggle {
   flex: 1;
   min-width: 0;
 }
+.window.app .panel .branch-head .branch-toggle:hover,
+.window.app .panel .branch-head .branch-toggle:focus-visible {
+  background: transparent;
+}
 .window.app .panel .branch-head .iconbtn.add {
   width: 22px;
   height: 22px;
   flex: none;
+  align-self: center;
+  margin-right: 10px;
   background: var(--surface-2);
   color: var(--ink-muted);
 }
 .window.app .panel .branch-head .iconbtn.add:hover {
   background: var(--surface-3);
   color: var(--ink);
+}
+.window.app .panel .branch-head .branch-vs-wrap {
+  align-self: center;
+  margin-right: 10px;
 }
 .window.app .panel .branch-vs-wrap {
   position: relative;
@@ -2148,7 +2202,7 @@ body.is-row-resizing * {
 /* #69 / #100 panel filter — under Protected, above Lanes. No border-bottom: next .section draws it. */
 .window.app .panel .branch-search {
   /* Equal inset so the field sits centered between the hairlines */
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-top: 1px solid var(--hairline);
 }
 .window.app .panel .branch-search-box {
