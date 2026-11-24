@@ -952,10 +952,10 @@ function openProtectedPicker(board) {
   const opts = names.map((n) => `<option value="${esc(n)}"${n === board.teamBranch ? ' selected' : ''}>${esc(n)}</option>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="prot-title">
-      <div class="eyebrow">${iconHTML('shield-check', 'sm')}Protected branch</div>
-      <h1 id="prot-title">Which branch do you integrate into?</h1>
-      <p>Protected is a role, not a lock. You still commit and push on it. Behind counts default to this tip. Lanes Start on their own ports once you write a recipe.</p>
-      <label class="field">Branch<select name="branch" class="select mono" required>${opts}</select></label>
+      <div class="eyebrow">${iconHTML('shield-check', 'sm')}Protected workspace</div>
+      <h1 id="prot-title">Which tip does Protected track?</h1>
+      <p>Protected is the root workspace (a lane role), not a locked branch. You still commit and push there. Behind counts default to this integration tip. Lanes Start on their own ports once you write a recipe.</p>
+      <label class="field">Team tip<select name="branch" class="select mono" required>${opts}</select></label>
       <div class="row-end">
         <button class="btn" type="button" data-prot-later>Not now</button>
         <button class="btn primary" type="submit">${iconHTML('check-circle', 'sm')}Continue</button>
@@ -1728,7 +1728,7 @@ function paintPanel() {
   const worktreesOpen = state.worktreesOpen || !!q;
   let html = `<div class="section section-protected">
     <div class="lane-block${primarySelected ? ' selected' : ''}">
-      <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0" title="Protected · Integration branch. You still commit and push here; Start works when the repo has a lane recipe.">
+      <button class="lane-row ${primarySelected ? 'selected' : ''}" type="button" data-lane="0" title="Protected · Root workspace. You still commit and push here; Start works when the repo has a lane recipe.">
         <span class="mark protected ${primary.alert ? 'alert' : ''}">${markPrimary}</span>
         <span class="lane-main"><span class="name" title="${esc(primary.name)}">${esc(primary.name)}</span><span class="meta ${primary.dirty ? 'bad' : 'ok'}">${primary.dirty ? `${primary.dirty} uncommitted` : 'clean'}</span>${laneAgentsHTML(primary)}</span>
       </button>
@@ -1820,7 +1820,7 @@ function paintPanel() {
   }
   html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
     <div class="branch-head">
-    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen || !!q}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs protected tip stays on the lane header.">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen || !!q}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs team tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="section-icon">${iconHTML('desktop', 'sm')}</span>
       <span class="name">Local</span>
@@ -3226,13 +3226,21 @@ async function checkoutBranchRow(name) {
   if (!tabId) return;
   const root = state.board?.root;
   const prev = lane.branch;
+  const wasDirty = Boolean(lane.dirty);
+  const stashBefore = state.board?.stashCount || 0;
   try {
     const board = await invoke('branch.checkout', ...pin({ branch: br.name, laneIndex: lane.index }));
     if (prev && prev !== br.name) {
       pushUndo(`switch to ${br.short || br.name}`, tabId, () => invoke('branch.checkout', ...pin({ branch: prev, laneIndex: lane.index })), { selectLane: lane.index });
     }
     if (settleBoard(tabId, root, board, { selectLane: lane.index })) {
-      toast(`Checked out ${br.short || br.name}${lane.isPrimary ? '' : ` in ${lane.name}`}`, 'ok', { undo: Boolean(prev && prev !== br.name) });
+      const tip = br.short || br.name;
+      const where = lane.isPrimary ? '' : ` in ${lane.name}`;
+      const stashKept = wasDirty && (board.stashCount || 0) > stashBefore;
+      const note = wasDirty
+        ? (stashKept ? ' · uncommitted kept in stash' : ' · uncommitted restored')
+        : '';
+      toast(`Checked out ${tip}${where}${note}`, 'ok', { undo: Boolean(prev && prev !== br.name) });
     }
   } catch { /* toasted */ }
   finally { endOp(tabId, 'checkout'); }
@@ -4983,7 +4991,7 @@ const SETTINGS_PAGES = {
     return `${head}
       <div class="group-head">${esc(t.title)}<small class="mono">${esc(b?.displayRoot || t.path)}</small></div>
       <div class="list">
-        ${settingsRow('shield-check', 'Protected / team branch', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip for ↓↑, Create lane, and merge. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
+        ${settingsRow('shield-check', 'Team tip', b?.teamBranchSource === 'override' ? 'Override (local git config)' : 'Behind counts against this', b ? `<span class="mono">${esc(b.teamRef)}</span>` : '…', b ? teamBranchControlHTML(b, root, t.title) : '', 'Integration tip Protected and lanes count ↓↑ against. Not a lock — Protected is the root workspace. Auto re-reads origin/HEAD. Stored as local git config plenum.teamBranch.')}
         ${settingsRow('git-fork', 'Comparison baselines', 'Extra tips to count ↓↑ against', b ? baselinesControlHTML(b, root, t.title) : 'Open a repository first.', '', 'Long-lived tips like demo or staging. Comparison only: they are not protected. Pick one in the Local header. Stored as local git config plenum.baseline.')}
         ${settingsRow('tree-structure', 'Lanes folder', 'Where Create lane puts worktrees', `Blank → <span class="mono">${esc(state.prefs.defaultLanesFolder || '.worktrees')}</span> from General`, `<input class="input" data-lanes-root="${esc(root)}" value="${esc(folder)}" placeholder="${esc(state.prefs.defaultLanesFolder || '.worktrees')}" aria-label="Lanes folder for ${esc(t.title)}" />`, 'This repo only. Relative paths sit under the checkout; absolute paths are fine.')}
         ${settingsRow('stack', 'Lane recipe', 'Start, Test, ports, services', laneDetail, '<button class="btn" type="button" data-open-lane>Open Lane</button>', 'Opens Settings → Lane to edit .plenum/lane.yaml as a form, or run Lane setup when the file is missing.')}
@@ -5758,7 +5766,7 @@ function teamBranchControlHTML(board, root, title) {
   if (board.teamBranchSource !== 'override') {
     opts[0] = `<option value="" selected>Auto · ${esc(cur || 'detect')}</option>`;
   }
-  return `<select class="select mono" data-team-root="${esc(root)}" aria-label="Protected branch for ${esc(title)}">${opts.join('')}</select>`;
+  return `<select class="select mono" data-team-root="${esc(root)}" aria-label="Team tip for ${esc(title)}">${opts.join('')}</select>`;
 }
 
 /** Removable baselines as a one-per-line list + Add select (#46, #101). */
@@ -5825,7 +5833,7 @@ function bindRepos(root) {
       board.displayRoot = await prettyPath(board.root);
       state.repoBoards.set(rootPath, board);
       if (board.root === state.board?.root) applyBoard(board);
-      toast(n.value.trim() ? `Protected branch → ${board.teamBranch}` : 'Protected branch re-detected', 'ok');
+      toast(n.value.trim() ? `Team tip → ${board.teamBranch}` : 'Team tip re-detected', 'ok');
       renderSettings();
     } catch { /* toasted */ }
   }));
@@ -5925,9 +5933,9 @@ function awardRowHTML(a) {
 
 function statsPageHTML() {
   const s = statsView.data;
-  const scope = `<div class="option-row" role="group" aria-label="Scope">${[['protected', 'Protected branch'], ['all', 'All branches']].map(([v, t]) =>
+  const scope = `<div class="option-row" role="group" aria-label="Scope">${[['protected', 'Team tip'], ['all', 'All branches']].map(([v, t]) =>
     `<button class="option${statsView.scope === v ? ' on' : ''}" type="button" aria-pressed="${statsView.scope === v}" data-stats-scope="${v}">${t}</button>`).join('')}</div>`;
-  const head = `<h1>Statistics</h1><p class="lede">${s ? `${s.scope === 'all' ? 'Every local and remote branch' : `Commits on <span class="mono">${esc(s.teamRef)}</span>, the protected branch`} in ${esc(activeTab()?.title || 'this repository')}.${s.truncated ? ' Newest 20,000 commits only.' : ''}` : 'Reading history…'}</p>${scope}`;
+  const head = `<h1>Statistics</h1><p class="lede">${s ? `${s.scope === 'all' ? 'Every local and remote branch' : `Commits on <span class="mono">${esc(s.teamRef)}</span>, the team tip`} in ${esc(activeTab()?.title || 'this repository')}.${s.truncated ? ' Newest 20,000 commits only.' : ''}` : 'Reading history…'}</p>${scope}`;
   if (!s) return head;
   if (!s.commits) return `${head}<p class="lede" style="margin-top:18px">No commits here yet.</p>`;
 
