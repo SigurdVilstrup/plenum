@@ -31,8 +31,20 @@ export const GRAPH_COLUMN_META = Object.freeze({
 const PAD_L = 12;
 const COL_GAP = 8;
 
+/** Columns hidden on a fresh install / legacy all-on migrate (#133). */
+const DEFAULT_OFF = new Set(['author', 'sha']);
+
 export function defaultGraphColumns() {
-  return GRAPH_COLUMN_IDS.map((id) => ({ id, on: true }));
+  return GRAPH_COLUMN_IDS.map((id) => ({ id, on: !DEFAULT_OFF.has(id) }));
+}
+
+/** True when prefs still match the pre-#133 “everything on” default. */
+export function isLegacyAllOnGraphColumns(raw) {
+  if (!Array.isArray(raw) || raw.length !== GRAPH_COLUMN_IDS.length) return false;
+  return GRAPH_COLUMN_IDS.every((id, i) => {
+    const row = raw[i];
+    return row && row.id === id && row.on !== false;
+  });
 }
 
 /** Canonical ordered list: known ids only, unique, missing appended on. ≥1 on. */

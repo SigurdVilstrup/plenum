@@ -67,6 +67,14 @@ test('setPrefs accepts statsFame mine|all', () => {
   assert.equal(setPrefs({ statsFame: 'nope' }, dir).statsFame, 'all');
 });
 
+test('statsFameCategories defaults to five and sanitizes', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  assert.deepEqual(getPrefs(dir).statsFameCategories, ['ai', 'lines', 'biggest', 'fav', 'streak']);
+  const p = setPrefs({ statsFameCategories: ['night', 'nope', 'night', 'file'] }, dir);
+  assert.deepEqual(p.statsFameCategories, ['night', 'file']);
+  assert.deepEqual(setPrefs({ statsFameCategories: [] }, dir).statsFameCategories, ['ai', 'lines', 'biggest', 'fav', 'streak']);
+});
+
 test('setPrefs clamps warmTabTtlMs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
   assert.equal(setPrefs({ warmTabTtlMs: 1000 }, dir).warmTabTtlMs, 30_000);
@@ -114,11 +122,13 @@ test('feedback prompts default on; nudge state keeps only known fields', () => {
   assert.deepEqual(p.nudge, { firstSeenAt: 5, seenVersion: '1.0.0', starAskedAt: 9 });
 });
 
-test('graphColumns default all on; sanitize order, junk, and last-on', () => {
+test('graphColumns default hides author+sha; sanitize order, junk, and last-on', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
   const d = getPrefs(dir).graphColumns;
   assert.deepEqual(d.map((c) => c.id), ['labels', 'graph', 'author', 'commit', 'sha', 'when']);
-  assert.ok(d.every((c) => c.on));
+  assert.equal(d.find((c) => c.id === 'author').on, false);
+  assert.equal(d.find((c) => c.id === 'sha').on, false);
+  assert.ok(['labels', 'graph', 'commit', 'when'].every((id) => d.find((c) => c.id === id).on));
 
   const p = setPrefs({
     graphColumns: [
@@ -143,4 +153,17 @@ test('graphColumns default all on; sanitize order, junk, and last-on', () => {
   }, dir);
   assert.ok(allOff.graphColumns.some((c) => c.on));
   assert.equal(allOff.graphColumns.find((c) => c.id === 'commit').on, true);
+});
+
+test('getPrefs migrates legacy all-on graph columns once', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-prefs-'));
+  fs.writeFileSync(path.join(dir, 'prefs.json'), JSON.stringify({
+    version: 1,
+    graphColumns: ['labels', 'graph', 'author', 'commit', 'sha', 'when'].map((id) => ({ id, on: true })),
+  }));
+  const p = getPrefs(dir);
+  assert.equal(p.graphColumns.find((c) => c.id === 'author').on, false);
+  assert.equal(p.graphColumns.find((c) => c.id === 'sha').on, false);
+  assert.equal(p.version, 2);
+  assert.deepEqual(p.statsFameCategories, ['ai', 'lines', 'biggest', 'fav', 'streak']);
 });

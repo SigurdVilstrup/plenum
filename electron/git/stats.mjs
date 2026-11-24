@@ -155,6 +155,13 @@ export function heatPeak(heat) {
 /** Minimum to earn a title. Below it nothing shows, so a quiet repo gets no trophies. */
 export const AWARD_MIN = { ai: 3, lines: 100, night: 3, early: 3, weekend: 3, deleted: 100, fixes: 3, human: 3, biggest: 500, fav: 3, day: 5, streak: 3, file: 5 };
 
+export {
+  FAME_CATEGORIES,
+  DEFAULT_FAME_CATEGORIES,
+  normalizeFameCategories,
+  filterAwardsByCategories,
+} from '../fame-categories.mjs';
+
 /**
  * Cheeky titles, each { id, title, who|null, stat, quip, scope: 'person'|'repo' }.
  * Person titles need two people to compete; repo titles need only enough history.

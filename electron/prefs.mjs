@@ -1,13 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defaultGraphColumns, normalizeGraphColumns } from './graph-columns-pref.mjs';
+import {
+  defaultGraphColumns,
+  isLegacyAllOnGraphColumns,
+  normalizeGraphColumns,
+} from './graph-columns-pref.mjs';
+import { DEFAULT_FAME_CATEGORIES, normalizeFameCategories } from './fame-categories.mjs';
 
 const TTL_MIN = 30_000;
 const TTL_MAX = 600_000;
+const PREFS_VERSION = 2;
 
 export function defaultPrefs() {
   return {
-    version: 1,
+    version: PREFS_VERSION,
     theme: 'system',
     chroma: 'muted',
     zoom: 1,
@@ -29,6 +35,7 @@ export function defaultPrefs() {
     tourDone: false,
     feedbackPrompts: true,
     statsFame: 'mine',
+    statsFameCategories: [...DEFAULT_FAME_CATEGORIES],
     nudge: {},
     warmTabTtlMs: 120_000,
     credentialHosts: [],
@@ -83,7 +90,17 @@ export function getPrefs(userDataDir) {
   delete merged.accent;
   delete merged.lightPalette;
   if (!ENUMS.chroma.includes(merged.chroma)) merged.chroma = 'muted';
-  merged.graphColumns = normalizeGraphColumns(merged.graphColumns);
+  merged.statsFameCategories = normalizeFameCategories(merged.statsFameCategories);
+  // #133: collapse Author + SHA when prefs still look like the old all-on default.
+  const legacyGraph = isLegacyAllOnGraphColumns(raw.graphColumns);
+  merged.graphColumns = normalizeGraphColumns(
+    legacyGraph ? defaultGraphColumns() : merged.graphColumns,
+  );
+  const ver = Number(raw.version) || 1;
+  if (legacyGraph || ver < PREFS_VERSION || !Array.isArray(raw.statsFameCategories)) {
+    merged.version = PREFS_VERSION;
+    write(merged, userDataDir);
+  }
   return merged;
 }
 
@@ -117,6 +134,8 @@ function sanitize(partial) {
       }
     } else if (k === 'graphColumns') {
       if (Array.isArray(v)) out[k] = normalizeGraphColumns(v);
+    } else if (k === 'statsFameCategories') {
+      if (Array.isArray(v)) out[k] = normalizeFameCategories(v);
     } else if (k === 'warmTabTtlMs' || k === 'zoom') out[k] = v;
   }
   return out;
@@ -128,7 +147,7 @@ export function setPrefs(raw, userDataDir) {
   const next = { ...cur, ...partial };
   if ('warmTabTtlMs' in partial) next.warmTabTtlMs = clampTtl(partial.warmTabTtlMs);
   if ('zoom' in partial) next.zoom = Math.min(1.25, Math.max(0.8, Number(partial.zoom) || 1));
-  next.version = 1;
+  next.version = PREFS_VERSION;
   write(next, userDataDir);
   return next;
 }

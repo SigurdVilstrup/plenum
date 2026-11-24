@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   defaultGraphColumns,
+  isLegacyAllOnGraphColumns,
   normalizeGraphColumns,
   graphTracks,
   graphSvgLeftCalc,
@@ -12,6 +13,20 @@ import {
   svgLeftIsFixed,
   visibleColumns,
 } from './graph-columns-pref.js';
+
+test('defaultGraphColumns hides author and sha (#133)', () => {
+  const d = defaultGraphColumns();
+  assert.deepEqual(d.map((c) => [c.id, c.on]), [
+    ['labels', true],
+    ['graph', true],
+    ['author', false],
+    ['commit', true],
+    ['sha', false],
+    ['when', true],
+  ]);
+  assert.equal(isLegacyAllOnGraphColumns(d), false);
+  assert.equal(isLegacyAllOnGraphColumns(d.map((c) => ({ ...c, on: true }))), true);
+});
 
 test('normalize fills missing ids and drops junk', () => {
   const n = normalizeGraphColumns([{ id: 'sha', on: false }, { id: 'x' }, 'nope']);
@@ -52,14 +67,16 @@ test('svg left calc for default order and when labels hidden', () => {
   assert.equal(graphSvgLeftCalc(noLabels), '12px');
 });
 
-test('headerCellsHTML includes every visible column (incl. empty Author)', () => {
-  const html = headerCellsHTML(setColumnOn(defaultGraphColumns(), 'sha', false));
+test('headerCellsHTML skips off columns by default', () => {
+  const html = headerCellsHTML(defaultGraphColumns());
   assert.match(html, /data-col="labels"/);
   assert.match(html, /data-col="graph"/);
-  assert.match(html, /data-col="author"/);
+  assert.equal(/data-col="author"/.test(html), false);
   assert.match(html, /data-col="commit"/);
   assert.equal(/data-col="sha"/.test(html), false);
   assert.match(html, /data-col="when"/);
+  const withAuthor = headerCellsHTML(setColumnOn(defaultGraphColumns(), 'author', true));
+  assert.match(withAuthor, /data-col="author"/);
 });
 
 test('svg left falls back when commit precedes graph', () => {

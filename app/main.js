@@ -27,6 +27,11 @@ import {
   normalizeGraphColumns,
   setColumnOn,
 } from './lib/graph-columns-pref.js';
+import {
+  FAME_CATEGORIES,
+  filterAwardsByCategories,
+  normalizeFameCategories,
+} from './lib/fame-categories.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -1826,7 +1831,7 @@ function paintPanel() {
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen || !!q}" title="Tips that exist only on the remote. Tracking remotes like origin/${esc(b.teamBranch || 'main')} live under Local once you have a local tip.">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen || !!q}" title="Branches that exist only on the remote. Check one out to work on it locally; tips you already track live under Local.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="section-icon">${iconHTML('cloud', 'sm')}</span>
       <span class="name">Remote</span>
@@ -5830,7 +5835,7 @@ function bindRepos(root) {
 const agentsView = { lines: {}, restart: {}, linkCmd: '' };
 
 /* Statistics: read-only numbers from git history (electron/git/stats.mjs). */
-const statsView = { scope: 'protected', data: null, root: null, loading: false };
+const statsView = { scope: 'protected', data: null, root: null, loading: false, fameCatsOpen: false };
 
 async function loadStats() {
   const tab = activeTab();
@@ -5869,6 +5874,20 @@ function bindStats(root) {
     setPref({ statsFame: v });
     rerenderStats();
   }));
+  root.querySelector('[data-fame-cats-toggle]')?.addEventListener('click', () => {
+    statsView.fameCatsOpen = !statsView.fameCatsOpen;
+    rerenderStats();
+  });
+  root.querySelectorAll('[data-fame-cat]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.fameCat;
+      const cur = new Set(normalizeFameCategories(state.prefs.statsFameCategories));
+      if (cur.has(id)) cur.delete(id);
+      else cur.add(id);
+      setPref({ statsFameCategories: normalizeFameCategories([...cur]) });
+      rerenderStats();
+    });
+  });
 }
 
 // Award id -> [icon, token colour]. Only design-system colours: agent, human, lane 2-4.
@@ -5935,23 +5954,31 @@ function statsPageHTML() {
     settingsRow('clock', 'Per active day', '', `${n(s.activeDays)} active day${s.activeDays === 1 ? '' : 's'}`, `<span class="stat-num"><b>${s.perActiveDay.toFixed(1)}</b></span>`),
   ].join('')}</div>`;
 
-  // Hall of fame: yours + repo by default; everyone is opt-in (#106).
+  // Hall of fame: yours + repo by default; everyone is opt-in; categories are configurable (#106).
   const fameMode = state.prefs.statsFame === 'all' ? 'all' : 'mine';
+  const fameCats = normalizeFameCategories(state.prefs.statsFameCategories);
+  const fameCatSet = new Set(fameCats);
   const me = statsIdentity();
-  const mine = s.awards.filter((a) => awardIsMine(a, me));
-  const repoAwards = s.awards.filter((a) => a.scope === 'repo');
-  const others = s.awards.filter((a) => a.scope === 'person' && !awardIsMine(a, me));
+  const shownAwards = filterAwardsByCategories(s.awards, fameCats);
+  const mine = shownAwards.filter((a) => awardIsMine(a, me));
+  const repoAwards = shownAwards.filter((a) => a.scope === 'repo');
+  const others = shownAwards.filter((a) => a.scope === 'person' && !awardIsMine(a, me));
   const fameToggle = `<div class="option-row" role="group" aria-label="Hall of fame">${[['mine', 'Yours + repo'], ['all', 'Everyone']].map(([v, t]) =>
-    `<button class="option${fameMode === v ? ' on' : ''}" type="button" aria-pressed="${fameMode === v}" data-stats-fame="${v}">${t}</button>`).join('')}</div>`;
+    `<button class="option${fameMode === v ? ' on' : ''}" type="button" aria-pressed="${fameMode === v}" data-stats-fame="${v}">${t}</button>`).join('')}
+    <button class="option${statsView.fameCatsOpen ? ' on' : ''}" type="button" aria-pressed="${statsView.fameCatsOpen}" data-fame-cats-toggle>Categories</button></div>`;
+  const fameCatsPanel = statsView.fameCatsOpen
+    ? `<div class="fame-cats" role="group" aria-label="Hall of fame categories">${FAME_CATEGORIES.map((c) =>
+      `<button class="option${fameCatSet.has(c.id) ? ' on' : ''}" type="button" aria-pressed="${fameCatSet.has(c.id)}" data-fame-cat="${c.id}" title="${c.scope === 'repo' ? 'Repo title' : 'Person title'}">${esc(c.title)}</button>`).join('')}</div>`
+    : '';
   const block = (title, detail, list) => list.length
     ? `<div class="group-head">${title}<small>${detail}</small></div><div class="list">${list.map(awardRowHTML).join('')}</div>`
     : '';
   const awards = (mine.length || repoAwards.length || (fameMode === 'all' && others.length))
-    ? `${fameToggle}
+    ? `${fameToggle}${fameCatsPanel}
       ${block('Your titles', me.email || me.name ? `Matched to ${esc(me.email || me.name)}.` : 'Set a git email in Accounts to claim titles.', mine)}
       ${block('The repo', 'About the history, not a person.', repoAwards)}
       ${fameMode === 'all' ? block('Everyone else', 'Competitive titles across contributors.', others) : ''}`
-    : `<div class="group-head">Hall of fame<small>Nothing earned yet on this history.</small></div>${fameToggle}`;
+    : `<div class="group-head">Hall of fame<small>Nothing earned yet on this history${fameCats.length < FAME_CATEGORIES.length ? ' with the selected categories' : ''}.</small></div>${fameToggle}${fameCatsPanel}`;
 
   // Agents over time: one stacked bar per week, last 52 weeks.
   const wk = s.weekly.weeks;
