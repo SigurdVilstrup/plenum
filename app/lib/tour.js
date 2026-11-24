@@ -14,7 +14,7 @@ export const TOUR_STEPS = [
   {
     sel: '#panel',
     title: 'Protected, Lanes, Worktrees',
-    body: 'Protected is the integration branch (you still commit there). Lanes can Start/Stop/Test. Worktrees are not lanes yet — Open as lane applies the recipe. Behind means commits on Protected the lane does not have yet.',
+    body: 'Protected is the root workspace (a lane role) — usually on your team tip; you still commit there. Lanes can Start/Stop/Test. Worktrees are not lanes yet — Open as lane applies the recipe. Behind means commits on the team tip the lane does not have yet.',
   },
   {
     sel: '.graph',
