@@ -405,7 +405,8 @@ function annotatePushReject(err, name) {
   return err;
 }
 
-/** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate. */
+/** Check out a branch in the chosen worktree (lane or primary). Open as lane is separate.
+ * Dirty trees auto-stash then pop so a switch never dead-ends on uncommitted work (#136). */
 export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   const board = await loadBoard(root);
   const lane = board.lanes.find((l) => l.index === laneIndex);
@@ -415,9 +416,20 @@ export async function checkoutBranch(root, { branch, laneIndex = 0 } = {}) {
   if (holder && holder.index !== lane.index) {
     throw new Error(`${local} is already checked out in ${holder.isPrimary ? 'primary' : `lane ${holder.name}`}. Select that worktree.`);
   }
-  if (lane.dirty) throw new Error('Uncommitted changes. Stash or commit before switching branches.');
   if (lane.branch === local) return board;
+  let stashed = false;
+  if (lane.dirty) {
+    await git(['stash', 'push', '-u', '-m', `plenum: switch ${lane.branch} → ${local}`], lane.path);
+    stashed = true;
+  }
   await git(['checkout', local], lane.path);
+  if (stashed) {
+    try {
+      await git(['stash', 'pop', 'stash@{0}'], lane.path);
+    } catch {
+      // Checkout already landed. Leave the stash entry for Pop stash / conflict walk.
+    }
+  }
   return loadBoard(root);
 }
 

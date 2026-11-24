@@ -407,6 +407,20 @@ test('rename delete checkout rebase onto', async () => {
   assert.equal(board.lanes[0].branch, 'feat/renamed');
   board = await ops.checkoutBranch(root, { branch: 'main', laneIndex: 0 });
   assert.equal(board.lanes[0].branch, 'main');
+
+  // Dirty switch auto-stashes and restores (#136).
+  sh(['branch', 'feat/dirty-switch'], root);
+  fs.writeFileSync(path.join(root, 'dirty.txt'), 'wip');
+  board = await loadBoard(root);
+  assert.ok(board.lanes[0].dirty, 'primary should be dirty before switch');
+  board = await ops.checkoutBranch(root, { branch: 'feat/dirty-switch', laneIndex: 0 });
+  assert.equal(board.lanes[0].branch, 'feat/dirty-switch');
+  assert.ok(board.lanes[0].dirty, 'uncommitted file restored after switch');
+  assert.equal(board.stashCount || 0, 0, 'auto-stash should be popped');
+  assert.ok(fs.existsSync(path.join(root, 'dirty.txt')));
+  board = await ops.checkoutBranch(root, { branch: 'main', laneIndex: 0 });
+  assert.equal(board.lanes[0].branch, 'main');
+  assert.ok(fs.existsSync(path.join(root, 'dirty.txt')));
 });
 
 test('updateBranchFromRemote fast-forwards a free local tip', async () => {
