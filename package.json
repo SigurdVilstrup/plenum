@@ -1,6 +1,6 @@
 {
   "name": "plenum",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Git client for parallel work on Mac and Windows: board, lanes, git verbs, runnable lanes, CLI, and local MCP",
   "author": "Plenum",
