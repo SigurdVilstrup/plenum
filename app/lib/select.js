@@ -70,6 +70,33 @@ export function placeMenu(menu, trigger, {
   menu.style.maxHeight = `${Math.min(maxH, viewH - top - pad)}px`;
 }
 
+/** Keep a point-anchored context menu inside the viewport (body has overflow: clip). */
+export function placeCtxMenu(menu, x, y, {
+  pad = 8,
+  viewW = typeof window !== 'undefined' ? window.innerWidth : 1280,
+  viewH = typeof window !== 'undefined' ? window.innerHeight : 800,
+} = {}) {
+  const mw = menu.offsetWidth || 160;
+  let mh = menu.offsetHeight || 40;
+  const maxH = Math.max(40, viewH - pad * 2);
+  if (mh > maxH) {
+    menu.style.maxHeight = `${maxH}px`;
+    mh = Math.min(mh, maxH);
+  }
+
+  let left = x;
+  if (left + mw > viewW - pad) left = viewW - pad - mw;
+  if (left < pad) left = pad;
+
+  let top = y;
+  if (top + mh > viewH - pad) top = y - mh;
+  if (top < pad) top = pad;
+  if (top + mh > viewH - pad) top = Math.max(pad, viewH - pad - mh);
+
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
 function openMenu(wrap, select, trigger) {
   closeSelectMenus();
   if (select.disabled) return;

@@ -26,7 +26,7 @@ import {
   resizeSectionHeights,
   writeSectionHeights,
 } from './lib/section-heights.js';
-import { enhanceSelects, closeSelectMenus } from './lib/select.js';
+import { enhanceSelects, closeSelectMenus, placeCtxMenu } from './lib/select.js';
 import {
   applyGraphColumnLayout,
   defaultGraphColumns,
@@ -3441,6 +3441,9 @@ function attachCtxMenu(menu) {
   }
   if (!menu.childElementCount) return;
   document.body.appendChild(menu);
+  const x = Number.parseFloat(menu.style.left) || 0;
+  const y = Number.parseFloat(menu.style.top) || 0;
+  placeCtxMenu(menu, x, y);
   const off = (ev) => {
     if (!menu.contains(ev.target)) {
       menu.remove();
