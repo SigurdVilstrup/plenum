@@ -107,12 +107,28 @@ test('tools/call repo.doctor on a fixture', async () => {
     assert.ok(Array.isArray(body.findings));
     assert.ok(typeof body.proposedYaml === 'string');
     assert.match(body.proposedYaml, /run:/);
+    assert.ok(typeof body.agentPrompt === 'string');
+    assert.match(body.agentPrompt, /Plenum lane wiring/);
+    assert.match(body.agentPrompt, /without Plenum/);
 
     const direct = await callTool('repo.doctor', { path: root });
     assert.equal(direct.content[0].type, 'text');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('tools/list repo.doctor description steers agents to agentPrompt', async () => {
+  const res = await handleMessage({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/list',
+    params: {},
+  });
+  const doctorTool = res.result.tools.find((t) => t.name === 'repo.doctor');
+  assert.ok(doctorTool);
+  assert.match(doctorTool.description, /agentPrompt/);
+  assert.match(doctorTool.description, /Always read agentPrompt|follow the prompt/i);
 });
 
 function doctorFixture() {

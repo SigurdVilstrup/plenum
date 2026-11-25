@@ -82,15 +82,45 @@ test('doctor proposes run/test from package.json and lists stack files', async (
   }
 });
 
-test('doctor ignores ports in unused scripts (start when dev wins)', async () => {
+test('doctor prefers run/test ports; falls back to other scripts.* when empty', async () => {
   const root = fixtureRepo({
     scripts: { dev: 'vite', start: 'node server.js --port 3000', test: 'node --test' },
     compose: false,
+    makefile: false,
+    apphost: false,
   });
   try {
     const { findings, proposed } = await doctor(root);
-    assert.deepEqual(proposed.ports.expose, {});
-    assert.ok(findings.some((f) => /wire ports manually/i.test(f)));
+    // run body has no --port; start does → fallback expose
+    assert.equal(proposed.ports.expose.web, 3000);
+    assert.ok(findings.some((f) => /other scripts/i.test(f)));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor exposes ports from nested scripts and open hits (compose-style)', async () => {
+  const root = fixtureRepo({
+    scripts: {
+      dev: 'concurrently "npm:fe:a" "npm:api:a"',
+      'fe:a': 'vite --port 5100',
+      'api:a': 'node api.js --port 6100',
+      test: 'node --test',
+    },
+    compose: true,
+    makefile: false,
+    apphost: false,
+  });
+  try {
+    fs.writeFileSync(path.join(root, 'web.ts'), 'fetch("http://localhost:5100");\n');
+    const { proposed, findings, agentPrompt, hits } = await doctor(root);
+    assert.equal(proposed.ports.expose.web, 5100);
+    assert.equal(proposed.ports.expose.api, 6100);
+    assert.ok(findings.some((f) => /other scripts|obvious ports/i.test(f)));
+    assert.ok(findings.some((f) => /docker-compose/i.test(f)));
+    assert.ok(hits.length >= 1);
+    assert.match(agentPrompt, /Aspire and\/or compose|docker-compose/i);
+    assert.match(agentPrompt, /multi-frontend|Superset|shared DBs/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -145,6 +175,31 @@ test('doctor explains aspire apphost without inventing a run command', async () 
     assert.equal(proposed.run, undefined);
     assert.equal(canAccept, false);
     assert.ok(findings.some((f) => /apphost\.mts/i.test(f) && /add a run:/i.test(f)));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor agentPrompt lists hits and dual-use wiring rules', async () => {
+  const root = fixtureRepo({
+    scripts: { dev: 'vite --port 5173', test: 'node --test' },
+    compose: false,
+    makefile: false,
+    apphost: false,
+  });
+  try {
+    fs.writeFileSync(
+      path.join(root, 'app.js'),
+      'const url = "http://localhost:5173";\n',
+    );
+    const { agentPrompt, hits, canAccept } = await doctor(root);
+    assert.equal(canAccept, true);
+    assert.ok(typeof agentPrompt === 'string' && agentPrompt.length > 80);
+    assert.match(agentPrompt, /without Plenum/);
+    assert.match(agentPrompt, /env\.set/);
+    assert.ok(hits.some((h) => h.path === 'app.js'));
+    assert.match(agentPrompt, /app\.js:\d+/);
+    assert.match(agentPrompt, /localhost:5173/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

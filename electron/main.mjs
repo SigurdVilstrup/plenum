@@ -456,6 +456,7 @@ ipcMain.handle('repo.doctor', async (_e, rootArg) => {
     hits: result.hits || [],
     allowlist: result.allowlist || [],
     wiring: result.wiring || null,
+    agentPrompt: result.agentPrompt || '',
   };
 });
 ipcMain.handle('repo.acceptManifest', async (_e, yaml, rootArg) => {

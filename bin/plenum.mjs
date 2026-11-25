@@ -63,6 +63,10 @@ function printHuman(cmd, data) {
     console.log('');
     process.stdout.write(data.proposedYaml);
     console.log(data.canAccept ? '(can accept)' : '(cannot accept yet)');
+    if (data.agentPrompt) {
+      console.log('');
+      console.log('Wiring prompt: use --json and read agentPrompt (recipe alone does not wire the app).');
+    }
     return;
   }
   if (cmd === 'status') {

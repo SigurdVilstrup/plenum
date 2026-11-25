@@ -11,11 +11,12 @@ import {
   filterHits,
   wiringChecks,
 } from './port-scour.mjs';
+import { buildAgentPrompt } from './agent-prompt.mjs';
 
 /**
  * Read-only lane doctor. Proposes a v1 manifest; writes nothing.
  * @param {string} repoPath
- * @returns {Promise<{ findings: string[], proposed: object, proposedYaml: string, canAccept: boolean, hits: object[], allowlist: object[], wiring: object }>}
+ * @returns {Promise<{ findings: string[], proposed: object, proposedYaml: string, canAccept: boolean, hits: object[], allowlist: object[], wiring: object, agentPrompt: string }>}
  */
 export async function doctor(repoPath) {
   const root = path.resolve(repoPath);
@@ -44,15 +45,24 @@ export async function doctor(repoPath) {
     proposed.setup = `${pm} install`;
     findings.push(`package manager ${pm} → setup: ${proposed.setup}`);
 
-    // ponytail: only the chosen run (+ test) bodies; ignore unused scripts.* ports
-    const ports = obviousPortsFromBodies(
+    // Prefer ports in the chosen run (+ test) bodies; if empty, fall back to other scripts.*
+    // (e.g. concurrently "npm:fe:a" where --port lives on fe:a, not on dev).
+    let ports = obviousPortsFromBodies(
       runKey ? scripts[runKey] : null,
       scripts.test || null,
     );
+    let portSource = 'run/test';
+    if (!Object.keys(ports).length) {
+      const otherBodies = Object.entries(scripts)
+        .filter(([k]) => k !== runKey && k !== 'test')
+        .map(([, body]) => body);
+      ports = obviousPortsFromBodies(...otherBodies);
+      if (Object.keys(ports).length) portSource = 'other scripts.*';
+    }
     if (Object.keys(ports).length) {
       proposed.ports.expose = ports;
       findings.push(
-        `obvious ports in run/test → expose: ${Object.entries(ports).map(([k, v]) => `${k}: ${v}`).join(', ')}`,
+        `obvious ports in ${portSource} → expose: ${Object.entries(ports).map(([k, v]) => `${k}: ${v}`).join(', ')}`,
       );
     }
   } else {
@@ -93,10 +103,6 @@ export async function doctor(repoPath) {
     findings.push(`untracked .env file(s): ${envFiles.join(', ')}`);
   }
 
-  if (!Object.keys(proposed.ports.expose).length) {
-    findings.push('wire ports manually');
-  }
-
   const rawHits = await scourPortHits(root);
   const allowlist = await loadAllowlist(root);
   const hits = filterHits(rawHits, allowlist);
@@ -110,6 +116,18 @@ export async function doctor(repoPath) {
     if (hits.length > 8) findings.push(`  …and ${hits.length - 8} more`);
   } else if (rawHits.length) {
     findings.push(`all ${rawHits.length} port hit${rawHits.length === 1 ? '' : 's'} allowlisted`);
+  }
+
+  if (!Object.keys(proposed.ports.expose).length) {
+    const fromHits = obviousPortsFromHitSnippets(hits);
+    if (Object.keys(fromHits).length) {
+      proposed.ports.expose = fromHits;
+      findings.push(
+        `ports from open hits → expose: ${Object.entries(fromHits).map(([k, v]) => `${k}: ${v}`).join(', ')}`,
+      );
+    } else {
+      findings.push('wire ports manually');
+    }
   }
 
   let existing = null;
@@ -136,14 +154,25 @@ export async function doctor(repoPath) {
     );
   }
 
+  const proposedYaml = dumpManifest(proposed);
+  const agentPrompt = buildAgentPrompt({
+    proposed,
+    findings,
+    hits,
+    wiring,
+    canAccept,
+    hasManifest: !!existing,
+  });
+
   return {
     findings,
     proposed,
-    proposedYaml: dumpManifest(proposed),
+    proposedYaml,
     canAccept,
     hits,
     allowlist,
     wiring,
+    agentPrompt,
   };
 }
 
@@ -236,7 +265,7 @@ async function detectPm(root) {
   return 'npm';
 }
 
-/** Scan chosen script bodies for `--port N` / `PORT=N` / `-p N`. First wins as web, then api, then app. */
+/** Scan script bodies for `--port N` / `PORT=N` / `-p N`. First wins as web, then api, then app. */
 function obviousPortsFromBodies(...bodies) {
   const nums = [];
   const seen = new Set();
@@ -250,9 +279,32 @@ function obviousPortsFromBodies(...bodies) {
       }
     }
   }
+  return namePorts(nums);
+}
+
+/** Unique port numbers from scour hit snippets → web/api/app (then port4…). */
+function obviousPortsFromHitSnippets(hits) {
+  const nums = [];
+  const seen = new Set();
+  for (const h of hits || []) {
+    const snip = String(h?.snippet || '');
+    for (const m of snip.matchAll(/\b(\d{2,5})\b/g)) {
+      const n = Number(m[1]);
+      if (n >= 1024 && n <= 65535 && !seen.has(n)) {
+        seen.add(n);
+        nums.push(n);
+      }
+    }
+  }
+  return namePorts(nums);
+}
+
+function namePorts(nums) {
   const names = ['web', 'api', 'app'];
   const out = {};
-  nums.slice(0, names.length).forEach((n, i) => { out[names[i]] = n; });
+  nums.slice(0, 6).forEach((n, i) => {
+    out[names[i] || `port${i + 1}`] = n;
+  });
   return out;
 }
 

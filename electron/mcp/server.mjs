@@ -20,7 +20,8 @@ const SERVER_INFO = { name: 'plenum', version: '0.1.0' };
 const TOOLS = [
   {
     name: 'repo.doctor',
-    description: 'Read the repo and propose a lane manifest. Writes nothing unless write is true, and then only when the repo has no lane.yaml yet.',
+    description:
+      'Scan the repo and propose a lane manifest plus an agentPrompt. Always read agentPrompt after this call — the recipe alone does not make parallel lanes work; follow the prompt to wire the app (env vars with non-Plenum defaults). Writes nothing unless write is true, and then only when the repo has no lane.yaml yet.',
     inputSchema: {
       type: 'object',
       properties: {
