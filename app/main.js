@@ -17,6 +17,13 @@ import { groupBranchesByPrefix } from './lib/branch-folders.js';
 import { startTour } from './lib/tour.js';
 import { noteLaunch, pickNudge, markShown } from './lib/nudge.js';
 import { bindLayoutResizers } from './lib/layout-widths.js';
+import {
+  SECTION_HEIGHT_DEFAULTS,
+  applySectionHeights,
+  clampSectionHeight,
+  readSectionHeights,
+  writeSectionHeights,
+} from './lib/section-heights.js';
 import { enhanceSelects, closeSelectMenus } from './lib/select.js';
 import {
   applyGraphColumnLayout,
@@ -1758,6 +1765,8 @@ function paintPanel() {
   const lanesBody = visibleLanes.length
     ? visibleLanes.map((l) => laneRowHTML(l, b, selected)).join('')
     : emptyNote(lanesEmpty);
+  const sectionResize = (key) =>
+    `<i class="section-resize" data-section-resize="${key}" title="Drag to resize · double-click to reset" aria-hidden="true"></i>`;
   html += `<div class="section section-accordion">
     <div class="branch-head">
       <button class="lane-row branch-toggle" type="button" data-lanes aria-expanded="${lanesOpen}" title="Worktrees with Plenum runner setup.">
@@ -1768,7 +1777,8 @@ function paintPanel() {
       </button>
       <button class="iconbtn add" type="button" data-new-lane aria-label="New lane from main">${iconHTML('plus', 'sm')}</button>
     </div>
-    <div class="section-body"${lanesOpen ? '' : ' hidden'}>${lanesBody}</div>
+    <div class="section-body" data-section="lanes"${lanesOpen ? '' : ' hidden'}>${lanesBody}</div>
+    ${lanesOpen ? sectionResize('lanes') : ''}
   </div>`;
 
   const worktreesBody = visibleWorktrees.length
@@ -1794,7 +1804,8 @@ function paintPanel() {
       <span class="name">Worktrees</span>
       <span class="meta">${visibleWorktrees.length}</span>
     </button>
-    <div class="section-body"${worktreesOpen ? '' : ' hidden'}>${worktreesBody}</div>
+    <div class="section-body" data-section="worktrees"${worktreesOpen ? '' : ' hidden'}>${worktreesBody}</div>
+    ${worktreesOpen ? sectionResize('worktrees') : ''}
   </div>`;
 
   const allBranches = b.branches || [];
@@ -1826,9 +1837,11 @@ function paintPanel() {
       <div class="remote-alert" title="${esc(origin.detail || label)}">${iconHTML('warning-circle', 'sm')}<span>${label}</span></div>
     </div>`;
   }
+  const localOpen = state.branchesOpen || !!q;
+  const remoteOpen = state.remotesOpen || !!q;
   html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
     <div class="branch-head">
-    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${state.branchesOpen || !!q}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs team tip stays on the lane header.">
+    <button class="lane-row branch-toggle" type="button" data-branches aria-expanded="${localOpen}" title="Local tips. ↓↑ ${vsRef ? `vs ${esc(vsRef)}` : 'only when drifted from upstream (origin/…)'}. Vs team tip stays on the lane header.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="section-icon">${iconHTML('desktop', 'sm')}</span>
       <span class="name">Local</span>
@@ -1836,17 +1849,19 @@ function paintPanel() {
     </button>
     <button class="linkbtn cleanup-entry" type="button" data-cleanup title="Clear safe lanes, worktrees, and local tips">Cleanup…</button>
     ${branchVsSelectHTML(b)}
-  </div>
-    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
+    </div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}" data-section="local"${localOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
+    ${localOpen ? sectionResize('local') : ''}
   </div>`;
   html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
-    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${state.remotesOpen || !!q}" title="Branches that exist only on the remote. Check one out to work on it locally; tips you already track live under Local.">
+    <button class="lane-row branch-toggle" type="button" data-remotes aria-expanded="${remoteOpen}" title="Branches that exist only on the remote. Check one out to work on it locally; tips you already track live under Local.">
       <span class="mark">${iconHTML('caret-right')}</span>
       <span class="section-icon">${iconHTML('cloud', 'sm')}</span>
       <span class="name">Remote</span>
       <span class="meta">${remoteMeta}</span>
     </button>
-    <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.remotesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${remoteBody}</div>
+    <div class="branch-list${refreshing ? ' is-refreshing' : ''}" data-section="remote"${remoteOpen ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${remoteBody}</div>
+    ${remoteOpen ? sectionResize('remote') : ''}
   </div>`;
 
   closeSelectMenus();
@@ -1947,7 +1962,49 @@ function paintPanel() {
     });
   });
   layout.remountRails();
+  applySectionHeights(el.panel, readSectionHeights());
+  el.panel.querySelectorAll('[data-section-resize]').forEach(bindSectionResize);
   bindPanelScrollReveal(el.panel.querySelector('.panel-scroll'));
+}
+
+function bindSectionResize(handle) {
+  if (!handle || handle.dataset.bound === '1') return;
+  handle.dataset.bound = '1';
+  const key = handle.dataset.sectionResize;
+  if (!key || !(key in SECTION_HEIGHT_DEFAULTS)) return;
+
+  const persist = (px) => {
+    const heights = writeSectionHeights({ ...readSectionHeights(), [key]: clampSectionHeight(px) });
+    applySectionHeights(el.panel, heights);
+  };
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startH = readSectionHeights()[key];
+    handle.classList.add('is-active');
+    document.body.classList.add('is-row-resizing');
+    const onMove = (ev) => {
+      persist(startH + (ev.clientY - startY));
+    };
+    const onUp = () => {
+      handle.classList.remove('is-active');
+      document.body.classList.remove('is-row-resizing');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  });
+  handle.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    persist(SECTION_HEIGHT_DEFAULTS[key]);
+  });
 }
 
 // #117 pinned branches per repo (right-click → Pin to top). Per-viewer convenience, like the baseline pick.

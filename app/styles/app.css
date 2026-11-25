@@ -1708,13 +1708,17 @@ body.is-row-resizing * {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* #134: sections share height; each open body scrolls — keep every accordion head on screen */
-  overflow: hidden;
+  /* #141: capped bodies; panel scrolls when the stack of caps exceeds the rail */
+  overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 .window.app .panel-scroll::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+}
+.window.app .panel-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-tertiary) 45%, transparent);
+  border-radius: 3px;
 }
 .window.app .panel .panel-foot {
   flex-shrink: 0;
@@ -1763,11 +1767,12 @@ body.is-row-resizing * {
   flex-direction: column;
   flex: 0 0 auto;
   min-height: 0;
+  position: relative;
 }
-/* Open accordions share leftover height so Lanes / Worktrees / Local / Remote heads stay visible */
+/* #141: open bodies use persisted max-height (flex 0 0 auto) instead of equal flex share */
 .window.app .panel .section.section-accordion:has([aria-expanded="true"]) {
-  flex: 1 1 0;
-  min-height: 72px;
+  flex: 0 0 auto;
+  min-height: 0;
 }
 .window.app .panel .section.section-accordion + .section.section-accordion {
   border-top: 1px solid var(--hairline);
@@ -1782,11 +1787,37 @@ body.is-row-resizing * {
 }
 .window.app .panel .section-body:not([hidden]),
 .window.app .panel .branch-list:not([hidden]) {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 56px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+/* Hairline ns-resize handle under open Lanes / Worktrees / Local / Remote bodies */
+.window.app .panel .section-resize {
+  flex: 0 0 auto;
+  position: relative;
+  height: 6px;
+  margin-top: -3px;
+  margin-bottom: -3px;
+  cursor: ns-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.window.app .panel .section-resize::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: transparent;
+  transition: background 120ms ease;
+}
+.window.app .panel .section-resize:hover::after,
+.window.app .panel .section-resize.is-active::after {
+  background: var(--primary);
 }
 .window.app .panel .section-body .empty-note,
 .window.app .panel .branch-list .empty-note {
