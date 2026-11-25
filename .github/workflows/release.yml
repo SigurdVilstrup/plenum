@@ -91,7 +91,10 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm test
+      # Full suite runs on release-mac. Windows still has Unix-fixture gaps (launcher
+      # symlinks, detached Git Bash smoke); pack + OTA smoke below are the Windows gate.
+      - name: Smoke unit tests (Windows-critical)
+        run: node --test --test-concurrency=1 electron/lane/shell.test.mjs electron/os-open.test.mjs electron/github-star.test.mjs
 
       - name: Release notes = commit headers since the previous tag
         shell: bash

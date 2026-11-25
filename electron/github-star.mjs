@@ -46,9 +46,11 @@ export function resolveGhBin({
 } = {}) {
   const list = bins || ghCandidates(home, platform);
   const ghName = platform === 'win32' ? 'gh.exe' : 'gh';
+  // Prefer the platform under test (tests pass Unix PATH on a Windows runner).
+  const delim = platform === 'win32' ? ';' : ':';
   for (const b of list) {
     if (b === 'gh' || b === 'gh.exe') {
-      for (const dir of String(pathEnv).split(path.delimiter)) {
+      for (const dir of String(pathEnv).split(delim)) {
         if (!dir) continue;
         const abs = path.join(dir, ghName);
         if (existsSync(abs)) return abs;
