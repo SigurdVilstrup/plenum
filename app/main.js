@@ -19,9 +19,11 @@ import { noteLaunch, pickNudge, markShown } from './lib/nudge.js';
 import { bindLayoutResizers } from './lib/layout-widths.js';
 import {
   SECTION_HEIGHT_DEFAULTS,
-  applySectionHeights,
-  clampSectionHeight,
+  layoutPanelSections,
+  measureOpenBodyBudget,
+  openSectionKeys,
   readSectionHeights,
+  resizeSectionHeights,
   writeSectionHeights,
 } from './lib/section-heights.js';
 import { enhanceSelects, closeSelectMenus } from './lib/select.js';
@@ -1962,9 +1964,24 @@ function paintPanel() {
     });
   });
   layout.remountRails();
-  applySectionHeights(el.panel, readSectionHeights());
+  layoutPanelSections(el.panel, readSectionHeights());
   el.panel.querySelectorAll('[data-section-resize]').forEach(bindSectionResize);
+  ensureSectionLayoutObserver();
   bindPanelScrollReveal(el.panel.querySelector('.panel-scroll'));
+}
+
+let sectionLayoutRo = null;
+function ensureSectionLayoutObserver() {
+  const scroll = el.panel?.querySelector('.panel-scroll');
+  if (!scroll) return;
+  if (!sectionLayoutRo) {
+    sectionLayoutRo = new ResizeObserver(() => {
+      if (!el.panel || el.panel.hidden) return;
+      layoutPanelSections(el.panel, readSectionHeights());
+    });
+  }
+  sectionLayoutRo.disconnect();
+  sectionLayoutRo.observe(scroll);
 }
 
 function bindSectionResize(handle) {
@@ -1974,8 +1991,14 @@ function bindSectionResize(handle) {
   if (!key || !(key in SECTION_HEIGHT_DEFAULTS)) return;
 
   const persist = (px) => {
-    const heights = writeSectionHeights({ ...readSectionHeights(), [key]: clampSectionHeight(px) });
-    applySectionHeights(el.panel, heights);
+    const scroll = el.panel?.querySelector('.panel-scroll');
+    const preferred = readSectionHeights();
+    const keys = openSectionKeys(el.panel);
+    const budget = measureOpenBodyBudget(scroll);
+    const heights = writeSectionHeights(
+      resizeSectionHeights(preferred, key, px, keys, budget),
+    );
+    layoutPanelSections(el.panel, heights);
   };
 
   handle.addEventListener('pointerdown', (e) => {
@@ -1983,7 +2006,8 @@ function bindSectionResize(handle) {
     e.preventDefault();
     e.stopPropagation();
     const startY = e.clientY;
-    const startH = readSectionHeights()[key];
+    const body = el.panel?.querySelector(`[data-section="${key}"]`);
+    const startH = body?.offsetHeight || readSectionHeights()[key];
     handle.classList.add('is-active');
     document.body.classList.add('is-row-resizing');
     const onMove = (ev) => {

@@ -1708,17 +1708,14 @@ body.is-row-resizing * {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* #141: capped bodies; panel scrolls when the stack of caps exceeds the rail */
+  /* #141: open bodies share the rail exactly; trailing closed headers sit under the last open body */
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  /* Native bars hidden; panel-scroll-thumb overlays while scrolling */
+  scrollbar-width: none;
 }
 .window.app .panel-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.window.app .panel-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--ink-tertiary) 45%, transparent);
-  border-radius: 3px;
+  display: none;
 }
 .window.app .panel .panel-foot {
   flex-shrink: 0;
@@ -1791,7 +1788,11 @@ body.is-row-resizing * {
   min-height: 56px;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+.window.app .panel .section-body::-webkit-scrollbar,
+.window.app .panel .branch-list::-webkit-scrollbar {
+  display: none;
 }
 /* Hairline ns-resize handle under open Lanes / Worktrees / Local / Remote bodies */
 .window.app .panel .section-resize {
