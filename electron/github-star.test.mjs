@@ -36,6 +36,17 @@ test('resolveGhBin uses PATH when gh is present there', () => {
   assert.equal(bin, '/custom/bin/gh');
 });
 
+// Host-agnostic: exercises win32 ';' PATH + gh.exe joining on Mac CI too.
+test('resolveGhBin uses Windows PATH when gh.exe is present there', () => {
+  const bin = resolveGhBin({
+    home: 'C:\\Users\\me',
+    pathEnv: 'C:\\custom\\bin;C:\\Windows\\System32',
+    platform: 'win32',
+    existsSync: (p) => p === 'C:\\custom\\bin\\gh.exe',
+  });
+  assert.equal(bin, 'C:\\custom\\bin\\gh.exe');
+});
+
 test('resolveGhBin returns null when nothing exists', () => {
   assert.equal(resolveGhBin({
     home: '/Users/me',

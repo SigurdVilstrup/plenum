@@ -5,6 +5,11 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+/** Join with the target platform's separators — host `path.join` breaks cross-OS unit tests. */
+function pathFor(platform) {
+  return platform === 'win32' ? path.win32 : path.posix;
+}
+
 export const PLENUM_GITHUB = {
   owner: 'SigurdVilstrup',
   repo: 'plenum',
@@ -13,21 +18,22 @@ export const PLENUM_GITHUB = {
 
 /** Candidate `gh` paths. Dock-launched Electron often misses Homebrew on PATH. */
 export function ghCandidates(home = process.env.HOME || process.env.USERPROFILE || '', platform = process.platform) {
+  const join = pathFor(platform).join;
   if (platform === 'win32') {
     const pf = process.env.ProgramFiles || 'C:\\Program Files';
     const local = process.env.LOCALAPPDATA || '';
     return [
       'gh.exe',
       'gh',
-      path.join(pf, 'GitHub CLI', 'gh.exe'),
-      local ? path.join(local, 'Programs', 'GitHub CLI', 'gh.exe') : null,
+      join(pf, 'GitHub CLI', 'gh.exe'),
+      local ? join(local, 'Programs', 'GitHub CLI', 'gh.exe') : null,
     ].filter(Boolean);
   }
   return [
     'gh',
     '/opt/homebrew/bin/gh',
     '/usr/local/bin/gh',
-    home ? path.join(home, '.local/bin/gh') : null,
+    home ? join(home, '.local/bin/gh') : null,
   ].filter(Boolean);
 }
 
@@ -45,6 +51,7 @@ export function resolveGhBin({
   platform = process.platform,
 } = {}) {
   const list = bins || ghCandidates(home, platform);
+  const join = pathFor(platform).join;
   const ghName = platform === 'win32' ? 'gh.exe' : 'gh';
   // Prefer the platform under test (tests pass Unix PATH on a Windows runner).
   const delim = platform === 'win32' ? ';' : ':';
@@ -52,7 +59,7 @@ export function resolveGhBin({
     if (b === 'gh' || b === 'gh.exe') {
       for (const dir of String(pathEnv).split(delim)) {
         if (!dir) continue;
-        const abs = path.join(dir, ghName);
+        const abs = join(dir, ghName);
         if (existsSync(abs)) return abs;
       }
       continue;
