@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plenum mark lab</title>
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --canvas: #010102;
+    --hairline: #23252a;
+    --ink: #f7f8f8;
+    --ink-subtle: #8a8f98;
+    --ink-tertiary: #62666d;
+    --primary: #5e6ad2;
+    --primary-hi: #8b93e8;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+  .hud {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2;
+    width: min(300px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    padding: 12px 14px 10px;
+    border: 1px solid var(--hairline);
+    background: rgba(15, 16, 17, .92);
+    backdrop-filter: blur(8px);
+    font-size: 12px;
+    color: var(--ink-subtle);
+  }
+  .hud h1, .hud h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .hud h2 { margin-top: 14px; margin-bottom: 8px; font-size: 12px; color: var(--ink-subtle); font-weight: 600; }
+  .hud label {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+    align-items: center;
+    margin: 0 0 8px;
+  }
+  .hud label span:first-child { grid-column: 1; }
+  .hud label .val {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-tertiary);
+  }
+  .hud input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+    accent-color: var(--primary);
+  }
+  .hud .meta {
+    margin: 4px 0 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-tertiary);
+  }
+  .intros {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .intros button {
+    appearance: none;
+    border: 1px solid var(--hairline);
+    background: #121315;
+    color: var(--ink-subtle);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .intros button:hover { border-color: #34343a; color: var(--ink); }
+  .intros button:focus-visible { outline: 2px solid var(--primary-hi); outline-offset: 2px; }
+  .intros button.on {
+    border-color: rgba(94, 106, 210, .55);
+    color: var(--ink);
+    background: rgba(94, 106, 210, .12);
+  }
+  .note {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 2;
+    max-width: 340px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink-subtle);
+    pointer-events: none;
+  }
+  .note strong { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<p class="note"><strong>Mark lab</strong> — only nearby dots lean toward the pointer. Try the intro animations below. Dev-only.</p>
+<canvas id="c" aria-label="Interactive Plenum mark made of dots"></canvas>
+<aside class="hud" id="hud">
+  <h1>Tunables</h1>
+  <label>Density <span class="val" id="v-density"></span>
+    <input type="range" id="density" min="0.35" max="1.4" step="0.05" value="1.4">
+  </label>
+  <label>Dot size <span class="val" id="v-size"></span>
+    <input type="range" id="size" min="0.8" max="3.2" step="0.1" value="0.8">
+  </label>
+  <label>Pull <span class="val" id="v-pull"></span>
+    <input type="range" id="pull" min="0" max="20" step="0.25" value="1.5">
+  </label>
+  <label>Radius <span class="val" id="v-radius"></span>
+    <input type="range" id="radius" min="20" max="280" step="4" value="200">
+  </label>
+  <label>Falloff <span class="val" id="v-falloff"></span>
+    <input type="range" id="falloff" min="0.6" max="3.5" step="0.1" value="0.6">
+  </label>
+  <label>Ease <span class="val" id="v-ease"></span>
+    <input type="range" id="ease" min="0.08" max="0.6" step="0.02" value="0.08">
+  </label>
+  <p class="meta" id="stats"></p>
+
+  <h2>Intro</h2>
+  <div class="intros" id="intros" role="group" aria-label="Intro animations">
+    <button type="button" data-intro="rise">1 · Rise</button>
+    <button type="button" data-intro="assemble" class="on">2 · Assemble</button>
+    <button type="button" data-intro="cascade">3 · Cascade</button>
+    <button type="button" data-intro="bloom">4 · Bloom</button>
+    <button type="button" data-intro="drift">5 · Drift</button>
+  </div>
+</aside>
+<script>
+(function () {
+  // Path from branding/plenum-mark.svg (64×64 viewBox).
+  var MARK_PATH = 'M12.50,6.00 L11.24,6.29 L9.98,6.97 L8.91,8.13 L8.23,10.27 L8.23,12.01 L8.91,14.05 L9.88,15.22 L11.63,16.09 L12.99,16.28 L30.74,16.19 L32.58,16.57 L33.55,17.16 L53.54,17.16 L51.50,16.38 L41.22,16.38 L38.99,15.60 L37.63,14.44 L36.75,12.99 L36.17,9.78 L35.40,8.13 L34.33,7.07 L32.49,6.19 L31.42,6.00 Z M10.07,15.31 L11.04,15.90 L12.99,16.28 L30.74,16.19 L32.00,16.38 L33.75,17.25 L34.72,18.22 L35.49,19.68 L35.78,21.04 L35.69,22.88 L35.20,24.24 L34.13,25.60 L32.68,26.47 L31.81,26.66 L12.99,26.66 L11.63,26.96 L10.17,27.83 L37.72,27.83 L38.99,26.96 L40.73,26.47 L51.60,26.47 L53.05,26.08 L54.22,25.31 L55.28,23.85 L55.67,22.69 L55.77,20.84 L55.09,18.71 L53.44,17.06 L51.50,16.38 L41.22,16.38 L39.76,15.99 L38.60,15.31 Z M33.55,25.99 L31.81,26.66 L12.99,26.66 L11.92,26.86 L9.98,27.93 L9.01,29.09 L8.23,31.32 L8.43,33.75 L9.01,35.01 L9.88,35.98 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.39,37.43 L33.65,38.21 L53.63,38.21 L52.57,37.63 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.31,36.46 L37.14,35.49 L36.27,34.23 L35.78,32.58 L35.88,30.74 L36.56,29.09 L37.63,27.83 L39.47,26.76 L40.73,26.47 L51.60,26.47 L53.15,25.99 Z M10.46,36.37 L11.14,36.75 L12.79,37.14 L31.22,37.14 L32.10,37.34 L33.84,38.31 L35.10,39.86 L35.69,41.41 L35.78,43.54 L35.40,45.00 L34.52,46.36 L33.55,47.13 L32.00,47.72 L12.31,47.81 L11.24,48.10 L10.27,48.69 L38.01,48.69 L39.28,47.91 L40.83,47.52 L51.79,47.52 L53.83,46.75 L54.99,45.49 L55.67,43.84 L55.67,41.31 L54.90,39.47 L53.25,37.92 L51.40,37.34 L40.73,37.34 L39.47,37.04 L38.21,36.37 Z M33.94,46.84 L32.78,47.52 L31.13,47.81 L11.82,47.91 L9.98,48.88 L8.72,50.53 L8.23,52.47 L8.52,54.80 L9.10,55.96 L10.27,57.13 L11.63,57.81 L12.60,58.00 L31.13,58.00 L32.10,57.81 L33.26,57.32 L34.72,56.06 L35.59,54.41 L36.27,50.82 L37.04,49.56 L38.50,48.30 L40.83,47.52 L51.79,47.52 L53.63,46.84 Z';
+
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d', { alpha: false });
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var dpr = 1;
+  var W = 0, H = 0;
+  var dots = [];
+  var pointer = { x: 0, y: 0, active: false };
+  var mark = { cx: 0, cy: 0, scale: 1, k: 1 };
+  var raf = 0;
+  var running = false;
+  var intro = { kind: 'assemble', t0: 0, active: false };
+  var now = performance.now();
+
+  var params = {
+    density: 1.4,
+    size: 0.8,
+    pull: 1.5,
+    radius: 200,
+    falloff: 0.6,
+    ease: 0.08
+  };
+
+  var ids = ['density', 'size', 'pull', 'radius', 'falloff', 'ease'];
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    var val = document.getElementById('v-' + id);
+    function sync() {
+      params[id] = parseFloat(el.value);
+      val.textContent = el.value;
+    }
+    el.addEventListener('input', function () {
+      sync();
+      if (id === 'density') rebuild(false);
+      else startLoop();
+    });
+    sync();
+  });
+
+  var introBtns = document.getElementById('intros');
+  introBtns.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-intro]');
+    if (!btn) return;
+    intro.kind = btn.getAttribute('data-intro');
+    Array.prototype.forEach.call(introBtns.querySelectorAll('button'), function (b) {
+      b.classList.toggle('on', b === btn);
+    });
+    playIntro(intro.kind);
+  });
+
+  function lerpColor(t) {
+    var stops = [
+      [0, 0x8b, 0x93, 0xe8],
+      [0.48, 0x5e, 0x6a, 0xd2],
+      [1, 0x3f, 0x48, 0xa8]
+    ];
+    t = Math.max(0, Math.min(1, t));
+    var a = stops[0], b = stops[1];
+    if (t > stops[1][0]) { a = stops[1]; b = stops[2]; }
+    var u = (t - a[0]) / (b[0] - a[0] || 1);
+    return 'rgb(' + ((a[1] + (b[1] - a[1]) * u) | 0) + ',' +
+      ((a[2] + (b[2] - a[2]) * u) | 0) + ',' +
+      ((a[3] + (b[3] - a[3]) * u) | 0) + ')';
+  }
+
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function sampleHomes(pixelSize, step) {
+    var off = document.createElement('canvas');
+    off.width = pixelSize;
+    off.height = pixelSize;
+    var o = off.getContext('2d');
+    o.setTransform(pixelSize / 64, 0, 0, pixelSize / 64, 0, 0);
+    o.fillStyle = '#fff';
+    o.fill(new Path2D(MARK_PATH));
+    var data = o.getImageData(0, 0, pixelSize, pixelSize).data;
+    var homes = [];
+    var half = step / 2;
+    for (var y = half; y < pixelSize; y += step) {
+      for (var x = half; x < pixelSize; x += step) {
+        var i = (((y | 0) * pixelSize) + (x | 0)) * 4;
+        if (data[i + 3] < 128) continue;
+        homes.push({ lx: x / pixelSize, ly: y / pixelSize });
+      }
+    }
+    return homes;
+  }
+
+  function rebuild(autoIntro) {
+    var markPx = Math.round(Math.min(W, H) * 0.8);
+    mark.scale = markPx;
+    mark.cx = W / 2;
+    mark.cy = H / 2;
+    mark.k = markPx / 400;
+
+    var pixelSize = Math.max(160, Math.min(900, markPx));
+    var step = Math.max(2, Math.round((6.5 / params.density) * (pixelSize / 400)));
+    var homes = sampleHomes(pixelSize, step);
+    dots = homes.map(function (h) {
+      var hx = mark.cx + (h.lx - 0.5) * mark.scale;
+      var hy = mark.cy + (h.ly - 0.5) * mark.scale;
+      return {
+        hx: hx, hy: hy,
+        x: hx, y: hy,
+        sx: hx, sy: hy,
+        alpha: 1,
+        delay: 0,
+        color: lerpColor(h.ly),
+        lx: h.lx, ly: h.ly
+      };
+    });
+    document.getElementById('stats').textContent = dots.length + ' dots · ' + markPx + 'px';
+    if (reduce) {
+      drawFrame(true);
+      return;
+    }
+    if (autoIntro !== false) playIntro(intro.kind);
+    else startLoop();
+  }
+
+  function playIntro(kind) {
+    if (reduce) {
+      for (var i = 0; i < dots.length; i++) {
+        var d = dots[i];
+        d.x = d.hx; d.y = d.hy; d.alpha = 1;
+      }
+      drawFrame(true);
+      return;
+    }
+    intro.kind = kind;
+    intro.t0 = performance.now();
+    intro.active = true;
+    var span = mark.scale * 0.55;
+
+    for (var i = 0; i < dots.length; i++) {
+      var d = dots[i];
+      d.alpha = 0;
+      d.x = d.hx;
+      d.y = d.hy;
+      if (kind === 'rise') {
+        d.sx = d.hx;
+        d.sy = d.hy + span * 0.22;
+        d.delay = d.ly * 420 + Math.random() * 80;
+      } else if (kind === 'assemble') {
+        var ang = Math.random() * Math.PI * 2;
+        var rad = span * (0.55 + Math.random() * 0.7);
+        d.sx = mark.cx + Math.cos(ang) * rad;
+        d.sy = mark.cy + Math.sin(ang) * rad;
+        d.delay = Math.random() * 520;
+      } else if (kind === 'cascade') {
+        d.sx = d.hx;
+        d.sy = d.hy - span * 0.08;
+        d.delay = d.ly * 700 + d.lx * 90;
+        d.alpha = 0;
+      } else if (kind === 'bloom') {
+        d.sx = mark.cx;
+        d.sy = mark.cy;
+        var dx = d.hx - mark.cx, dy = d.hy - mark.cy;
+        d.delay = Math.sqrt(dx * dx + dy * dy) * 1.1;
+      } else if (kind === 'drift') {
+        var side = d.lx < 0.5 ? -1 : 1;
+        d.sx = d.hx + side * span * 0.85;
+        d.sy = d.hy + (d.ly - 0.5) * span * 0.12;
+        d.delay = (1 - Math.abs(d.lx - 0.5) * 2) * 180 + d.ly * 280;
+      }
+      d.x = d.sx;
+      d.y = d.sy;
+    }
+    startLoop();
+  }
+
+  function introProgress(d, elapsed) {
+    var local = (elapsed - d.delay) / 720;
+    if (local <= 0) return 0;
+    if (local >= 1) return 1;
+    return easeOutCubic(local);
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rebuild(true);
+  }
+
+  function drawFrame(forceHome) {
+    ctx.fillStyle = '#010102';
+    ctx.fillRect(0, 0, W, H);
+
+    var k = mark.k || 1;
+    var r = params.radius * k;
+    var r2 = r * r;
+    var pull = params.pull * k;
+    var fall = params.falloff;
+    var ease = params.ease;
+    var size = params.size * Math.max(0.85, Math.min(1.6, k));
+    var px = pointer.x;
+    var py = pointer.y;
+    var pointerOn = pointer.active && !reduce && !forceHome && !intro.active;
+    var elapsed = now - intro.t0;
+    var introDone = true;
+
+    for (var i = 0; i < dots.length; i++) {
+      var d = dots[i];
+      var tx = d.hx;
+      var ty = d.hy;
+      var a = 1;
+
+      if (intro.active && !forceHome && !reduce) {
+        var p = introProgress(d, elapsed);
+        if (p < 1) introDone = false;
+        tx = d.sx + (d.hx - d.sx) * p;
+        ty = d.sy + (d.hy - d.sy) * p;
+        a = p;
+        d.x = tx;
+        d.y = ty;
+        d.alpha = a;
+      } else if (forceHome || reduce) {
+        d.x = d.hx;
+        d.y = d.hy;
+        d.alpha = 1;
+      } else {
+        // Only dots inside the radius move — toward the pointer, falloff by distance.
+        if (pointerOn) {
+          var dx = px - d.hx;
+          var dy = py - d.hy;
+          var dist2 = dx * dx + dy * dy;
+          if (dist2 < r2 && dist2 > 0.0001) {
+            var dist = Math.sqrt(dist2);
+            var t = 1 - dist / r;
+            var strength = pull * Math.pow(t, fall);
+            tx = d.hx + (dx / dist) * strength;
+            ty = d.hy + (dy / dist) * strength;
+          }
+        }
+        d.x += (tx - d.x) * ease;
+        d.y += (ty - d.y) * ease;
+        d.alpha = 1;
+      }
+
+      if (d.alpha <= 0.01) continue;
+      ctx.globalAlpha = d.alpha;
+      ctx.beginPath();
+      ctx.fillStyle = d.color;
+      ctx.arc(d.x, d.y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    if (intro.active && introDone) intro.active = false;
+  }
+
+  function settled() {
+    if (intro.active) return false;
+    for (var i = 0; i < dots.length; i++) {
+      var d = dots[i];
+      var ox = d.x - d.hx, oy = d.y - d.hy;
+      if (ox * ox + oy * oy > 0.25) return false;
+    }
+    return true;
+  }
+
+  function tick(t) {
+    if (!running) return;
+    now = t;
+    drawFrame(false);
+    if (!pointer.active && !intro.active && settled()) {
+      stopLoop();
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function startLoop() {
+    if (reduce || running) return;
+    running = true;
+    raf = requestAnimationFrame(tick);
+  }
+
+  function stopLoop() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  }
+
+  addEventListener('pointermove', function (e) {
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    pointer.active = true;
+    if (!intro.active) startLoop();
+  });
+  addEventListener('pointerdown', function (e) {
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    pointer.active = true;
+    if (!intro.active) startLoop();
+  });
+  document.documentElement.addEventListener('pointerleave', function () {
+    pointer.active = false;
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopLoop();
+    else if ((pointer.active || intro.active) && !reduce) startLoop();
+  });
+
+  addEventListener('resize', resize);
+
+  if (reduce) {
+    document.getElementById('hud').style.opacity = '0.55';
+    document.querySelector('.note').textContent = 'Reduced motion: static mark.';
+  }
+  resize();
+})();
+</script>
+</body>
+</html>
