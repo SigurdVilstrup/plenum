@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as asar from '@electron/asar';
 import {
+  asarFileKey,
   asarPathForApp,
   die,
   findPackagedApp,
@@ -238,7 +239,7 @@ function checkAsar(asarFile) {
 
   // Feed URL still baked into packaged module (guards against a bad rewrite at build time).
   try {
-    const packed = asar.extractFile(asarFile, 'electron/updates.mjs').toString('utf8');
+    const packed = asar.extractFile(asarFile, asarFileKey('electron/updates.mjs')).toString('utf8');
     const ok = packed.includes(PUBLIC_FEED_URL);
     gates.push({
       id: 'ota-asar-feed-url',

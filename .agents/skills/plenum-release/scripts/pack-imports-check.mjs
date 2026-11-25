@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as asar from '@electron/asar';
 import {
+  asarFileKey,
   asarPathForApp,
   die,
   findPackagedApp,
@@ -76,12 +77,12 @@ function resolveInAsar(fromEntry, spec) {
 }
 
 function checkAsarGraph(asarFile) {
-  const pkgRaw = asar.extractFile(asarFile, 'package.json').toString('utf8');
+  const pkgRaw = asar.extractFile(asarFile, asarFileKey('package.json')).toString('utf8');
   const pkg = JSON.parse(pkgRaw);
   const entry = normalizeAsarEntry(pkg.main || 'electron/main.mjs');
-  const listed = new Set(asar.listPackage(asarFile).map((p) => normalizeAsarEntry(p.replace(/^\//, ''))));
-  // listPackage often returns paths like "/electron/main.mjs"
-  const has = (rel) => listed.has(rel) || listed.has(`/${rel}`);
+  // listPackage uses path.join on the host — normalize to forward-slash keys.
+  const listed = new Set(asar.listPackage(asarFile).map((p) => normalizeAsarEntry(p)));
+  const has = (rel) => listed.has(normalizeAsarEntry(rel));
 
   const missing = [];
   const visited = new Set();
@@ -97,7 +98,8 @@ function checkAsarGraph(asarFile) {
     }
     let source;
     try {
-      source = asar.extractFile(asarFile, cur).toString('utf8');
+      // Platform seps required — nested "/" paths break asar getFile on win32.
+      source = asar.extractFile(asarFile, asarFileKey(cur)).toString('utf8');
     } catch (err) {
       missing.push({ from: null, spec: null, tried: [cur], error: String(err.message || err) });
       continue;
@@ -170,7 +172,9 @@ function main() {
               .map((m) =>
                 m.from
                   ? `${m.from} → ${m.spec} (tried ${m.tried.join(', ')})`
-                  : `missing entry ${m.tried?.[0] || '?'}`,
+                  : m.error
+                    ? `extract ${m.tried?.[0] || '?'}: ${m.error}`
+                    : `missing entry ${m.tried?.[0] || '?'}`,
               )
               .join('; '),
       missing: graph.missing,

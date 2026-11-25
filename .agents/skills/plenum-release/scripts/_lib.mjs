@@ -129,5 +129,15 @@ export function relativeSpecifiers(source) {
 }
 
 export function normalizeAsarEntry(rel) {
-  return rel.replace(/\\/g, '/').replace(/^\.\//, '');
+  return rel.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+}
+
+/**
+ * Key for asar.extractFile / getFile.
+ * @electron/asar walks with path.dirname/basename, so nested forward-slash
+ * paths break on Windows (`dirname('a/b/c')` → `'a/b'`). Always pass
+ * platform separators.
+ */
+export function asarFileKey(rel, pathApi = path) {
+  return normalizeAsarEntry(rel).split('/').filter(Boolean).join(pathApi.sep);
 }

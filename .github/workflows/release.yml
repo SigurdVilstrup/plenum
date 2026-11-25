@@ -94,7 +94,12 @@ jobs:
       # Full suite runs on release-mac. Windows still has Unix-fixture gaps (launcher
       # symlinks, detached Git Bash smoke); pack + OTA smoke below are the Windows gate.
       - name: Smoke unit tests (Windows-critical)
-        run: node --test --test-concurrency=1 electron/lane/shell.test.mjs electron/os-open.test.mjs electron/github-star.test.mjs
+        run: >
+          node --test --test-concurrency=1
+          electron/lane/shell.test.mjs
+          electron/os-open.test.mjs
+          electron/github-star.test.mjs
+          .agents/skills/plenum-release/scripts/pack-imports-check.test.mjs
 
       - name: Release notes = commit headers since the previous tag
         shell: bash
@@ -124,8 +129,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APP=$(find release -type f -name 'Plenum.exe' | head -1)
-          test -n "$APP"
+          # Prefer win-unpacked (not a random find hit under release/).
+          APP=release/win-unpacked/Plenum.exe
+          test -f "$APP"
           node .agents/skills/plenum-release/scripts/pack-imports-check.mjs --app "$APP"
           node .agents/skills/plenum-release/scripts/pack-launch-smoke.mjs --app "$APP" --ms 10000
           node .agents/skills/plenum-release/scripts/ota-health-check.mjs \

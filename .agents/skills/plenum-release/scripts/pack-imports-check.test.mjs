@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { relativeSpecifiers } from './_lib.mjs';
+import path from 'node:path';
+import { asarFileKey, normalizeAsarEntry, relativeSpecifiers } from './_lib.mjs';
+
+test('normalizeAsarEntry strips host separators and leading slash', () => {
+  assert.equal(normalizeAsarEntry('\\electron\\git\\stats.mjs'), 'electron/git/stats.mjs');
+  assert.equal(normalizeAsarEntry('/electron/main.mjs'), 'electron/main.mjs');
+});
+
+// Host-agnostic: proves nested keys use win32 seps so asar getFile won't
+// path.win32.dirname('a/b/c') → 'a/b' (single broken segment) on Windows CI.
+test('asarFileKey uses platform separators for nested asar paths', () => {
+  assert.equal(asarFileKey('electron/git/stats.mjs', path.posix), 'electron/git/stats.mjs');
+  assert.equal(asarFileKey('/electron/git/stats.mjs', path.win32), 'electron\\git\\stats.mjs');
+  assert.equal(path.win32.dirname(asarFileKey('electron/git/stats.mjs', path.win32)), 'electron\\git');
+});
 
 test('relativeSpecifiers catches import and re-export', () => {
   const src = `
