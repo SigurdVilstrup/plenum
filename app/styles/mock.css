@@ -3720,47 +3720,78 @@ a.btn {
   user-select: text;
 }
 
-/* Statistics page. Design system: hairline panels, neutral data ink, lavender stays for actions. */
+/* Statistics page. Same settings-body inset; ~18–22px between major blocks (hero → facts → fame → charts → people → heat). */
 .fame-cats {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 8px 0 4px;
+  margin: 10px 0 0;
 }
 .fame-cats .option { font-size: 12px; }
-.stat-facts { margin-top: 12px; }
-.stat-chart { border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--surface-1); padding: 12px 14px 8px; }
-.stat-chart svg { display: block; width: 100%; height: 72px; }
-.stat-chart rect { fill: var(--ink-subtle); }
-.stat-chart rect.zero { fill: var(--hairline); }
-.stat-chart .axis { display: flex; justify-content: space-between; color: var(--ink-tertiary); font-size: 11px; margin-top: 6px; }
-.bar { display: block; height: 6px; border-radius: 3px; background: var(--hairline); overflow: hidden; min-width: 120px; }
-.bar i { display: block; height: 100%; border-radius: 3px; background: var(--ink-subtle); }
-.stat-num { min-width: 120px; text-align: right; color: var(--ink-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.stat-num b { color: var(--ink); font-weight: 500; }
-.stat-heat-wrap { border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--surface-1); padding: 12px 14px; }
-.stat-heat-read { margin: 0 0 10px; color: var(--ink-subtle); font-size: 12px; line-height: 1.4; }
-.stat-heat-read b { color: var(--ink); font-weight: 500; }
-.stat-heat { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 3px; align-items: center; }
-.stat-heat i { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink-subtle) calc(var(--a) * 100%), var(--hairline)); }
-.stat-heat i.peak { outline: 1px solid var(--primary); outline-offset: 0; background: color-mix(in srgb, var(--primary) calc(40% + var(--a) * 60%), var(--hairline)); }
-.stat-heat .d, .stat-heat .h { color: var(--ink-tertiary); font-size: 10px; font-variant-numeric: tabular-nums; }
-.stat-heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink-tertiary); font-size: 11px; }
-.stat-heat-legend .scale { display: inline-grid; grid-template-columns: repeat(5, 10px); gap: 2px; }
-.stat-heat-legend .scale i { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink-subtle) calc(var(--a) * 100%), var(--hairline)); }
-.list-row .name .ai-pill-icon { margin-right: 6px; vertical-align: -2px; }
-.list-row .quip { display: block; margin-top: 1px; color: var(--ink-tertiary); font-style: italic; }
+.fame-cats + .group-head { margin-top: 18px; }
 
-.stat-hero { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--surface-1);
-  display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: baseline; }
+.stat-hero {
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+  align-items: baseline;
+}
 .stat-hero .big { font-size: 28px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--agent); }
 .stat-hero .big small { font-size: 16px; margin-left: 1px; }
 .stat-hero .what { font-weight: 500; }
 .stat-hero .what small { display: block; margin-top: 1px; color: var(--ink-subtle); font-weight: 400; }
 .stat-hero .split { grid-column: 1 / -1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 12px; gap: 2px; }
 .stat-hero .split i { display: block; min-width: 3px; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; color: var(--ink-subtle); }
 .stat-hero .legend { grid-column: 1 / -1; }
+
+.stat-facts { margin-top: 18px; }
+.stat-empty { margin-top: 22px; }
+/* Hall of fame toggle (or empty head) was flush under facts. */
+.stat-facts + .option-row,
+.stat-facts + .group-head { margin-top: 22px; }
+
+.stat-chart {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  padding: 14px 16px 12px;
+}
+.stat-chart svg { display: block; width: 100%; height: 72px; }
+.stat-chart rect { fill: var(--ink-subtle); }
+.stat-chart rect.zero { fill: var(--hairline); }
+.stat-chart .axis { display: flex; justify-content: space-between; color: var(--ink-tertiary); font-size: 11px; margin-top: 8px; }
+.stat-chart .legend { margin-top: 10px; }
+
+.bar { display: block; height: 6px; border-radius: 3px; background: var(--hairline); overflow: hidden; min-width: 120px; }
+.bar i { display: block; height: 100%; border-radius: 3px; background: var(--ink-subtle); }
+.stat-num { min-width: 120px; text-align: right; color: var(--ink-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-num b { color: var(--ink); font-weight: 500; }
+
+.stat-heat-wrap {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  padding: 14px 16px;
+}
+.stat-heat-read { margin: 0 0 12px; color: var(--ink-subtle); font-size: 12px; line-height: 1.4; }
+.stat-heat-read b { color: var(--ink); font-weight: 500; }
+.stat-heat { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 3px; align-items: center; }
+.stat-heat i { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink-subtle) calc(var(--a) * 100%), var(--hairline)); }
+.stat-heat i.peak { outline: 1px solid var(--primary); outline-offset: 0; background: color-mix(in srgb, var(--primary) calc(40% + var(--a) * 60%), var(--hairline)); }
+.stat-heat .d, .stat-heat .h { color: var(--ink-tertiary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.stat-heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--ink-tertiary); font-size: 11px; }
+.stat-heat-legend .scale { display: inline-grid; grid-template-columns: repeat(5, 10px); gap: 2px; }
+.stat-heat-legend .scale i { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink-subtle) calc(var(--a) * 100%), var(--hairline)); }
+
+.list-row .name .ai-pill-icon { margin-right: 6px; vertical-align: -2px; }
+.list-row .quip { display: block; margin-top: 1px; color: var(--ink-tertiary); font-style: italic; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; color: var(--ink-subtle); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend span > i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .legend b { color: var(--ink); font-weight: 500; }

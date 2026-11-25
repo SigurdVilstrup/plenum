@@ -6078,7 +6078,7 @@ function statsPageHTML() {
     `<button class="option${statsView.scope === v ? ' on' : ''}" type="button" aria-pressed="${statsView.scope === v}" data-stats-scope="${v}">${t}</button>`).join('')}</div>`;
   const head = `<h1>Statistics</h1><p class="lede">${s ? `${s.scope === 'all' ? 'Every local and remote branch' : `Commits on <span class="mono">${esc(s.teamRef)}</span>, the protected branch`} in ${esc(activeTab()?.title || 'this repository')}.${s.truncated ? ' Newest 20,000 commits only.' : ''}` : 'Reading history…'}</p>${scope}`;
   if (!s) return head;
-  if (!s.commits) return `${head}<p class="lede" style="margin-top:18px">No commits here yet.</p>`;
+  if (!s.commits) return `${head}<p class="lede stat-empty">No commits here yet.</p>`;
 
   const n = (x) => Number(x).toLocaleString();
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
