@@ -72,4 +72,4 @@ Tools: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.
 
 ## Design
 
-Visual contract: [`docs/design.md`](docs/design.md). Product docs for humans: [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Visual contract: [`docs/design.md`](docs/design.md). Action → icon lexicon: [`docs/icons.md`](docs/icons.md). Product docs for humans: [`README.md`](README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md).

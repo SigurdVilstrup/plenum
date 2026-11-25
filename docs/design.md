@@ -20,7 +20,7 @@ Lane 0 (primary) stays neutral in the graph; the selected lane takes primary; ot
 
 System UI stack. Display at 600 with slight negative tracking for the selected lane name and page titles. Body 13px. Mono 11px for refs, SHAs, paths, WIP counts.
 
-Icons: Phosphor Regular, 16px, `currentColor`, vendored in `app/icons.svg`. No tiles behind icons.
+Icons: Phosphor Regular, 16px, `currentColor`, vendored in `app/icons.svg`. No tiles behind icons. Action → glyph map: [`icons.md`](icons.md).
 
 ## Layout
 
