@@ -1,0 +1,229 @@
+/* Cleanup — full-window page sibling to Branch Overview / Settings. Flat lists, not cards. */
+
+.window.app .body.cleanup-open {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+}
+.body.cleanup-open #lane-head {
+  display: none !important;
+}
+
+#cleanup {
+  grid-column: 1 / -1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: var(--rail-w, 300px) 1fr;
+  flex: 1;
+}
+
+.cleanup-nav {
+  position: relative;
+  width: var(--rail-w, 300px);
+  border-right: 1px solid var(--hairline);
+  background: var(--surface-1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cleanup-nav-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cleanup-nav .heading {
+  padding: 2px 10px 10px;
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cleanup-nav .navitem.back {
+  margin-bottom: 8px;
+}
+
+.cleanup-nav .navitem.back .icon {
+  transform: rotate(180deg);
+}
+
+.cleanup-nav .navitem.back kbd {
+  margin-left: auto;
+}
+
+.cleanup-body {
+  padding: 24px 32px 40px;
+  overflow: auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.cleanup-body h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.cleanup-body .lede {
+  margin: 6px 0 0;
+  color: var(--ink-subtle);
+}
+
+.cleanup-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cleanup-opts {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cleanup-opts .check {
+  margin: 0;
+}
+
+.cleanup-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.cleanup-actions .hint {
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
+.cleanup-group {
+  margin-top: 22px;
+}
+
+.cleanup-group-label {
+  margin: 0 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.cleanup-row {
+  display: grid;
+  grid-template-columns: 20px 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cleanup-row:hover:not(.is-blocked):not(.is-busy) {
+  background: var(--surface-1);
+}
+
+.cleanup-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.cleanup-row.is-blocked {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.cleanup-row.is-busy {
+  cursor: default;
+}
+
+.cleanup-row .kind-icon {
+  color: var(--ink-tertiary);
+}
+
+.cleanup-row .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.cleanup-row .name small {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink-tertiary);
+  font-weight: 400;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cleanup-row .name small.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.cleanup-row .status {
+  color: var(--ink-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cleanup-row .status.is-ok {
+  color: var(--success);
+}
+
+.cleanup-row .status.is-bad {
+  color: var(--danger);
+}
+
+.cleanup-row .status.is-run {
+  color: var(--primary);
+}
+
+.cleanup-empty {
+  margin-top: 28px;
+  color: var(--ink-subtle);
+}
+
+.cleanup-empty p {
+  margin: 0;
+}
+
+.window.app .panel .branch-head .linkbtn.cleanup-entry {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 2px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+
+.window.app .panel .branch-head .linkbtn.cleanup-entry:hover {
+  color: var(--ink);
+}

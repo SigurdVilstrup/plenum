@@ -32,6 +32,11 @@ import {
   filterAwardsByCategories,
   normalizeFameCategories,
 } from './lib/fame-categories.js';
+import {
+  planCleanup,
+  resolveCleanupCandidate,
+  orderCleanupActions,
+} from './lib/cleanup.js';
 
 const api = window.plenum;
 const icon = (n, c = '') => {
@@ -122,6 +127,17 @@ const state = {
     error: null,
     selectedSha: null,
   },
+  /** Full-window cleanup page (see docs/cleanup.md). */
+  cleanup: {
+    open: false,
+    /** @type {Set<string>} */
+    selected: new Set(),
+    deleteBranchAfter: false,
+    applying: false,
+    /** @type {null | { id: string, label: string, status: string, error?: string }[]} */
+    progress: null,
+    focusId: null,
+  },
   appInfo: { version: '', commit: '', committedAt: '' },
   /** electron-updater state from main (`app.update.state` / `onUpdate`). */
   update: null,
@@ -162,6 +178,8 @@ const el = {
   settingsBody: document.getElementById('settings-body'),
   branchOverview: document.getElementById('branch-overview'),
   branchOverviewBody: document.getElementById('branch-overview-body'),
+  cleanup: document.getElementById('cleanup'),
+  cleanupBody: document.getElementById('cleanup-body'),
   body: document.getElementById('body'),
   laneHead: document.getElementById('lane-head'),
   graph: document.querySelector('.graph'),
@@ -283,7 +301,7 @@ async function setPref(partial, render = true) {
   // Editor chrome lives on the board / file pane — refresh even while Settings is open
   // so closing Settings (or a later paint) never keeps a stale Cursor/VS Code glyph.
   if ('editor' in partial || 'editorPath' in partial || 'openLaneInEditor' in partial) {
-    if (!state.settings.open && !state.branchOverview.open) {
+    if (!state.settings.open && !state.branchOverview.open && !state.cleanup.open) {
       if (state.board) paintHeader();
       if (state.filePane) paintFilePane(state.filePane);
     }
@@ -759,7 +777,7 @@ function copyFocused() {
 
 /** ⌘V outside a text field: a repo path opens that repo, anything else goes to the palette search. */
 async function pasteIntoApp(clip) {
-  if (el.sheetLayer.classList.contains('open') || state.settings.open || state.branchOverview.open) return;
+  if (el.sheetLayer.classList.contains('open') || state.settings.open || state.branchOverview.open || state.cleanup.open) return;
   const text = String(clip ?? '').trim();
   if (!text || text.includes('\n')) return;
   if (/^(\/|~\/)/.test(text)) return openRepoPath(text);
@@ -931,7 +949,7 @@ async function applyBoard(board, { selectLane, enterLane } = {}) {
 
 /** First open: explain Protected and confirm (or change) the team branch. */
 function maybePromptProtected(board) {
-  if (!board?.root || state.settings.open || state.branchOverview.open || el.sheetLayer?.childElementCount) return;
+  if (!board?.root || state.settings.open || state.branchOverview.open || state.cleanup.open || el.sheetLayer?.childElementCount) return;
   const ov = state.prefs.repoOverrides?.[board.root] || {};
   if (ov.protectedPicked || board.teamBranchSource === 'override') return;
   if (state._protectedPromptRoot === board.root) return;
@@ -988,21 +1006,33 @@ function openProtectedPicker(board) {
 function paint() {
   paintTabs();
   const overviewOpen = state.branchOverview.open;
+  const cleanupOpen = state.cleanup.open;
   el.settings.hidden = !state.settings.open;
   if (el.branchOverview) el.branchOverview.hidden = !overviewOpen;
+  if (el.cleanup) el.cleanup.hidden = !cleanupOpen;
   el.body.classList.toggle('settings-open', state.settings.open);
   el.body.classList.toggle('branch-overview-open', overviewOpen);
+  el.body.classList.toggle('cleanup-open', cleanupOpen);
   if (state.settings.open) {
     // Settings owns the body; the board repaints on close.
     closeRunLog();
     for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
     if (el.branchOverview) el.branchOverview.hidden = true;
+    if (el.cleanup) el.cleanup.hidden = true;
     return;
   }
   if (overviewOpen) {
     closeRunLog();
     for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
+    if (el.cleanup) el.cleanup.hidden = true;
     renderBranchOverview();
+    return;
+  }
+  if (cleanupOpen) {
+    closeRunLog();
+    for (const n of [el.empty, el.loading, el.laneHead, el.panel, el.main, el.changes]) n.hidden = true;
+    if (el.branchOverview) el.branchOverview.hidden = true;
+    renderCleanup();
     return;
   }
   const tab = activeTab();
@@ -1804,8 +1834,9 @@ function paintPanel() {
       <span class="name">Local</span>
       <span class="meta">${branchMeta}</span>
     </button>
+    <button class="linkbtn cleanup-entry" type="button" data-cleanup title="Clear safe lanes, worktrees, and local tips">Cleanup…</button>
     ${branchVsSelectHTML(b)}
-    </div>
+  </div>
     <div class="branch-list${refreshing ? ' is-refreshing' : ''}"${state.branchesOpen || q ? '' : ' hidden'} aria-busy="${refreshing ? 'true' : 'false'}">${localBody}</div>
   </div>`;
   html += `<div class="section section-accordion section-branches${refreshing ? ' is-refreshing' : ''}">
@@ -1870,6 +1901,10 @@ function paintPanel() {
   el.panel.querySelector('[data-branches]')?.addEventListener('click', () => {
     state.branchesOpen = !state.branchesOpen;
     paint();
+  });
+  el.panel.querySelector('[data-cleanup]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCleanup();
   });
   el.panel.querySelector('[data-branch-filter]')?.addEventListener('input', (e) => {
     state.branchFilter = e.target.value;
@@ -2663,7 +2698,7 @@ function openQuickStart() {
 
 // First board of a fresh install: walk through it once.
 function maybeStartTour() {
-  if (state.prefs.tourDone || !state.board || state.settings.open || state.branchOverview.open) return;
+  if (state.prefs.tourDone || !state.board || state.settings.open || state.branchOverview.open || state.cleanup.open) return;
   if (el.sheetLayer.classList.contains('open')) return;
   requestAnimationFrame(openQuickStart);
 }
@@ -6452,6 +6487,7 @@ function openBranchOverview(branchName) {
   if (state.settings.open) {
     state.settings.open = false;
   }
+  if (state.cleanup.open) closeCleanup({ repaint: false });
   state.branchOverview = {
     open: true,
     branch: br.name,
@@ -6760,8 +6796,332 @@ function bindGraphColumns(root) {
   });
 }
 
+/* ---- Cleanup (docs/cleanup.md) ---- */
+
+function cleanupKindIcon(kind) {
+  if (kind === 'worktree') return 'tree-structure';
+  if (kind === 'branch') return 'git-branch';
+  if (kind === 'protected') return 'shield-check';
+  return 'stack';
+}
+
+function cleanupKindLabel(kind) {
+  if (kind === 'worktree') return 'Worktree';
+  if (kind === 'branch') return 'Local tip';
+  if (kind === 'protected') return 'Protected';
+  return 'Lane';
+}
+
+function cleanupPlan() {
+  return planCleanup(state.board);
+}
+
+function openCleanup() {
+  if (!state.board) {
+    toast('Open a repository first', 'bad');
+    return;
+  }
+  if (state.settings.open) state.settings.open = false;
+  if (state.branchOverview.open) closeBranchOverview({ repaint: false });
+  const plan = planCleanup(state.board);
+  state.cleanup = {
+    open: true,
+    selected: new Set(plan.safe.map((c) => c.id)),
+    deleteBranchAfter: false,
+    applying: false,
+    progress: null,
+    focusId: plan.safe[0]?.id || plan.confirm[0]?.id || null,
+  };
+  paint();
+}
+
+function closeCleanup({ repaint = true } = {}) {
+  if (state.cleanup.applying) return;
+  state.cleanup.open = false;
+  state.cleanup.progress = null;
+  state.cleanup.applying = false;
+  if (repaint) paint();
+}
+
+function cleanupSelectedCandidates(plan = cleanupPlan()) {
+  const ids = state.cleanup.selected;
+  return [...plan.safe, ...plan.confirm].filter((c) => ids.has(c.id));
+}
+
+function cleanupRowHTML(c, { selectable }) {
+  const checked = state.cleanup.selected.has(c.id);
+  const prog = (state.cleanup.progress || []).find((p) => p.id === c.id);
+  const busy = state.cleanup.applying;
+  const status = prog
+    ? prog.status === 'running'
+      ? '<span class="status is-run">Working…</span>'
+      : prog.status === 'done'
+        ? '<span class="status is-ok">Done</span>'
+        : prog.status === 'failed'
+          ? `<span class="status is-bad" title="${esc(prog.error || '')}">Failed</span>`
+          : '<span class="status">Queued</span>'
+    : c.tier === 'blocked'
+      ? `<span class="status">${esc(c.reason || 'Blocked')}</span>`
+      : `<span class="status">${esc(c.reason || '')}</span>`;
+  const sub = c.kind === 'branch'
+    ? `<small class="mono">${esc(c.branch || '')}${c.ahead ? ` · ↑${c.ahead}` : ''}${c.behind ? ` · ↓${c.behind}` : ''}</small>`
+    : `<small class="mono">${esc(c.branch || c.path || '')}${c.dirty ? ` · ${c.dirty} dirty` : ''}${c.ahead ? ` · ↑${c.ahead}` : ''}</small>`;
+  const box = selectable
+    ? `<input type="checkbox" data-cleanup-id="${esc(c.id)}" ${checked ? 'checked' : ''} ${busy ? 'disabled' : ''} aria-label="Select ${esc(c.label)}" />`
+    : '<span></span>';
+  const focus = state.cleanup.focusId === c.id ? ' tabindex="0"' : ' tabindex="-1"';
+  return `<div class="cleanup-row${c.tier === 'blocked' ? ' is-blocked' : ''}${busy ? ' is-busy' : ''}" role="row" data-cleanup-row="${esc(c.id)}"${focus}>
+    ${box}
+    <span class="kind-icon" title="${esc(cleanupKindLabel(c.kind))}">${iconHTML(cleanupKindIcon(c.kind), 'sm')}</span>
+    <div class="name">${esc(c.label)}${sub}</div>
+    ${status}
+  </div>`;
+}
+
+function cleanupGroupHTML(title, rows, { selectable }) {
+  if (!rows.length) return '';
+  return `<div class="cleanup-group">
+    <h2 class="cleanup-group-label">${esc(title)} · ${rows.length}</h2>
+    <div class="cleanup-list" role="list">${rows.map((c) => cleanupRowHTML(c, { selectable })).join('')}</div>
+  </div>`;
+}
+
+function renderCleanup() {
+  const root = el.cleanupBody;
+  if (!root) return;
+  const board = state.board;
+  if (!board) {
+    root.innerHTML = `<div class="cleanup-title-row"><div><h1>Cleanup</h1><p class="lede">Open a repository first.</p></div></div>`;
+    return;
+  }
+  const plan = cleanupPlan();
+  const selected = cleanupSelectedCandidates(plan);
+  const confirmN = selected.filter((c) => c.tier === 'confirm').length;
+  const empty = !plan.safe.length && !plan.confirm.length;
+  const busy = state.cleanup.applying;
+  const body = empty
+    ? `<div class="cleanup-empty"><p>Nothing to clean up. Protected and current tips stay.</p></div>`
+    : [
+      cleanupGroupHTML('Safe to clear', plan.safe, { selectable: true }),
+      cleanupGroupHTML('Needs confirm', plan.confirm, { selectable: true }),
+      cleanupGroupHTML('Blocked', plan.blocked, { selectable: false }),
+    ].join('');
+
+  root.innerHTML = `
+    <div class="cleanup-title-row">
+      <div>
+        <h1>Cleanup</h1>
+        <p class="lede">Remove finished lanes and local tips. Remote delete stays out of this pass.</p>
+      </div>
+    </div>
+    <div class="cleanup-opts">
+      <label class="check"><input type="checkbox" data-cleanup-delete-branch ${state.cleanup.deleteBranchAfter ? 'checked' : ''} ${busy ? 'disabled' : ''} /> Also delete local branch after remove</label>
+    </div>
+    <div class="cleanup-actions">
+      <button class="btn primary" type="button" data-cleanup-apply ${busy || !selected.length ? 'disabled' : ''}>${busy ? 'Applying…' : `Apply${selected.length ? ` · ${selected.length}` : ''}`}</button>
+      <span class="hint">${confirmN ? `${confirmN} need confirmation` : selected.length ? 'Safe selection' : empty ? '' : 'Nothing selected'}</span>
+    </div>
+    ${body}`;
+
+  root.querySelector('[data-cleanup-delete-branch]')?.addEventListener('change', (e) => {
+    state.cleanup.deleteBranchAfter = Boolean(e.target.checked);
+  });
+  root.querySelectorAll('[data-cleanup-id]').forEach((input) => {
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('change', () => {
+      if (busy) return;
+      const id = input.dataset.cleanupId;
+      if (input.checked) state.cleanup.selected.add(id);
+      else state.cleanup.selected.delete(id);
+      state.cleanup.focusId = id;
+      renderCleanup();
+    });
+  });
+  root.querySelectorAll('[data-cleanup-row]').forEach((row) => {
+    const id = row.dataset.cleanupRow;
+    row.addEventListener('click', (e) => {
+      if (busy || e.target.closest('input')) return;
+      const input = row.querySelector('[data-cleanup-id]');
+      if (!input || input.disabled) {
+        state.cleanup.focusId = id;
+        return;
+      }
+      input.checked = !input.checked;
+      if (input.checked) state.cleanup.selected.add(id);
+      else state.cleanup.selected.delete(id);
+      state.cleanup.focusId = id;
+      renderCleanup();
+    });
+    row.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        row.click();
+      }
+    });
+  });
+  root.querySelector('[data-cleanup-apply]')?.addEventListener('click', () => startCleanupApply());
+}
+
+function openCleanupConfirm(selectedConfirm, onOk) {
+  const risks = selectedConfirm.flatMap((c) => {
+    if (c.kind === 'branch') {
+      return [`Force-delete ${c.branch} (${c.ahead || 0} ahead of ${state.board?.teamBranch || 'team'})`];
+    }
+    return laneRemoveRisks({
+      ...c,
+      name: c.label || c.branch,
+      dirty: c.dirty || 0,
+      readiness: c.readiness,
+      ahead: c.ahead || 0,
+      running: c.running,
+    });
+  });
+  const unique = [...new Set(risks)];
+  const riskList = unique.map((r) => `
+    <div class="list-row compact">
+      ${iconHTML('warning-circle')}
+      <div class="name">${esc(r)}</div>
+    </div>`).join('');
+  openSheet(`
+    <form class="modal" role="dialog" aria-labelledby="cleanup-confirm-title">
+      <div class="eyebrow warn">${iconHTML('warning-circle', 'sm')}Needs confirm</div>
+      <h1 id="cleanup-confirm-title">Clear ${selectedConfirm.length} item${selectedConfirm.length === 1 ? '' : 's'}?</h1>
+      <p>Force path uses the same risk as Remove anyway. Dirty worktrees get a private snapshot so ⌘Z can restore them.</p>
+      <div class="list">${riskList}</div>
+      <label class="check"><input type="checkbox" name="confirm" /> I get it. Continue</label>
+      <div class="row-end">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn danger" type="submit" disabled>Apply selection</button>
+      </div>
+    </form>`);
+  const form = el.sheetLayer.querySelector('form');
+  const submit = form.querySelector('[type=submit]');
+  const confirm = form.querySelector('[name=confirm]');
+  confirm?.addEventListener('change', () => { submit.disabled = !confirm.checked; });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!confirm?.checked) return;
+    closeSheet();
+    onOk();
+  });
+}
+
+async function startCleanupApply() {
+  if (state.cleanup.applying || !state.board) return;
+  const plan = cleanupPlan();
+  const selected = cleanupSelectedCandidates(plan);
+  if (!selected.length) return;
+  const needsConfirm = selected.filter((c) => c.tier === 'confirm');
+  const run = () => applyCleanupSelection(selected);
+  if (needsConfirm.length) openCleanupConfirm(needsConfirm, run);
+  else run();
+}
+
+async function applyCleanupSelection(selected) {
+  const tabId = state.store.activeId;
+  const root = state.board?.root;
+  const deleteBranchAfter = state.cleanup.deleteBranchAfter;
+  const steps = orderCleanupActions(selected, { deleteBranchAfter });
+  const byId = new Map(selected.map((c) => [c.id, c]));
+  state.cleanup.applying = true;
+  state.cleanup.progress = selected.map((c) => ({ id: c.id, label: c.label, status: 'pending' }));
+  paint();
+
+  let removed = 0;
+  let deleted = 0;
+  const failures = [];
+  let board = state.board;
+
+  const setProg = (id, status, error) => {
+    const row = state.cleanup.progress?.find((p) => p.id === id);
+    if (!row) return;
+    row.status = status;
+    if (error) row.error = error;
+    renderCleanup();
+  };
+
+  for (const step of steps) {
+    const cand = byId.get(step.candidateId);
+    if (!cand) continue;
+    setProg(step.candidateId, 'running');
+    try {
+      if (step.type === 'remove') {
+        const live = resolveCleanupCandidate(board, cand);
+        if (!live) {
+          setProg(step.candidateId, 'done');
+          continue;
+        }
+        if (live.running) {
+          await invoke('lane.down', ...pin(live.laneIndex)).catch(() => {});
+        }
+        const snap = live.dirty ? await api.invoke('undo.snapshot', ...pin(live.laneIndex)).catch(() => null) : null;
+        board = await invoke('lane.remove', ...pin(live.laneIndex, step.force ? { force: true } : {}));
+        settleBoard(tabId, root, board, { selectLane: 0 });
+        const undoable = Boolean(live.branch || live.path) && (!live.dirty || Boolean(snap));
+        if (undoable && live.path) {
+          pushUndo(`remove lane ${live.label || live.branch}`, tabId, () => invoke('undo.restoreLane', ...pin({
+            path: live.path, sha: snap?.sha,
+          })), { selectLane: live.laneIndex });
+        }
+        removed += 1;
+        setProg(step.candidateId, 'done');
+      } else if (step.type === 'deleteBranch') {
+        // Re-resolve by branch name after removes (indexes / hasLane shift).
+        const tip = (board.branches || []).find((b) => !b.remote && b.name === step.branch);
+        if (!tip) {
+          if (step.afterRemove) setProg(step.candidateId, 'done');
+          else {
+            failures.push(`${step.branch}: already gone`);
+            setProg(step.candidateId, 'failed', 'Already gone');
+          }
+          continue;
+        }
+        if (tip.hasLane) {
+          failures.push(`${step.branch}: still checked out`);
+          setProg(step.candidateId, 'failed', 'Still checked out');
+          continue;
+        }
+        const head = tip.head;
+        board = await invoke('branch.delete', ...pin(step.branch, { force: Boolean(step.force) }));
+        settleBoard(tabId, root, board);
+        if (head) {
+          pushUndo(`delete ${step.branch}`, tabId, () => invoke('undo.restoreBranch', ...pin(step.branch, head)));
+        }
+        deleted += 1;
+        setProg(step.candidateId, 'done');
+      }
+    } catch (e) {
+      const msg = (e?.message || String(e)).replace(/^Error invoking remote method [^:]+:\s*/, '');
+      failures.push(`${cand.label || step.branch || step.path}: ${msg}`);
+      setProg(step.candidateId, 'failed', msg);
+    }
+  }
+
+  state.cleanup.applying = false;
+  // Clear progress so Failed rows do not stay checked with Apply re-armed.
+  state.cleanup.progress = null;
+  const next = planCleanup(state.board);
+  // Re-select remaining safe only when nothing failed; otherwise leave selection empty.
+  state.cleanup.selected = failures.length
+    ? new Set()
+    : new Set(next.safe.map((c) => c.id));
+  paint();
+
+  const bits = [];
+  if (removed) bits.push(`${removed} removed`);
+  if (deleted) bits.push(`${deleted} branch${deleted === 1 ? '' : 'es'} deleted`);
+  if (failures.length) bits.push(`${failures.length} failed`);
+  const summary = bits.length ? bits.join(' · ') : 'Nothing changed';
+  toast(failures.length ? `${summary}. ${failures[0]}` : summary, failures.length ? 'bad' : 'ok');
+
+  if (!next.safe.length && !next.confirm.length && !failures.length) {
+    closeCleanup();
+  }
+}
+
 function openSettings(page = state.settings.page) {
   if (state.branchOverview.open) closeBranchOverview({ repaint: false });
+  if (state.cleanup.open) closeCleanup({ repaint: false });
   state.settings.open = true;
   state.settings.page = page;
   if (page === 'repositories' || page === 'lane') seedActiveRepoBoard();
@@ -6902,6 +7262,13 @@ function paletteCommands() {
       when: !!state.board && !!lane?.branch,
       match: ['overview', 'investigate', 'compare branch', 'branch overview'],
     },
+    {
+      id: 'cleanup',
+      label: 'Cleanup…',
+      run: () => { closePalette(); openCleanup(); },
+      when: !!state.board,
+      match: ['cleanup', 'clear', 'prune', 'delete branches', 'remove lanes'],
+    },
     { id: 'new', label: 'New lane…', run: openCreateLane, when: !!state.board },
     { id: 'doctor', label: 'Lane setup…', run: () => openLaneSetup(), when: !!state.board },
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
@@ -7020,6 +7387,7 @@ document.addEventListener('keydown', (e) => {
       if (el.sheetLayer.querySelector('form[data-sending="1"]')) return;
       closeSheet();
     }
+    else if (state.cleanup.open) closeCleanup();
     else if (state.branchOverview.open) closeBranchOverview();
     else if (state.settings.open) {
       if (state.settings.page === 'setup') openSettings('lane');
@@ -7048,6 +7416,8 @@ async function openRepoPath(path) {
   setLoading(true, 'Opening repository…', path);
   try {
     state.settings.open = false;
+    if (state.cleanup.open) closeCleanup({ repaint: false });
+    if (state.branchOverview.open) closeBranchOverview({ repaint: false });
     if (state.store.activeId && state.board) snapshotWarm(state.store.activeId);
     const res = await invoke('tabs.open', path);
     applyStore(res.store);
@@ -7068,11 +7438,13 @@ async function openRepoPath(path) {
 
 async function selectTab(id) {
   if (id === state.store.activeId) {
-    if (state.branchOverview.open) closeBranchOverview();
+    if (state.cleanup.open) closeCleanup();
+    else if (state.branchOverview.open) closeBranchOverview();
     else if (state.settings.open) closeSettings();
     return;
   }
   const prevId = state.store.activeId;
+  if (state.cleanup.open) closeCleanup({ repaint: false });
   if (state.branchOverview.open) closeBranchOverview({ repaint: false });
   const keepSettings = state.settings.open;
   // Cancel any prior cold-load chrome so a late timer cannot cover the new tab.
@@ -7248,7 +7620,7 @@ async function saveQuietPrefs(partial) {
 function nudgeBusy() {
   const a = document.activeElement;
   return !document.hasFocus() || document.hidden || !state.board || state.loading || state.settings.open
-    || state.branchOverview.open
+    || state.branchOverview.open || state.cleanup.open
     || el.sheetLayer.classList.contains('open') || !el.paletteLayer.hidden || !el.toast.hidden
     || !!document.querySelector('.tour-layer, #nudge')
     || !!a?.matches?.('input, textarea, select, [contenteditable]');
@@ -7566,4 +7938,5 @@ el.graph.addEventListener('keydown', (e) => {
 
 el.openRepo.addEventListener('click', openRepo);
 el.branchOverview?.querySelector('[data-overview-back]')?.addEventListener('click', () => closeBranchOverview());
+el.cleanup?.querySelector('[data-cleanup-back]')?.addEventListener('click', () => closeCleanup());
 boot();

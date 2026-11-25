@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./styles/mock.css" />
     <link rel="stylesheet" href="./styles/app.css" />
     <link rel="stylesheet" href="./styles/branch-overview.css" />
+    <link rel="stylesheet" href="./styles/cleanup.css" />
   </head>
   <body class="app-shell">
     <div class="window app">
@@ -102,6 +103,19 @@
             </div>
           </nav>
           <section class="branch-overview-body" id="branch-overview-body"></section>
+        </div>
+        <div class="cleanup" id="cleanup" hidden>
+          <nav class="cleanup-nav" aria-label="Cleanup">
+            <div class="cleanup-nav-list">
+              <button class="navitem back" type="button" data-cleanup-back>
+                <svg class="icon" aria-hidden="true"><use href="#i-caret-right"></use></svg>
+                Board
+                <kbd>esc</kbd>
+              </button>
+              <div class="heading">Cleanup</div>
+            </div>
+          </nav>
+          <section class="cleanup-body" id="cleanup-body"></section>
         </div>
       </div>
 

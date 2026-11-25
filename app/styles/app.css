@@ -301,6 +301,7 @@ input, textarea, [contenteditable="true"] {
 #panel[hidden],
 #settings[hidden],
 #branch-overview[hidden],
+#cleanup[hidden],
 #main[hidden],
 #changes[hidden],
 .palette-layer[hidden],

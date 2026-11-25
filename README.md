@@ -1,6 +1,6 @@
 # Plenum
 
-Mac git client for parallel work. Open a repo, see **Protected**, **Lanes**, and plain **Worktrees** on one board, and move commits with Commit / Push / Pull / Rebase / Finish — including a conflict walk. A **lane** is a worktree with Plenum’s runner: check in a `.plenum/lane.yaml`, then Start / Stop / Test with port offsets (Protected included), or drive the same verbs from the CLI and a local MCP server.
+Mac git client for parallel work. Open a repo, see **Protected**, **Lanes**, and plain **Worktrees** on one board, and move commits with Commit / Push / Pull / Rebase / Finish — including a conflict walk. **Cleanup…** (Local accordion or ⌘K) clears finished lanes, worktrees, and local tips in one pass. A **lane** is a worktree with Plenum’s runner: check in a `.plenum/lane.yaml`, then Start / Stop / Test with port offsets (Protected included), or drive the same verbs from the CLI and a local MCP server.
 
 Download signed builds from [plenum.sh](https://plenum.sh). Updates come from the public feed at [plenum.sh/updates](https://plenum.sh/updates/) — no GitHub token required.
 
