@@ -94,36 +94,66 @@
   .key { font: 600 11px var(--mono); border: 1px solid #bcc3d0; border-radius: 5px; padding: 1px 6px; color: #353943; }
   @media (hover: none) { .key { display: none; } }
   .arch { font-weight: 400; color: #5c6472; }
-  .send, .osnote, #dl-win, .alt-dl { display: none; }
-  .is-mac .alt-dl-win { display: inline; }
-  .is-win #dl { display: none; }
-  .is-win #dl-win { display: inline-flex; }
+
+  /* Split download: primary OS + caret menu for the other. */
+  .split { display: none; position: relative; vertical-align: top; }
+  .is-mac .split-mac, .is-win .split-win { display: inline-flex; align-items: stretch; }
+  .split .btn { border-radius: 10px 0 0 10px; }
+  .split-caret {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; padding: 0; cursor: pointer;
+    border: 0; border-left: 1px solid #c5c9d2; border-radius: 0 10px 10px 0;
+    background: #e8e9ec; color: #0c0d12;
+  }
+  .split-caret:hover { background: #fff; }
+  .split-caret:focus-visible { outline: 2px solid var(--primary-hover); outline-offset: 3px; }
+  .split-caret svg { display: block; width: 12px; height: 12px; }
+  .split-menu {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; min-width: 100%;
+    z-index: 5; padding: 6px;
+    background: #14151c; border: 1px solid var(--hairline); border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .45);
+  }
+  .split.open .split-menu { display: block; }
+  .split-menu a {
+    display: block; padding: 10px 12px; border-radius: 8px;
+    text-decoration: none; color: var(--ink-muted); font-size: 14px; font-weight: 500;
+  }
+  .split-menu a:hover { background: rgba(255, 255, 255, .05); color: #fff; }
+  .split-menu a small { display: block; margin-top: 2px; font-weight: 400; color: var(--ink-tertiary); }
+
+  .send, .osnote { display: none; }
   .is-win .osnote-win { display: block; }
-  .is-win .alt-dl-mac { display: inline; }
-  .not-desktop #dl, .not-desktop #dl-win { display: none; }
-  .not-desktop .send { display: inline-flex; border: 0; cursor: pointer; font-family: inherit; }
+  .not-desktop .split { display: none !important; }
+  .not-desktop .send { display: inline-flex; border: 0; cursor: pointer; font-family: inherit; border-radius: 10px; }
   .not-desktop .osnote-other { display: block; }
   .osnote { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); max-width: 440px; }
-  .alt-dl { margin: 10px 0 0; font-size: 13px; color: var(--ink-subtle); }
-  .alt-dl a { color: var(--ink-muted); text-decoration: underline; text-underline-offset: 2px; }
-  .alt-dl a:hover { color: #fff; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
-  .link { display: none; background: none; border: 0; cursor: pointer; font: inherit; color: var(--ink-muted); font-weight: 500; font-size: 15px; padding: 12px 2px; }
-  .js .link { display: inline-flex; align-items: center; gap: 6px; }
-  .link:hover { color: #fff; }
-  .link:focus-visible { outline: 2px solid var(--primary-hover); outline-offset: 3px; border-radius: 6px; }
-  /* Two paths in one box — no rotate, so up/down share the same optical center. */
+
+  /* Foot: version + license + Why (kept off the download row). */
+  .foot {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px;
+    margin: 18px 0 0; font-size: 13px; line-height: 1.45; color: var(--ink-subtle);
+  }
+  .foot .ver { font: 12px var(--mono); color: var(--ink-tertiary); min-height: 1.2em; }
+  .foot .sep { color: var(--hairline); }
+  .foot .why-bit { display: none; align-items: center; gap: 10px; }
+  .js .foot .why-bit { display: inline-flex; }
+  .foot .link {
+    background: none; border: 0; cursor: pointer; padding: 0;
+    font: inherit; font-weight: 500; color: var(--ink-muted);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .foot .link:hover { color: #fff; }
+  .foot .link:focus-visible { outline: 2px solid var(--primary-hover); outline-offset: 3px; border-radius: 4px; }
   .chev {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 12px; height: 12px; flex: 0 0 auto;
+    width: 11px; height: 11px; flex: 0 0 auto;
   }
-  .chev svg { display: block; width: 12px; height: 12px; }
+  .chev svg { display: block; width: 11px; height: 11px; }
   .chev .up { visibility: hidden; }
   .link[aria-expanded="true"] .chev .down { visibility: hidden; }
   .link[aria-expanded="true"] .chev .up { visibility: visible; }
-  .note { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-subtle); }
-  .note b { font-weight: 500; color: var(--ink-muted); }
-  .req { margin-top: 10px; min-height: 1.2em; font: 12px var(--mono); color: var(--ink-tertiary); }
 
   /* Screenshot sits beside copy on desktop so the first viewport doesn't need a scroll. */
   .shot { display: none; margin: 0; width: 100%; background: transparent; border: 0; box-shadow: none; }
@@ -198,6 +228,8 @@
     .hero { align-items: center; text-align: center; }
     .copy { margin: 0 auto; }
     .actions { justify-content: center; }
+    .foot { justify-content: center; }
+    .split-menu { text-align: left; }
   }
 
   /* Typing sequence: elements start hidden only when JS is running. */
@@ -240,16 +272,38 @@
       <div class="rev">
         <div class="actions">
           <button class="btn send" id="send" type="button">Send download link</button>
-          <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
-          <a class="btn" id="dl-win" href="/updates/Plenum-Setup.exe">Download for Windows <span class="arch">x64</span> <span class="key" aria-hidden="true">⏎</span></a>
-          <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path class="down" d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path class="up" d="M2.5 7.75L6 4.25L9.5 7.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+          <div class="split split-mac" id="split-mac">
+            <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
+            <button class="split-caret" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="dl-menu-mac" aria-label="Other platforms">
+              <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="split-menu" id="dl-menu-mac" role="menu">
+              <a href="/updates/Plenum.dmg" role="menuitem">macOS <small>Apple Silicon · .dmg</small></a>
+              <a href="/updates/Plenum-Setup.exe" role="menuitem">Windows <small>x64 · unsigned setup</small></a>
+            </div>
+          </div>
+          <div class="split split-win" id="split-win">
+            <a class="btn" id="dl-win" href="/updates/Plenum-Setup.exe">Download for Windows <span class="arch">x64</span> <span class="key" aria-hidden="true">⏎</span></a>
+            <button class="split-caret" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="dl-menu-win" aria-label="Other platforms">
+              <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="split-menu" id="dl-menu-win" role="menu">
+              <a href="/updates/Plenum-Setup.exe" role="menuitem">Windows <small>x64 · unsigned setup</small></a>
+              <a href="/updates/Plenum.dmg" role="menuitem">macOS <small>Apple Silicon · .dmg</small></a>
+            </div>
+          </div>
         </div>
         <p class="osnote osnote-win">Unsigned Windows build — SmartScreen may warn; choose More info → Run anyway. Requires Git for Windows for lane run/test.</p>
         <p class="osnote osnote-other">Plenum runs on macOS and Windows. Open this page on your computer to download.</p>
-        <p class="alt-dl alt-dl-win">Also available: <a href="/updates/Plenum-Setup.exe">Windows (x64)</a></p>
-        <p class="alt-dl alt-dl-mac">Also available: <a href="/updates/Plenum.dmg">macOS (Apple Silicon)</a></p>
-        <p class="note"><b>Early-stage beta.</b> Free and open source.</p>
-        <div class="req" id="ver"></div>
+        <div class="foot">
+          <span class="ver" id="ver" hidden></span>
+          <span class="sep ver-sep" aria-hidden="true" hidden>·</span>
+          <span>Free and open source</span>
+          <span class="why-bit">
+            <span class="sep" aria-hidden="true">·</span>
+            <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path class="down" d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path class="up" d="M2.5 7.75L6 4.25L9.5 7.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+          </span>
+        </div>
       </div>
     </div>
     <figure class="shot rev"><img src="/board.jpg" width="2160" height="1350" alt="Plenum on a demo repo: protected main, two lanes with behind counts and authorship, one lane running, and the commit graph"></figure>
@@ -453,7 +507,12 @@
   var feed = document.documentElement.classList.contains('is-win') ? '/updates/latest.yml' : '/updates/latest-mac.yml';
   fetch(feed).then(function (r) { return r.ok ? r.text() : fetch('/updates/latest-mac.yml').then(function (r2) { return r2.ok ? r2.text() : ''; }); }).then(function (y) {
     var m = /^version:\s*['"]?([\w.\-+]+)/m.exec(y || '');
-    if (m) $('ver').textContent = 'v' + m[1];
+    if (m) {
+      var ver = $('ver'), sep = document.querySelector('.ver-sep');
+      ver.textContent = 'v' + m[1];
+      ver.hidden = false;
+      if (sep) sep.hidden = false;
+    }
   }).catch(function () {});
 
   // ?from=Anna: the headline becomes "Work in plenum.sh with Anna". Plain text only, trimmed, capped.
@@ -484,6 +543,31 @@
   whyb.addEventListener('click', function () {
     var open = why.classList.toggle('open');
     whyb.setAttribute('aria-expanded', open);
+  });
+
+  // Platform caret: one open menu at a time; click outside / Escape closes.
+  function closeSplits(except) {
+    document.querySelectorAll('.split.open').forEach(function (el) {
+      if (el === except) return;
+      el.classList.remove('open');
+      var btn = el.querySelector('.split-caret');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.querySelectorAll('.split').forEach(function (split) {
+    var caret = split.querySelector('.split-caret');
+    if (!caret) return;
+    caret.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = !split.classList.contains('open');
+      closeSplits(open ? split : null);
+      split.classList.toggle('open', open);
+      caret.setAttribute('aria-expanded', open);
+    });
+  });
+  document.addEventListener('click', function () { closeSplits(null); });
+  addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSplits(null);
   });
 
   var reveals = document.querySelectorAll('.rev');
