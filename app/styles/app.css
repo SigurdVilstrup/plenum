@@ -1739,7 +1739,7 @@ body.is-row-resizing * {
 }
 .window.app .panel .section.section-protected .lane-row {
   min-height: 28px;
-  padding: 6px 12px 4px 12px;
+  padding: 6px 12px;
 }
 .window.app .panel .lane-row,
 .window.app .panel .lane-row:hover,
@@ -1837,9 +1837,11 @@ body.is-row-resizing * {
 }
 .window.app .panel .lane-row .name {
   font-size: 13px;
+  line-height: 16px;
 }
 .window.app .panel .lane-row .meta {
   font-size: 11px;
+  line-height: 16px;
   color: var(--ink-tertiary);
 }
 /* #82 keep behind/warn/bad louder than the default meta mute */
