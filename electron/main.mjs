@@ -344,11 +344,15 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
   if (!comment) throw new Error('Add a comment.');
   const reporterEmail = sanitizeReporterEmail(payload?.reporterEmail);
   const parsed = parseFeedbackTarget(payload?.target ?? null);
-  let png;
-  if (payload?.pngBase64) {
-    png = Buffer.from(String(payload.pngBase64), 'base64');
-  } else {
-    png = await captureFeedbackPng(parsed?.rect || null);
+  const omitScreenshot = !!payload?.omitScreenshot;
+  let png = null;
+  if (!omitScreenshot) {
+    if (payload?.pngBase64) {
+      png = Buffer.from(String(payload.pngBase64), 'base64');
+    } else {
+      // Empty png is not enough — without omitScreenshot we still capture.
+      png = await captureFeedbackPng(parsed?.rect || null);
+    }
   }
   const env = feedbackEnvSnapshot();
   const dir = await writeFeedbackReport(prefsDir(), {
@@ -357,6 +361,7 @@ ipcMain.handle('feedback.save', async (_e, payload) => {
     reporterEmail,
     ...env,
     repoPath: activePath(),
+    omitScreenshot,
     png,
   });
   return { dir };
@@ -384,7 +389,16 @@ function assertFeedbackDir(dir) {
   if (reportDir !== root && !reportDir.startsWith(root + path.sep)) {
     throw new Error('bad report path');
   }
-  if (!fs.existsSync(path.join(reportDir, 'meta.json')) || !fs.existsSync(path.join(reportDir, 'window.png'))) {
+  const metaPath = path.join(reportDir, 'meta.json');
+  if (!fs.existsSync(metaPath)) throw new Error('bad report path');
+  let meta;
+  try {
+    meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  } catch {
+    throw new Error('bad report path');
+  }
+  // Screenshot-optional reports skip window.png; otherwise require it.
+  if (!meta?.omitScreenshot && !fs.existsSync(path.join(reportDir, 'window.png'))) {
     throw new Error('bad report path');
   }
   return reportDir;

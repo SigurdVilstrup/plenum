@@ -44,6 +44,8 @@ test('buildMeta shapes v2 report', () => {
   assert.equal(meta.reporterEmail, 'sigurd@example.com');
   assert.equal(meta.status, 'pending');
   assert.equal(meta.issueUrl, null);
+  assert.equal(meta.omitScreenshot, false);
+  assert.equal(buildMeta({ comment: 'x', omitScreenshot: true }).omitScreenshot, true);
 
   assert.equal(buildMeta({ comment: '', appVersion: '1', platform: 'darwin' }).target, null);
   assert.equal(buildMeta({ comment: '', target: null, appVersion: '1', platform: 'darwin' }).target, null);
@@ -94,6 +96,20 @@ test('buildUploadPayload strips repoPath', () => {
   assert.equal('repoPath' in payload, false);
   assert.equal('repoPath' in payload.env, false);
   assert.ok(payload.pngBase64);
+  assert.equal('omitScreenshot' in payload, false);
+});
+
+test('buildUploadPayload omits png when screenshot is skipped', () => {
+  const meta = buildMeta({
+    comment: 'text only',
+    appVersion: '0.1.0',
+    platform: 'darwin',
+    omitScreenshot: true,
+  });
+  const payload = buildUploadPayload(meta, null);
+  assert.equal(payload.omitScreenshot, true);
+  assert.equal('pngBase64' in payload, false);
+  assert.equal(payload.comment, 'text only');
 });
 
 test('collectFeedbackEnv shapes display + window facts', () => {
@@ -145,7 +161,63 @@ test('writeFeedbackReport writes meta.json and window.png', async () => {
   assert.equal(meta.target, null);
   assert.equal(meta.status, 'pending');
   assert.equal(meta.version, 2);
+  assert.equal(meta.omitScreenshot, false);
   assert.deepEqual(fs.readFileSync(path.join(out, 'window.png')), tinyPng);
+});
+
+test('writeFeedbackReport skips window.png when omitScreenshot is set', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const out = await writeFeedbackReport(dir, {
+    comment: 'no shot',
+    target: null,
+    appVersion: '0.0.0',
+    platform: 'darwin',
+    repoPath: null,
+    omitScreenshot: true,
+  });
+  assert.ok(fs.existsSync(path.join(out, 'meta.json')));
+  assert.equal(fs.existsSync(path.join(out, 'window.png')), false);
+  const { meta, png } = readFeedbackReport(out);
+  assert.equal(meta.omitScreenshot, true);
+  assert.equal(meta.comment, 'no shot');
+  assert.equal(png, null);
+});
+
+test('sendFeedbackReport posts without png when screenshot omitted', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-fb-'));
+  const out = await writeFeedbackReport(dir, {
+    comment: 'relay text only',
+    target: null,
+    appVersion: '0.2.0',
+    platform: 'darwin',
+    repoPath: '/Users/secret/repo',
+    omitScreenshot: true,
+  });
+  let posted = null;
+  const meta = await sendFeedbackReport(out, {
+    endpoint: 'https://example.test/submit-feedback',
+    anonKey: 'anon',
+    fetchImpl: async (url, init) => {
+      posted = { url, body: JSON.parse(init.body), headers: init.headers };
+      return {
+        ok: true,
+        async json() {
+          return {
+            issueUrl: 'https://github.com/SigurdVilstrup/plenum/issues/99',
+            issueNumber: 99,
+            screenshot: false,
+          };
+        },
+      };
+    },
+  });
+  assert.equal(posted.body.omitScreenshot, true);
+  assert.equal('pngBase64' in posted.body, false);
+  assert.equal(posted.body.comment, 'relay text only');
+  assert.equal('repoPath' in posted.body, false);
+  assert.equal(meta.status, 'sent');
+  assert.equal(meta.screenshot, false);
+  assert.equal(fs.existsSync(out), false);
 });
 
 test('writeFeedbackReport dirs are unique under baseDir/feedback', async () => {

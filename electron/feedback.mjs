@@ -80,6 +80,7 @@ export function buildMeta(input) {
   const reporterEmail = input.reporterEmail == null
     ? null
     : sanitizeReporterEmail(input.reporterEmail);
+  const omitScreenshot = !!input.omitScreenshot;
   return {
     version: 2,
     createdAt: input.createdAt || new Date().toISOString(),
@@ -95,6 +96,7 @@ export function buildMeta(input) {
     windowSize: input.windowSize,
     repoPath: input.repoPath ?? null,
     reporterEmail,
+    omitScreenshot,
     status: input.status || 'pending',
     issueUrl: input.issueUrl ?? null,
     issueNumber: input.issueNumber ?? null,
@@ -118,15 +120,20 @@ export function buildUploadEnv(meta) {
 }
 
 export function buildUploadPayload(meta, pngBuffer) {
-  return {
+  const payload = {
     comment: meta.comment,
     target: meta.target
       ? { label: meta.target.label, rect: meta.target.rect }
       : null,
     reporterEmail: meta.reporterEmail || null,
     env: buildUploadEnv(meta),
-    pngBase64: Buffer.from(pngBuffer).toString('base64'),
   };
+  if (meta.omitScreenshot || !pngBuffer) {
+    payload.omitScreenshot = true;
+    return payload;
+  }
+  payload.pngBase64 = Buffer.from(pngBuffer).toString('base64');
+  return payload;
 }
 
 export function collectFeedbackEnv(deps) {
@@ -158,9 +165,17 @@ export async function writeFeedbackReport(baseDir, opts) {
   const dir = path.resolve(feedbackRoot, id);
   if (!dir.startsWith(feedbackRoot + path.sep)) throw new Error('bad report path');
   fs.mkdirSync(dir, { recursive: true });
-  const meta = buildMeta({ ...opts, createdAt: opts.createdAt || now, status: 'pending' });
+  const omitScreenshot = !!opts.omitScreenshot || !opts.png;
+  const meta = buildMeta({
+    ...opts,
+    omitScreenshot,
+    createdAt: opts.createdAt || now,
+    status: 'pending',
+  });
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta));
-  fs.writeFileSync(path.join(dir, 'window.png'), opts.png);
+  if (!omitScreenshot && opts.png) {
+    fs.writeFileSync(path.join(dir, 'window.png'), opts.png);
+  }
   return dir;
 }
 
@@ -168,7 +183,9 @@ export function readFeedbackReport(dir) {
   const metaPath = path.join(dir, 'meta.json');
   const pngPath = path.join(dir, 'window.png');
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-  const png = fs.readFileSync(pngPath);
+  const png = meta.omitScreenshot || !fs.existsSync(pngPath)
+    ? null
+    : fs.readFileSync(pngPath);
   return { meta, png, metaPath };
 }
 

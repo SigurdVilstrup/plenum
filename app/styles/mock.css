@@ -3144,6 +3144,10 @@ a.navitem {
   line-height: 1.45;
 }
 
+.feedback-modal textarea[name="comment"] {
+  min-height: 8.5em;
+}
+
 .field input:focus,
 .field select:focus,
 .field textarea:focus,

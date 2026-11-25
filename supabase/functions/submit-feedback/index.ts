@@ -60,23 +60,25 @@ Deno.serve(async (req) => {
 
     let png: Uint8Array | null = null;
     if (!checkin) {
+      // Screenshot is optional when the client sets omitScreenshot or leaves pngBase64 off.
       const pngBase64 = String(body?.pngBase64 || '');
-      if (!pngBase64) return json(400, { error: 'Missing screenshot.' });
-      // Cap encoded size before decode so huge bodies fail cheaply.
-      if (pngBase64.length > Math.ceil(MAX_PNG_BYTES * 4 / 3) + 8) {
-        return json(400, { error: 'Screenshot size out of range.' });
-      }
-      try {
-        png = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
-      } catch {
-        return json(400, { error: 'Invalid screenshot encoding.' });
-      }
-      if (png.byteLength < 32 || png.byteLength > MAX_PNG_BYTES) {
-        return json(400, { error: 'Screenshot size out of range.' });
-      }
-      // PNG signature
-      if (!(png[0] === 0x89 && png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47)) {
-        return json(400, { error: 'Screenshot must be a PNG.' });
+      if (pngBase64) {
+        // Cap encoded size before decode so huge bodies fail cheaply.
+        if (pngBase64.length > Math.ceil(MAX_PNG_BYTES * 4 / 3) + 8) {
+          return json(400, { error: 'Screenshot size out of range.' });
+        }
+        try {
+          png = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
+        } catch {
+          return json(400, { error: 'Invalid screenshot encoding.' });
+        }
+        if (png.byteLength < 32 || png.byteLength > MAX_PNG_BYTES) {
+          return json(400, { error: 'Screenshot size out of range.' });
+        }
+        // PNG signature
+        if (!(png[0] === 0x89 && png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47)) {
+          return json(400, { error: 'Screenshot must be a PNG.' });
+        }
       }
     }
 
@@ -185,7 +187,8 @@ Deno.serve(async (req) => {
     return json(200, {
       issueUrl: issue.html_url,
       issueNumber: issue.number,
-      screenshot: !screenshotLost,
+      // true only when an image was uploaded; omitted or lost screenshots are false
+      screenshot: !!imageUrl,
     });
   } catch (e) {
     console.error(e);

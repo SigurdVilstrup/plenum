@@ -2693,7 +2693,7 @@ function openWarmSheet() {
   });
 }
 
-let feedbackDraft = { comment: '', target: null, credit: false, viaGh: false };
+let feedbackDraft = { comment: '', target: null, credit: false, viaGh: false, includeScreenshot: true };
 
 /** Effective git email for optional feedback credit (local override, else global). */
 function feedbackCreditEmail() {
@@ -2763,7 +2763,11 @@ function startFeedbackPick() {
     e.stopPropagation();
     const node = hitAt(e.clientX, e.clientY);
     stopFeedbackPick();
-    const creditSeed = { credit: !!feedbackDraft.credit, viaGh: !!feedbackDraft.viaGh };
+    const creditSeed = {
+      credit: !!feedbackDraft.credit,
+      viaGh: !!feedbackDraft.viaGh,
+      includeScreenshot: feedbackDraft.includeScreenshot !== false,
+    };
     if (!node) {
       openFeedbackSheet({ comment: feedbackDraft.comment, target: feedbackDraft.target, ...creditSeed });
       return;
@@ -2901,24 +2905,47 @@ async function openFeedbackSheet(seed = {}) {
   const creditOn = !!seed.credit && !!email;
   // Prefer the signed-in `gh` path whenever the CLI is on disk; hide the relay option.
   const viaGh = ghAvailable;
+  // Include screenshot defaults on; seed/draft can turn it off.
+  const includeScreenshot = seed.includeScreenshot !== false;
   const chip = target?.label
     ? `<span class="feedback-target-chip">${esc(target.label)}</span>`
     : `<span class="feedback-target-chip muted">No element selected</span>`;
-  const previewSrc = seed.pngBase64 || feedbackPreviewPng;
+  const previewSrc = includeScreenshot ? (seed.pngBase64 || feedbackPreviewPng) : null;
   const creditLabel = email
     ? `<strong>Credit me</strong> (${esc(email)}). We may ask follow-up questions.`
     : `<strong>Credit me</strong>. We may ask follow-up questions.`;
   const creditHint = email
     ? ''
     : `<p class="feedback-credit-hint">Add an email in Settings → Accounts first.</p>`;
+  // Credit me is for relay identity only — via gh the issue already posts as you (#140).
+  const creditBlock = viaGh
+    ? ''
+    : `<div class="feedback-credit">
+        <label class="feedback-credit-row">
+          <input type="checkbox" name="credit" ${creditOn ? 'checked' : ''} ${email ? '' : 'disabled'} />
+          <span>${creditLabel}</span>
+        </label>
+        ${creditHint}
+      </div>`;
   const pathNote = viaGh
-    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>). The screenshot stays on this Mac.</p>`
+    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>).${includeScreenshot ? ' The screenshot stays on this Mac.' : ''}</p>`
+    : '';
+  const previewBlock = includeScreenshot
+    ? `<div class="feedback-preview">
+        <span>Screenshot</span>
+        <figure>
+          ${previewSrc
+            ? `<img alt="Blurred window preview" src="data:image/png;base64,${previewSrc}" />`
+            : '<div class="feedback-preview-pending">Grabbing a blurred preview…</div>'}
+          <figcaption>Branch names and faces are blanked. Say what was on screen if it matters.</figcaption>
+        </figure>
+      </div>`
     : '';
   openSheet(`
     <form class="modal feedback-modal" role="dialog" aria-labelledby="feedback-title" data-feedback-ignore data-via="${viaGh ? 'gh' : 'relay'}">
       <div class="eyebrow">${iconHTML('pencil-simple', 'sm')}Feedback</div>
       <h1 id="feedback-title">What’s broken?</h1>
-      <label class="field">Comment<textarea name="comment" rows="3" required autofocus placeholder="What happened?">${esc(comment)}</textarea></label>
+      <label class="field">Comment<textarea name="comment" rows="6" required autofocus placeholder="What happened?">${esc(comment)}</textarea></label>
       <div class="field">
         <span>Target</span>
         <div class="feedback-target-row">
@@ -2927,22 +2954,14 @@ async function openFeedbackSheet(seed = {}) {
           ${target ? '<button class="btn" type="button" data-clear-target>Clear</button>' : ''}
         </div>
       </div>
-      <div class="feedback-preview">
-        <span>Screenshot</span>
-        <figure>
-          ${previewSrc
-            ? `<img alt="Blurred window preview" src="data:image/png;base64,${previewSrc}" />`
-            : '<div class="feedback-preview-pending">Grabbing a blurred preview…</div>'}
-          <figcaption>Branch names and faces are blanked. Say what was on screen if it matters.</figcaption>
-        </figure>
-      </div>
-      <div class="feedback-credit">
+      ${creditBlock}
+      <div class="feedback-shot">
         <label class="feedback-credit-row">
-          <input type="checkbox" name="credit" ${creditOn ? 'checked' : ''} ${email ? '' : 'disabled'} />
-          <span>${creditLabel}</span>
+          <input type="checkbox" name="includeScreenshot" ${includeScreenshot ? 'checked' : ''} />
+          <span><strong>Include screenshot</strong>. Redacted preview of this window.</span>
         </label>
-        ${creditHint}
       </div>
+      ${previewBlock}
       ${pathNote}
       <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
@@ -2953,7 +2972,14 @@ async function openFeedbackSheet(seed = {}) {
   const form = el.sheetLayer.querySelector('form');
   const ta = form.querySelector('[name=comment]');
   const credit = form.querySelector('[name=credit]');
+  const shotToggle = form.querySelector('[name=includeScreenshot]');
   const sendBtn = form.querySelector('[data-feedback-send]');
+
+  const focusComment = () => {
+    if (!form.isConnected) return;
+    ta.focus();
+    if (ta.value) ta.setSelectionRange(ta.value.length, ta.value.length);
+  };
 
   const paintSendLabel = (busy) => {
     sendBtn.replaceChildren();
@@ -2975,7 +3001,10 @@ async function openFeedbackSheet(seed = {}) {
     paintSendLabel(on);
   };
 
+  const wantsScreenshot = () => !!shotToggle?.checked;
+
   const refreshPreview = async () => {
+    if (!wantsScreenshot()) return;
     try {
       const b64 = await captureFeedbackPreview(target);
       const fig = form.querySelector('.feedback-preview figure');
@@ -2988,12 +3017,17 @@ async function openFeedbackSheet(seed = {}) {
     } catch (e) {
       const pending = form.querySelector('.feedback-preview-pending');
       if (pending) pending.textContent = e.message || 'Couldn’t capture preview';
+    } finally {
+      // Capture hides the sheet; put focus back in the comment (#144).
+      focusComment();
     }
   };
-  if (!previewSrc) refreshPreview();
-  else feedbackPreviewPng = previewSrc;
+  if (includeScreenshot) {
+    if (!previewSrc) refreshPreview();
+    else feedbackPreviewPng = previewSrc;
+  }
 
-  const toastSent = (sent) => {
+  const toastSent = (sent, omittedShot) => {
     const link = sent?.issueUrl
       ? { url: sent.issueUrl, label: sent.issueNumber != null ? `#${sent.issueNumber}` : 'Open issue' }
       : null;
@@ -3001,12 +3035,21 @@ async function openFeedbackSheet(seed = {}) {
       toast('Opened as a public GitHub issue. Thanks.', 'ok', { link });
       return;
     }
-    if (sent?.screenshot === false) {
+    if (!omittedShot && sent?.screenshot === false) {
       toast('Sent, but the screenshot didn’t upload. Thanks.', 'ok', { link });
       return;
     }
     toast('Sent. Thanks.', 'ok', { link });
   };
+
+  const draftFromForm = () => ({
+    comment: ta.value,
+    target,
+    credit: !!credit?.checked,
+    viaGh,
+    includeScreenshot: wantsScreenshot(),
+    pngBase64: wantsScreenshot() ? feedbackPreviewPng : null,
+  });
 
   const send = async () => {
     if (sendBtn.disabled) return;
@@ -3015,35 +3058,37 @@ async function openFeedbackSheet(seed = {}) {
       ta.focus();
       return;
     }
-    const wantCredit = !!credit?.checked && !!email;
-    if (credit?.checked && !email) {
+    const wantCredit = !viaGh && !!credit?.checked && !!email;
+    if (!viaGh && credit?.checked && !email) {
       toast('Add an email in Settings → Accounts, or leave credit off.', 'bad');
       return;
     }
     const useGh = form.dataset.via === 'gh';
-    const draft = {
-      comment: text,
-      target,
-      credit: wantCredit,
-      pngBase64: feedbackPreviewPng,
-      viaGh: useGh,
-    };
+    const omitScreenshot = !wantsScreenshot();
+    const draft = draftFromForm();
+    draft.comment = text;
+    draft.credit = wantCredit;
     setSendBusy(true);
     try {
-      let pngBase64 = feedbackPreviewPng;
-      if (!pngBase64) pngBase64 = await captureFeedbackPreview(target);
+      let pngBase64 = null;
+      if (!omitScreenshot) {
+        pngBase64 = feedbackPreviewPng;
+        if (!pngBase64) pngBase64 = await captureFeedbackPreview(target);
+      }
       const { dir } = await invoke('feedback.save', {
         comment: text,
         target,
         reporterEmail: wantCredit ? email : null,
-        pngBase64,
+        omitScreenshot,
+        // Never pass an empty png and rely on auto-capture when omit is set.
+        ...(omitScreenshot ? {} : { pngBase64 }),
       });
       try {
         const sent = await invoke(useGh ? 'feedback.sendViaGh' : 'feedback.send', dir);
         feedbackPreviewPng = null;
         closeSheet();
         stopFeedbackPick();
-        toastSent(sent);
+        toastSent(sent, omitScreenshot);
       } catch (e) {
         feedbackPreviewPng = null;
         closeSheet();
@@ -3063,13 +3108,17 @@ async function openFeedbackSheet(seed = {}) {
   };
   form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
   bindCommitChord(ta, send);
+  shotToggle?.addEventListener('change', () => {
+    const on = wantsScreenshot();
+    // Rebuild so preview is hidden when off (no empty box).
+    openFeedbackSheet({
+      ...draftFromForm(),
+      includeScreenshot: on,
+      pngBase64: on ? feedbackPreviewPng : null,
+    });
+  });
   form.querySelector('[data-pick]')?.addEventListener('click', () => {
-    feedbackDraft = {
-      comment: ta.value,
-      target,
-      credit: !!credit?.checked,
-      viaGh,
-    };
+    feedbackDraft = draftFromForm();
     feedbackPreviewPng = null;
     closeSheet();
     startFeedbackPick();
@@ -3077,14 +3126,11 @@ async function openFeedbackSheet(seed = {}) {
   form.querySelector('[data-clear-target]')?.addEventListener('click', () => {
     feedbackPreviewPng = null;
     openFeedbackSheet({
-      comment: ta.value,
+      ...draftFromForm(),
       target: null,
-      credit: !!credit?.checked,
-      viaGh,
     });
   });
-  ta.focus();
-  if (comment) ta.setSelectionRange(comment.length, comment.length);
+  focusComment();
 }
 
 
@@ -6965,6 +7011,7 @@ document.addEventListener('keydown', (e) => {
         target: feedbackDraft.target,
         credit: !!feedbackDraft.credit,
         viaGh: !!feedbackDraft.viaGh,
+        includeScreenshot: feedbackDraft.includeScreenshot !== false,
       });
       return;
     }

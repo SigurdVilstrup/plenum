@@ -1238,8 +1238,21 @@ button.env-link {
   font-size: 11px;
 }
 
+.feedback-modal textarea[name="comment"] {
+  min-height: 8.5em;
+  resize: vertical;
+}
+
+.feedback-shot {
+  margin: 0 0 14px;
+}
+
 .feedback-preview {
   margin: 0 0 14px;
+}
+
+.feedback-preview[hidden] {
+  display: none;
 }
 
 .feedback-preview > span {
