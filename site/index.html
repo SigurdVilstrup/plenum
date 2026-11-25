@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plenum: git client with lanes</title>
-<meta name="description" content="Plenum is a git client with lanes — parallel checkouts you can start, stop, and test — so every lane sits against the team.">
+<meta name="description" content="Plenum is a Mac and Windows git client with lanes — parallel checkouts you can start, stop, and test — so every lane sits against the team.">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script>
@@ -12,8 +12,12 @@
   c.add('js');
   // Mac = macOS, not iPhone/iPad (iPadOS in desktop mode reports MacIntel but has touch).
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
-  var mac = /mac/i.test(p) && !/iPhone|iPad|iPod/i.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1);
-  if (!mac) c.add('not-mac');
+  var ua = navigator.userAgent || '';
+  var mac = /mac/i.test(p) && !/iPhone|iPad|iPod/i.test(ua) && !(navigator.maxTouchPoints > 1);
+  var win = /win/i.test(p) || /Windows/i.test(ua);
+  if (mac) c.add('is-mac');
+  else if (win) c.add('is-win');
+  else c.add('not-desktop');
 })(document.documentElement.classList);
 </script>
 <style>
@@ -90,12 +94,19 @@
   .key { font: 600 11px var(--mono); border: 1px solid #bcc3d0; border-radius: 5px; padding: 1px 6px; color: #353943; }
   @media (hover: none) { .key { display: none; } }
   .arch { font-weight: 400; color: #5c6472; }
-  /* Not a Mac: no download, offer to send the link to one. */
-  .send, .macnote { display: none; }
-  .not-mac #dl { display: none; }
-  .not-mac .send { display: inline-flex; border: 0; cursor: pointer; font-family: inherit; }
-  .not-mac .macnote { display: block; }
-  .macnote { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); max-width: 440px; }
+  .send, .osnote, #dl-win, .alt-dl { display: none; }
+  .is-mac .alt-dl-win { display: inline; }
+  .is-win #dl { display: none; }
+  .is-win #dl-win { display: inline-flex; }
+  .is-win .osnote-win { display: block; }
+  .is-win .alt-dl-mac { display: inline; }
+  .not-desktop #dl, .not-desktop #dl-win { display: none; }
+  .not-desktop .send { display: inline-flex; border: 0; cursor: pointer; font-family: inherit; }
+  .not-desktop .osnote-other { display: block; }
+  .osnote { margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); max-width: 440px; }
+  .alt-dl { margin: 10px 0 0; font-size: 13px; color: var(--ink-subtle); }
+  .alt-dl a { color: var(--ink-muted); text-decoration: underline; text-underline-offset: 2px; }
+  .alt-dl a:hover { color: #fff; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
   .link { display: none; background: none; border: 0; cursor: pointer; font: inherit; color: var(--ink-muted); font-weight: 500; font-size: 15px; padding: 12px 2px; }
   .js .link { display: inline-flex; align-items: center; gap: 6px; }
@@ -228,11 +239,15 @@
       <p class="sub rev">A git client with lanes: parallel checkouts you start, stop, and test.</p>
       <div class="rev">
         <div class="actions">
-          <button class="btn send" id="send" type="button">Send link to my Mac</button>
+          <button class="btn send" id="send" type="button">Send download link</button>
           <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
+          <a class="btn" id="dl-win" href="/updates/Plenum-Setup.exe">Download for Windows <span class="arch">x64</span> <span class="key" aria-hidden="true">⏎</span></a>
           <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path class="down" d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path class="up" d="M2.5 7.75L6 4.25L9.5 7.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
         </div>
-        <p class="macnote">Plenum is a Mac app (Apple Silicon). Send yourself the link and open it on your Mac.</p>
+        <p class="osnote osnote-win">Unsigned Windows build — SmartScreen may warn; choose More info → Run anyway. Requires Git for Windows for lane run/test.</p>
+        <p class="osnote osnote-other">Plenum runs on macOS and Windows. Open this page on your computer to download.</p>
+        <p class="alt-dl alt-dl-win">Also available: <a href="/updates/Plenum-Setup.exe">Windows (x64)</a></p>
+        <p class="alt-dl alt-dl-mac">Also available: <a href="/updates/Plenum.dmg">macOS (Apple Silicon)</a></p>
         <p class="note"><b>Early-stage beta.</b> Free and open source.</p>
         <div class="req" id="ver"></div>
       </div>
@@ -434,9 +449,10 @@
     resize();
   })();
 
-  // Version label from the update feed. Absent if the fetch fails; the button works regardless.
-  fetch('/updates/latest-mac.yml').then(function (r) { return r.ok ? r.text() : ''; }).then(function (y) {
-    var m = /^version:\s*['"]?([\w.\-+]+)/m.exec(y);
+  // Version label from the update feed. Prefer the OS-matching feed; fall back to Mac.
+  var feed = document.documentElement.classList.contains('is-win') ? '/updates/latest.yml' : '/updates/latest-mac.yml';
+  fetch(feed).then(function (r) { return r.ok ? r.text() : fetch('/updates/latest-mac.yml').then(function (r2) { return r2.ok ? r2.text() : ''; }); }).then(function (y) {
+    var m = /^version:\s*['"]?([\w.\-+]+)/m.exec(y || '');
     if (m) $('ver').textContent = 'v' + m[1];
   }).catch(function () {});
 
@@ -449,16 +465,19 @@
 
   // Enter downloads, but never steal Enter from a focused link or button.
   addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && e.target === document.body && !document.documentElement.classList.contains('not-mac') && !e.metaKey && !e.ctrlKey && !e.altKey) $('dl').click();
+    if (e.key === 'Enter' && e.target === document.body && !document.documentElement.classList.contains('not-desktop') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      var btn = document.documentElement.classList.contains('is-win') ? $('dl-win') : $('dl');
+      if (btn) btn.click();
+    }
   });
 
   // Share sheet where there is one (phones, Edge/Chrome on Windows), otherwise a pre-filled email.
   $('send').addEventListener('click', async function () {
-    var url = location.origin + '/' + location.search, text = 'Plenum, a git client with lanes for parallel work. Open this on your Mac:';
+    var url = location.origin + '/' + location.search, text = 'Plenum, a git client with lanes for parallel work. Download on your Mac or Windows PC:';
     try {
       if (navigator.share) { await navigator.share({ title: 'Plenum', text: text, url: url }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
-    location.href = 'mailto:?subject=' + encodeURIComponent('Plenum for Mac') + '&body=' + encodeURIComponent(text + '\n' + url);
+    location.href = 'mailto:?subject=' + encodeURIComponent('Plenum') + '&body=' + encodeURIComponent(text + '\n' + url);
   });
 
   var why = $('why'), whyb = $('whyb');

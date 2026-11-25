@@ -9,10 +9,11 @@
  * Checks (layers):
  *   source  — default feed URL, package.json publish, electron-updater dep, updater wiring
  *   asar    — updates module + electron-updater present in the packaged app
- *   feed    — local latest-mac.yml + zip (+ optional live feed compare)
+ *   feed    — local latest-mac.yml / latest.yml + payload (+ optional live feed compare)
  *
- *   node ota-health-check.mjs [--path <repo>] [--app <Plenum.app>] [--artifacts <dir>]
- *                             [--live-feed] [--skip-source] [--skip-asar] [--skip-feed] [--json]
+ *   node ota-health-check.mjs [--path <repo>] [--app <Plenum.app|Plenum.exe>] [--artifacts <dir>]
+ *                             [--platform mac|win] [--live-feed] [--skip-source] [--skip-asar]
+ *                             [--skip-feed] [--json]
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,14 +22,14 @@ import * as asar from '@electron/asar';
 import {
   asarPathForApp,
   die,
-  findPlenumApp,
+  findPackagedApp,
   normalizeAsarEntry,
   repoRootFrom,
 } from './_lib.mjs';
 
 export const PUBLIC_FEED_URL = 'https://plenum.sh/updates/';
 
-const USAGE = `Usage: node ota-health-check.mjs [--path <repo>] [--app <Plenum.app>] [--artifacts <dir>] [--live-feed] [--skip-source] [--skip-asar] [--skip-feed] [--json]
+const USAGE = `Usage: node ota-health-check.mjs [--path <repo>] [--app <Plenum.app|Plenum.exe>] [--artifacts <dir>] [--platform mac|win] [--live-feed] [--skip-source] [--skip-asar] [--skip-feed] [--json]
 `;
 
 function parseArgs(argv) {
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     path: null,
     app: null,
     artifacts: null,
+    platform: null,
     liveFeed: false,
     skipSource: false,
     skipAsar: false,
@@ -48,6 +50,7 @@ function parseArgs(argv) {
     if (a === '--path') out.path = argv[++i];
     else if (a === '--app') out.app = argv[++i];
     else if (a === '--artifacts') out.artifacts = argv[++i];
+    else if (a === '--platform') out.platform = String(argv[++i] || '').toLowerCase();
     else if (a === '--live-feed') out.liveFeed = true;
     else if (a === '--skip-source') out.skipSource = true;
     else if (a === '--skip-asar') out.skipAsar = true;
@@ -57,6 +60,17 @@ function parseArgs(argv) {
     else die(`Unknown arg: ${a}\n${USAGE}`);
   }
   return out;
+}
+
+function resolvePlatform(opts) {
+  if (opts.platform === 'mac' || opts.platform === 'darwin') return 'mac';
+  if (opts.platform === 'win' || opts.platform === 'win32' || opts.platform === 'windows') return 'win';
+  if (opts.app) {
+    const a = String(opts.app);
+    if (a.endsWith('.exe')) return 'win';
+    if (a.endsWith('.app')) return 'mac';
+  }
+  return process.platform === 'win32' ? 'win' : 'mac';
 }
 
 function parseSemver(v) {
@@ -75,8 +89,12 @@ export function cmpSemver(a, b) {
   return 0;
 }
 
-/** Minimal YAML subset for electron-builder latest-mac.yml (version/path/sha512/files). */
+/** Minimal YAML subset for electron-builder latest*.yml (version/path/sha512/files). */
 export function parseLatestMacYml(text) {
+  return parseLatestYml(text);
+}
+
+export function parseLatestYml(text) {
   const out = { version: null, path: null, sha512: null, files: [] };
   const lines = String(text || '').split(/\r?\n/);
   let inFiles = false;
@@ -145,13 +163,22 @@ function checkSource(repoRoot) {
       : `build.publish must be generic ${PUBLIC_FEED_URL} (got ${JSON.stringify(pub)})`,
   });
 
-  const targets = pkg.build?.mac?.target;
-  const targetList = Array.isArray(targets) ? targets : [targets];
-  const hasZip = targetList.some((t) => t === 'zip' || t?.target === 'zip');
+  const macTargets = pkg.build?.mac?.target;
+  const macList = Array.isArray(macTargets) ? macTargets : [macTargets];
+  const hasZip = macList.some((t) => t === 'zip' || t?.target === 'zip');
   gates.push({
     id: 'ota-mac-zip-target',
     ok: hasZip,
     detail: hasZip ? 'mac.target includes zip (Squirrel.Mac / electron-updater payload)' : 'mac.target must include zip for OTA',
+  });
+
+  const winTargets = pkg.build?.win?.target;
+  const winList = Array.isArray(winTargets) ? winTargets : [winTargets];
+  const hasNsis = winList.some((t) => t === 'nsis' || t?.target === 'nsis');
+  gates.push({
+    id: 'ota-win-nsis-target',
+    ok: hasNsis,
+    detail: hasNsis ? 'win.target includes nsis (electron-updater Windows payload)' : 'win.target must include nsis for OTA',
   });
 
   const updatesSrc = fs.readFileSync(path.join(repoRoot, 'electron', 'updates.mjs'), 'utf8');
@@ -230,41 +257,57 @@ function checkAsar(asarFile) {
   return gates;
 }
 
-function checkArtifacts(dir, { liveYml = null, requireNotOlderThanLive = false } = {}) {
+function feedMeta(platform) {
+  if (platform === 'win') {
+    return {
+      ymlName: 'latest.yml',
+      payloadLabel: 'OTA installer',
+      idPayload: 'ota-feed-installer',
+    };
+  }
+  return {
+    ymlName: 'latest-mac.yml',
+    payloadLabel: 'OTA zip',
+    idPayload: 'ota-feed-zip',
+  };
+}
+
+function checkArtifacts(dir, { liveYml = null, requireNotOlderThanLive = false, platform = 'mac' } = {}) {
   const gates = [];
-  const ymlPath = path.join(dir, 'latest-mac.yml');
+  const meta = feedMeta(platform);
+  const ymlPath = path.join(dir, meta.ymlName);
   if (!fs.existsSync(ymlPath)) {
     gates.push({
       id: 'ota-feed-yml',
       ok: false,
-      detail: `No latest-mac.yml in ${dir}`,
+      detail: `No ${meta.ymlName} in ${dir}`,
     });
     return gates;
   }
-  const yml = parseLatestMacYml(fs.readFileSync(ymlPath, 'utf8'));
+  const yml = parseLatestYml(fs.readFileSync(ymlPath, 'utf8'));
   const fieldsOk = Boolean(yml.version && yml.path && yml.sha512 && yml.files.length);
   gates.push({
     id: 'ota-feed-yml',
     ok: fieldsOk,
     detail: fieldsOk
-      ? `latest-mac.yml version=${yml.version} path=${yml.path} files=${yml.files.length}`
-      : `latest-mac.yml incomplete: ${JSON.stringify(yml)}`,
+      ? `${meta.ymlName} version=${yml.version} path=${yml.path} files=${yml.files.length}`
+      : `${meta.ymlName} incomplete: ${JSON.stringify(yml)}`,
     yml,
   });
   if (!fieldsOk) return gates;
 
-  const zipName = yml.path;
-  const zipPath = path.join(dir, zipName);
-  const zipOk = fs.existsSync(zipPath) && fs.statSync(zipPath).size > 0;
+  const payloadName = yml.path;
+  const payloadPath = path.join(dir, payloadName);
+  const payloadOk = fs.existsSync(payloadPath) && fs.statSync(payloadPath).size > 0;
   gates.push({
-    id: 'ota-feed-zip',
-    ok: zipOk,
-    detail: zipOk
-      ? `OTA zip present (${fs.statSync(zipPath).size} bytes): ${zipName}`
-      : `Missing OTA zip named by latest-mac.yml path: ${zipName}`,
+    id: meta.idPayload,
+    ok: payloadOk,
+    detail: payloadOk
+      ? `${meta.payloadLabel} present (${fs.statSync(payloadPath).size} bytes): ${payloadName}`
+      : `Missing ${meta.payloadLabel} named by ${meta.ymlName} path: ${payloadName}`,
   });
 
-  const blockmap = `${zipName}.blockmap`;
+  const blockmap = `${payloadName}.blockmap`;
   const bmPath = path.join(dir, blockmap);
   gates.push({
     id: 'ota-feed-blockmap',
@@ -298,11 +341,12 @@ function checkArtifacts(dir, { liveYml = null, requireNotOlderThanLive = false }
   return gates;
 }
 
-async function fetchLiveYml() {
-  const url = `${PUBLIC_FEED_URL}latest-mac.yml`;
+async function fetchLiveYml(platform = 'mac') {
+  const name = feedMeta(platform).ymlName;
+  const url = `${PUBLIC_FEED_URL}${name}`;
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
-  return parseLatestMacYml(await res.text());
+  return parseLatestYml(await res.text());
 }
 
 async function main() {
@@ -313,7 +357,8 @@ async function main() {
   }
 
   const repoRoot = repoRootFrom(opts.path || process.cwd());
-  const report = { repoRoot, publicFeed: PUBLIC_FEED_URL, gates: [] };
+  const platform = resolvePlatform(opts);
+  const report = { repoRoot, publicFeed: PUBLIC_FEED_URL, platform, gates: [] };
   let failed = false;
 
   if (!opts.skipSource) {
@@ -321,7 +366,8 @@ async function main() {
   }
 
   if (!opts.skipAsar) {
-    const appPath = opts.app || findPlenumApp(repoRoot);
+    const host = platform === 'win' ? 'win32' : 'darwin';
+    const appPath = opts.app || findPackagedApp(repoRoot, host);
     const asarFile = appPath ? asarPathForApp(appPath) : null;
     if (!asarFile || !fs.existsSync(asarFile)) {
       report.gates.push({
@@ -336,29 +382,35 @@ async function main() {
 
   if (!opts.skipFeed) {
     const artDir = opts.artifacts || path.join(repoRoot, 'release');
-    const hasYml = fs.existsSync(path.join(artDir, 'latest-mac.yml'));
+    const ymlName = feedMeta(platform).ymlName;
+    const hasYml = fs.existsSync(path.join(artDir, ymlName));
     if (!hasYml && !opts.artifacts) {
       report.gates.push({
         id: 'ota-feed-yml',
         ok: true,
-        detail: 'No local latest-mac.yml yet (dir pack only) — CI dist artifacts are checked before publish',
+        detail: `No local ${ymlName} yet (dir pack only) — CI dist artifacts are checked before publish`,
       });
     } else {
       let live = null;
       if (opts.liveFeed) {
         try {
-          live = await fetchLiveYml();
+          live = await fetchLiveYml(platform);
         } catch (err) {
+          // First Windows publish has no live latest.yml yet — don't block the inaugural feed.
+          const missing = /→ 404/.test(String(err.message || err));
           report.gates.push({
             id: 'ota-live-feed-fetch',
-            ok: false,
-            detail: String(err.message || err),
+            ok: platform === 'win' && missing,
+            detail: platform === 'win' && missing
+              ? `No live ${ymlName} yet (first Windows publish) — local artifacts still gated`
+              : String(err.message || err),
           });
         }
       }
       for (const g of checkArtifacts(artDir, {
         liveYml: live,
         requireNotOlderThanLive: Boolean(opts.liveFeed && live?.version),
+        platform,
       })) {
         report.gates.push(g);
       }

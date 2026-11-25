@@ -24,6 +24,7 @@ export function run(cmd, args, opts = {}) {
     stdio: opts.stdio || 'pipe',
     cwd: opts.cwd,
     env: opts.env || process.env,
+    shell: opts.shell || false,
   });
 }
 
@@ -32,6 +33,7 @@ export function die(message, code = 1) {
   process.exit(code);
 }
 
+/** Packaged Mac app bundle under release/. */
 export function findPlenumApp(repoRoot) {
   const release = path.join(repoRoot, 'release');
   if (!fs.existsSync(release)) return null;
@@ -55,8 +57,63 @@ export function findPlenumApp(repoRoot) {
   return hits[0] || null;
 }
 
+/** Packaged Windows executable under release/ (prefer win-unpacked). */
+export function findPlenumExe(repoRoot) {
+  const release = path.join(repoRoot, 'release');
+  if (!fs.existsSync(release)) return null;
+  const preferred = path.join(release, 'win-unpacked', 'Plenum.exe');
+  if (fs.existsSync(preferred)) return preferred;
+  const hits = [];
+  function walk(dir, depth = 0) {
+    if (depth > 4) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isFile() && ent.name === 'Plenum.exe') hits.push(full);
+      else if (ent.isDirectory() && !ent.name.startsWith('.')) walk(full, depth + 1);
+    }
+  }
+  walk(release);
+  hits.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  return hits[0] || null;
+}
+
+/** Host-aware packaged app path (bundle, exe, or absolute --app override). */
+export function findPackagedApp(repoRoot, platform = process.platform) {
+  if (platform === 'win32') return findPlenumExe(repoRoot);
+  return findPlenumApp(repoRoot);
+}
+
 export function asarPathForApp(appPath) {
+  if (!appPath) return null;
+  if (appPath.endsWith('.exe') || appPath.toLowerCase().endsWith('plenum.exe')) {
+    // win-unpacked/Plenum.exe → win-unpacked/resources/app.asar
+    return path.join(path.dirname(appPath), 'resources', 'app.asar');
+  }
+  if (appPath.endsWith('.app')) {
+    return path.join(appPath, 'Contents', 'Resources', 'app.asar');
+  }
+  // Directory that already points at unpacked contents
+  const winAsar = path.join(appPath, 'resources', 'app.asar');
+  if (fs.existsSync(winAsar)) return winAsar;
+  const macAsar = path.join(appPath, 'Contents', 'Resources', 'app.asar');
+  if (fs.existsSync(macAsar)) return macAsar;
   return path.join(appPath, 'Contents', 'Resources', 'app.asar');
+}
+
+/** Launch binary for a packaged app path. */
+export function binaryForApp(appPath) {
+  if (!appPath) return null;
+  if (appPath.endsWith('.exe')) return appPath;
+  if (appPath.endsWith('.app')) return path.join(appPath, 'Contents', 'MacOS', 'Plenum');
+  const win = path.join(appPath, 'Plenum.exe');
+  if (fs.existsSync(win)) return win;
+  return path.join(appPath, 'Contents', 'MacOS', 'Plenum');
 }
 
 /** Relative ESM import/export sources: './x', '../y.mjs'. */

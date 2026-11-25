@@ -63,6 +63,15 @@ input, textarea, [contenteditable="true"] {
   align-self: stretch;
 }
 
+/* Windows / Linux: overlay controls sit on the right — reserve space there instead. */
+html:not([data-platform="darwin"]) .window.app .titlebar .traffic.spacer {
+  width: 12px;
+}
+
+html:not([data-platform="darwin"]) .window.app .title-actions {
+  padding-right: 140px;
+}
+
 .window.app .title-actions {
   align-self: center;
   flex: 0 0 auto;

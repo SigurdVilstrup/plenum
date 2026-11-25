@@ -9,7 +9,8 @@
  * Unpackaged (dev) builds stay enabled and mock a patch bump — no network.
  * Manual checks stay on “checking” for at least CHECK_MIN_MS so the spinner is visible.
  *
- * Releases are Developer ID–signed + notarized so Squirrel.Mac can install the zip.
+ * Mac releases are Developer ID–signed + notarized (Squirrel.Mac zip).
+ * Windows ships unsigned NSIS; electron-updater still uses latest.yml on the same feed.
  */
 import fs from 'node:fs';
 import path from 'node:path';

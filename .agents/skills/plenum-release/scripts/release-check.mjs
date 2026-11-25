@@ -9,7 +9,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { die, findPlenumApp, repoRootFrom, run } from './_lib.mjs';
+import { die, findPackagedApp, repoRootFrom, run } from './_lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const USAGE = `Usage: node release-check.mjs [--path <repo>] [--skip-test] [--skip-pack] [--skip-launch] [--json]
@@ -105,9 +105,13 @@ function main() {
     }
   }
 
-  const app = findPlenumApp(repoRoot);
+  const app = findPackagedApp(repoRoot);
   if (!app) {
-    push({ id: 'find-app', ok: false, detail: 'No Plenum.app under release/' });
+    push({
+      id: 'find-app',
+      ok: false,
+      detail: process.platform === 'win32' ? 'No Plenum.exe under release/' : 'No Plenum.app under release/',
+    });
     finish(report, true, opts.json);
     return;
   }
@@ -116,17 +120,18 @@ function main() {
   const importsScript = path.join(HERE, 'pack-imports-check.mjs');
   push(gateFromScript('pack-imports', importsScript, ['--app', app], repoRoot));
 
-  if (!opts.skipLaunch && process.platform === 'darwin') {
+  if (!opts.skipLaunch && (process.platform === 'darwin' || process.platform === 'win32')) {
     console.log('… pack-launch-smoke (OTA requires a living process)');
     const launchScript = path.join(HERE, 'pack-launch-smoke.mjs');
     push(gateFromScript('pack-launch', launchScript, ['--app', app, '--ms', '8000'], repoRoot));
   } else if (!opts.skipLaunch) {
-    push({ id: 'pack-launch', ok: true, detail: 'Skipped (not macOS)' });
+    push({ id: 'pack-launch', ok: true, detail: 'Skipped (unsupported platform)' });
   }
 
   console.log('… ota-health-check');
   const otaScript = path.join(HERE, 'ota-health-check.mjs');
-  push(gateFromScript('ota-health', otaScript, ['--app', app], repoRoot));
+  const platformArg = process.platform === 'win32' ? 'win' : 'mac';
+  push(gateFromScript('ota-health', otaScript, ['--app', app, '--platform', platformArg], repoRoot));
 
   finish(report, failed, opts.json);
 }

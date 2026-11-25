@@ -1,7 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, protocol, screen, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { loadRepoEnv } from './load-env.mjs';
@@ -40,6 +39,13 @@ import { ensureLauncher, launcherPath, pathStatus, linkOnPath } from './agents/l
 import { agentsHome, getAgentSettings, setAgentSettings } from './agents/settings.mjs';
 import { listClients, previewAdd, addClient, removeClient } from './agents/clients.mjs';
 import { starPlenumRepo } from './github-star.mjs';
+import {
+  listDiffMergeTools,
+  listEditors,
+  openEditor,
+  openTerminal,
+  terminalOptions,
+} from './os-open.mjs';
 
 loadRepoEnv();
 
@@ -83,9 +89,12 @@ function prefsDir() {
 
 function appIcon() {
   const candidates = [
+    path.join(rootDir, 'build', 'icon.ico'),
     path.join(rootDir, 'build', 'icon.icns'),
     path.join(rootDir, 'build', 'icon.png'),
+    path.join(process.resourcesPath || '', 'build', 'icon.ico'),
     path.join(process.resourcesPath || '', 'build', 'icon.icns'),
+    path.join(process.resourcesPath || '', 'build', 'icon.png'),
   ];
   for (const p of candidates) {
     if (!p || !fs.existsSync(p)) continue;
@@ -100,13 +109,25 @@ let updates;
 
 function createWindow() {
   const icon = appIcon();
+  const isMac = process.platform === 'darwin';
   win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 14 },
+    ...(isMac
+      ? {
+          titleBarStyle: 'hiddenInset',
+          trafficLightPosition: { x: 16, y: 14 },
+        }
+      : {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: {
+            color: '#1a1b1e',
+            symbolColor: '#e8e8ea',
+            height: 40,
+          },
+        }),
     backgroundColor: '#1a1b1e',
     ...(icon ? { icon } : {}),
     webPreferences: {
@@ -173,8 +194,8 @@ app.whenReady().then(async () => {
   // Undo / Copy / Paste go to the page first: it decides between a focused text field
   // (native editing) and the app-level action (undo last git op, copy SHA, paste repo path).
   const edit = (cmd) => () => win?.webContents.send('edit', cmd, cmd === 'paste' ? clipboard.readText() : undefined);
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { role: 'appMenu' },
+  const menuTemplate = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: 'Edit', submenu: [
       { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: edit('undo') },
       { role: 'redo' },
@@ -186,7 +207,8 @@ app.whenReady().then(async () => {
     ] },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
-  ]));
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
   createWindow();
   updates = createUpdater({
     getVersion: () => app.getVersion(),
@@ -532,126 +554,26 @@ ipcMain.handle('github.star', () => starPlenumRepo({
   openExternal: (url) => shell.openExternal(url),
 }));
 
-const home = process.env.HOME || '';
-const EDITORS = {
-  cursor: {
-    label: 'Cursor',
-    cli: ['/usr/local/bin/cursor', '/opt/homebrew/bin/cursor', path.join(home, '.local/bin/cursor')],
-    apps: [path.join(home, 'Applications/Cursor.app'), '/Applications/Cursor.app'],
-    open: ['-b', 'com.todesktop.230313mzl4w4u92'],
-  },
-  vscode: {
-    label: 'VS Code',
-    cli: ['/usr/local/bin/code', '/opt/homebrew/bin/code'],
-    apps: [path.join(home, 'Applications/Visual Studio Code.app'), '/Applications/Visual Studio Code.app'],
-    open: ['-a', 'Visual Studio Code'],
-  },
-  zed: {
-    label: 'Zed',
-    cli: ['/usr/local/bin/zed', '/opt/homebrew/bin/zed'],
-    apps: [path.join(home, 'Applications/Zed.app'), '/Applications/Zed.app'],
-    open: ['-a', 'Zed'],
-  },
-  windsurf: {
-    label: 'Windsurf',
-    cli: [
-      '/usr/local/bin/windsurf',
-      '/opt/homebrew/bin/windsurf',
-      path.join(home, '.local/bin/windsurf'),
-      '/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf',
-      path.join(home, 'Applications/Windsurf.app/Contents/Resources/app/bin/windsurf'),
-    ],
-    apps: [path.join(home, 'Applications/Windsurf.app'), '/Applications/Windsurf.app'],
-    open: ['-b', 'com.exafunction.windsurf'],
-  },
-};
-
-/** #109 CLI shims get hijacked (Cursor's "Install 'code' command" points `code` at Cursor.app): only trust one that resolves into this editor's own bundle. */
-function editorCli(e) {
-  return e.cli.find((p) => {
-    let real;
-    try { real = fs.realpathSync(p); } catch { return false; }
-    return !real.includes('.app/') || e.apps.some((a) => real.startsWith(`${a}/`));
-  });
-}
-
-function editorAvailable(e) {
-  return Boolean(editorCli(e)) || e.apps.some((p) => fs.existsSync(p));
-}
-
-function listEditors() {
-  return [
-    ...Object.entries(EDITORS).map(([id, e]) => ({
-      id,
-      label: e.label,
-      available: editorAvailable(e),
-    })),
-    { id: 'custom', label: 'Other app…', available: true },
-  ];
-}
-
-function fileMergeAvailable() {
-  const apps = [
-    '/Applications/Xcode.app/Contents/Applications/FileMerge.app',
-    '/Applications/FileMerge.app',
-    path.join(home, 'Applications/FileMerge.app'),
-  ];
-  const bins = [
-    '/Applications/Xcode.app/Contents/Developer/usr/bin/opendiff',
-    '/Library/Developer/CommandLineTools/usr/bin/opendiff',
-  ];
-  return apps.some((p) => fs.existsSync(p)) || bins.some((p) => fs.existsSync(p));
-}
-
-/** Tools allowed by prefs.diffTool / prefs.mergeTool - probe installs like editors. */
-function listDiffMergeTools() {
-  return [
-    { id: 'internal', label: 'Built-in', available: true },
-    { id: 'opendiff', label: 'FileMerge', available: fileMergeAvailable() },
-    { id: 'vscode', label: 'VS Code', available: editorAvailable(EDITORS.vscode) },
-    { id: 'cursor', label: 'Cursor', available: editorAvailable(EDITORS.cursor) },
-    { id: 'windsurf', label: 'Windsurf', available: editorAvailable(EDITORS.windsurf) },
-  ];
-}
-
-function launch(cmd, args) {
-  spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
-}
-
-/** Custom tool from Settings: a .app bundle or an executable that takes the folder as its argument. */
-function openCustom(tool, abs) {
-  if (!tool || !path.isAbsolute(tool) || !fs.existsSync(tool)) throw new Error('Set a valid path under Settings → General.');
-  if (tool.endsWith('.app')) launch('open', ['-a', tool, abs]);
-  else launch(tool, [abs]);
-}
-
-/** Resolve Settings → Editor to a launchable entry. Prefer the saved id whenever that app is present. */
-function resolveEditor(editorId) {
-  const wanted = EDITORS[editorId];
-  if (wanted && editorAvailable(wanted)) return wanted;
-  // Insertion order: cursor, vscode, zed, windsurf — first installed wins when the pick is missing.
-  return Object.values(EDITORS).find(editorAvailable) || wanted || EDITORS.cursor;
-}
-
 ipcMain.handle('os.openEditor', (_e, target) => {
   const abs = assertPath(target);
   // #103 a file from an old commit may be gone: say so instead of opening a blank buffer.
   if (!fs.existsSync(abs)) throw new Error(`${path.basename(abs)} isn't in the working tree (deleted or moved since).`);
-  const { editor, editorPath } = getPrefs(prefsDir());
-  if (editor === 'custom') return openCustom(editorPath, abs);
-  const e = resolveEditor(editor);
-  const cli = editorCli(e);
-  // Prefer a trusted CLI; otherwise `open` with the editor's own bundle/args (never another editor's shim).
-  if (cli) launch(cli, ['-r', '--', abs]);
-  else launch('open', [...e.open, abs]);
+  const prefs = getPrefs(prefsDir());
+  return openEditor(abs, prefs);
 });
 
 ipcMain.handle('os.openTerminal', (_e, target) => {
   const abs = assertPath(target);
-  const { terminal, terminalPath } = getPrefs(prefsDir());
-  if (terminal === 'custom') return openCustom(terminalPath, abs);
-  launch('open', ['-a', terminal === 'iterm' ? 'iTerm' : 'Terminal', abs]);
+  const prefs = getPrefs(prefsDir());
+  return openTerminal(abs, prefs);
 });
+
+ipcMain.handle('os.platform', () => ({
+  platform: process.platform,
+  isMac: process.platform === 'darwin',
+  isWindows: process.platform === 'win32',
+  terminalOptions: terminalOptions(),
+}));
 
 ipcMain.handle('os.displayPath', (_e, p) => displayPath(p));
 
@@ -687,7 +609,11 @@ ipcMain.handle('accounts.setHttps', async (_e, { kind, host, username, token }) 
   const h = creds.sanitizeHost(kind === 'github' ? 'github.com' : host);
   const user = String(username ?? '').trim();
   if (!(await creds.credentialHelper()).length) {
-    throw new Error('No git credential helper set. Run: git config --global credential.helper osxkeychain');
+    throw new Error(
+      process.platform === 'win32'
+        ? 'No git credential helper set. Run: git config --global credential.helper manager'
+        : 'No git credential helper set. Run: git config --global credential.helper osxkeychain',
+    );
   }
   await creds.approve({ host: h, username: user, password: token });
   const list = creds.upsertHost(getPrefs(prefsDir()).credentialHosts, { host: h, username: user, kind });

@@ -48,6 +48,18 @@ import {
 } from './lib/cleanup.js';
 
 const api = window.plenum;
+const isMac = api?.isMac ?? (api?.platform === 'darwin');
+const isWindows = api?.isWindows ?? (api?.platform === 'win32');
+const MOD = isMac ? '⌘' : 'Ctrl+';
+const REVEAL_LABEL = isMac ? 'Reveal in Finder' : (isWindows ? 'Show in Explorer' : 'Show in folder');
+const MACHINE = isMac ? 'this Mac' : (isWindows ? 'this PC' : 'this computer');
+try {
+  document.documentElement.dataset.platform = api?.platform || (isMac ? 'darwin' : (isWindows ? 'win32' : 'other'));
+  if (!isMac) {
+    for (const el of document.querySelectorAll('kbd.mod-p')) el.textContent = 'Ctrl+P';
+  }
+} catch { /* ignore */ }
+
 const icon = (n, c = '') => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', `icon ${c}`.trim());
@@ -348,7 +360,7 @@ function toast(msg, kind = '', { undo = false, link = null, action = null } = {}
   el.toast.className = `toast ${kind}`.trim();
   el.toast.setAttribute('role', 'status');
   el.toast.replaceChildren();
-  const text = String(msg).replace(/^Error:\s*/i, '').split('\n')[0] + (undo ? ' · ⌘Z to undo' : '');
+  const text = String(msg).replace(/^Error:\s*/i, '').split('\n')[0] + (undo ? ` · ${MOD}Z to undo` : '');
   el.toast.append(document.createTextNode(text));
   if (link?.url && link?.label) {
     el.toast.append(document.createTextNode(' · '));
@@ -2370,7 +2382,7 @@ function paintHeader() {
       <div class="actions">
         ${gitActionsHTML(l)}
         <span class="env-sep"></span>
-        <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
+        <button class="iconbtn framed" type="button" data-act="reveal" title="${REVEAL_LABEL}" aria-label="${REVEAL_LABEL}">${iconHTML('folder-simple')}</button>
         ${editorBtnHTML()}
       </div>
     </div>`;
@@ -2395,7 +2407,7 @@ function paintHeader() {
       <div class="actions">
         ${remove}${gitActionsHTML(l)}
         <span class="env-sep"></span>
-        <button class="iconbtn framed" type="button" data-act="reveal" title="Reveal in Finder" aria-label="Reveal in Finder">${iconHTML('folder-simple')}</button>
+        <button class="iconbtn framed" type="button" data-act="reveal" title="${REVEAL_LABEL}" aria-label="${REVEAL_LABEL}">${iconHTML('folder-simple')}</button>
         ${editorBtnHTML()}
       </div>
     </div>`;
@@ -2917,7 +2929,7 @@ function panelFootHTML(settingsActive = false) {
     : '';
   return `<div class="panel-foot">
     <div class="foot-start">
-      <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ⌘," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
+      <button class="iconbtn${settingsActive ? ' active' : ''}" type="button" data-settings title="Settings ${MOD}," aria-label="Settings"${settingsActive ? ' aria-pressed="true"' : ''}>${iconHTML('gear-six')}</button>
       <button class="iconbtn" type="button" disabled title="Account (coming soon)" aria-label="Account (coming soon)">${iconHTML('user')}</button>
       ${updateBtn}
     </div>
@@ -3082,7 +3094,7 @@ async function openFeedbackSheet(seed = {}) {
       <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
-        <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>⌘↩</kbd></button>
+        <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>${MOD}↩</kbd></button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
@@ -3101,7 +3113,7 @@ async function openFeedbackSheet(seed = {}) {
     sendBtn.replaceChildren();
     sendBtn.setAttribute('aria-busy', busy ? 'true' : 'false');
     const kbd = document.createElement('kbd');
-    kbd.textContent = '⌘↩';
+    kbd.textContent = `${MOD}↩`;
     sendBtn.append(document.createTextNode('Send feedback '), kbd);
   };
 
@@ -3495,7 +3507,7 @@ function openLaneCtxMenu(x, y, lane) {
       paint();
     }, { icon: 'check-circle' });
   }
-  add('Reveal in Finder', () => handleAction('reveal', lane), { icon: 'folder-simple' });
+  add(REVEAL_LABEL, () => handleAction('reveal', lane), { icon: 'folder-simple' });
   add(`Open in ${editorName()}`, () => handleAction('editor', lane), { icon: editorIcon() });
   add('Copy path', () => copyText(lane.path, 'path'), { icon: 'files' });
   if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'), { icon: 'git-branch' });
@@ -5060,7 +5072,7 @@ const SETTINGS_PAGES = {
     const eff = effectiveEditor();
     const editorDetail = p.editor !== 'custom' && p.editor !== eff
       ? `Saved ${editorLabelOf(p.editor)} isn’t available — Open uses ${editorLabelOf(eff)}`
-      : 'Only apps found on this Mac';
+      : `Only apps found on ${MACHINE}`;
 
     const tools = state.diffMergeTools.length ? state.diffMergeTools : [
       { id: 'internal', label: 'Built-in', available: true },
@@ -5071,7 +5083,7 @@ const SETTINGS_PAGES = {
     ];
     const diffOpts = tools.filter((t) => t.available || t.id === p.diffTool).map((t) => [t.id, t.label]);
     const mergeOpts = tools.filter((t) => t.available || t.id === p.mergeTool).map((t) => [t.id, t.label]);
-    return `<h1>General</h1><p class="lede">Where Plenum opens editors, terminals, and folders on this Mac.</p>
+    return `<h1>General</h1><p class="lede">Where Plenum opens editors, terminals, and folders on ${MACHINE}.</p>
       <div class="group-head">About</div>
       <div class="list">
         ${settingsRow(
@@ -5089,13 +5101,13 @@ const SETTINGS_PAGES = {
         ${settingsRow(savedEditorIcon(), 'Editor', '', editorDetail, selectHTML('editor', editorOpts, p.editor, 'Editor'), 'Used for Open in editor and after Create lane. Missing installs stay hidden; Open falls back to another installed editor.')}
         ${p.editor === 'custom' ? settingsRow('folder-simple', 'Editor path', '', 'Path to an .app or binary', custom('editorPath', '/Applications/Zed.app'), 'Full path Plenum launches when Editor is Other app.') : ''}
         ${settingsRow('tree-structure', 'Open new lanes in editor', '', 'Right after Create', switchHTML('openLaneInEditor', p.openLaneInEditor, 'Open new lanes in editor'), 'When on, Create also opens that worktree in your editor.')}
-        ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
-        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', 'Path to an .app or binary', custom('terminalPath', '/Applications/Ghostty.app'), 'Full path Plenum launches when Terminal is Other app.') : ''}
+        ${settingsRow('terminal-window', 'Terminal', '', 'Palette → Open in terminal', selectHTML('terminal', isWindows ? [['windows-terminal', 'Windows Terminal'], ['cmd', 'Command Prompt'], ['custom', 'Other app…']] : [['terminal', 'Terminal'], ['iterm', 'iTerm'], ['custom', 'Other app…']], isWindows && (p.terminal === 'terminal' || p.terminal === 'iterm') ? 'windows-terminal' : p.terminal, 'Terminal'), 'Which terminal opens a lane folder from the palette.')}
+        ${p.terminal === 'custom' ? settingsRow('folder-simple', 'Terminal path', '', isWindows ? 'Path to an .exe' : 'Path to an .app or binary', custom('terminalPath', isWindows ? 'C:\\Windows\\System32\\cmd.exe' : '/Applications/Ghostty.app'), 'Full path Plenum launches when Terminal is Other app.') : ''}
       </div>
       <div class="group-head">Diff and merge<span class="soon-tag">Coming soon</span><small>Compare changes and resolve conflicts in the tool you pick.</small></div>
       <div class="list">
-        ${settingsRow('files', 'Diff tool', '', 'Compares file changes in a lane', selectHTML('diffTool', diffOpts, p.diffTool, 'Diff tool'), 'Installed tools on this Mac.')}
-        ${settingsRow('git-merge', 'Merge tool', '', 'Resolves conflicts when merging lanes', selectHTML('mergeTool', mergeOpts, p.mergeTool, 'Merge tool'), 'Installed tools on this Mac.')}
+        ${settingsRow('files', 'Diff tool', '', 'Compares file changes in a lane', selectHTML('diffTool', diffOpts, p.diffTool, 'Diff tool'), `Installed tools on ${MACHINE}.`)}
+        ${settingsRow('git-merge', 'Merge tool', '', 'Resolves conflicts when merging lanes', selectHTML('mergeTool', mergeOpts, p.mergeTool, 'Merge tool'), `Installed tools on ${MACHINE}.`)}
       </div>
       <div class="group-head">Folders</div>
       <div class="list">
@@ -5118,10 +5130,10 @@ const SETTINGS_PAGES = {
   appearance: () => {
     const p = state.prefs;
     const chroma = p.chroma || 'muted';
-    return `<h1>Appearance</h1><p class="lede">Theme, surfaces, size, type. Stays on this Mac.</p>
+    return `<h1>Appearance</h1><p class="lede">Theme, surfaces, size, type. Stays on ${MACHINE}.</p>
       <div class="group-head">Theme</div>
       <div class="list">
-        ${settingsRow('sun', 'Mode', '', 'System follows macOS', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), 'System tracks light/dark from macOS. Light and Dark stay put.')}
+        ${settingsRow('sun', 'Mode', '', isMac ? 'System follows macOS' : 'System follows OS theme', optionGroup('theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], p.theme, { label: 'Mode' }), isMac ? 'System tracks light/dark from macOS. Light and Dark stay put.' : 'System tracks light/dark from the OS. Light and Dark stay put.')}
       </div>
       <div class="group-head">Look<small>Every look has a light and a dark side; Mode picks which.</small></div>
       ${themeGridHTML(chroma)}
@@ -5256,13 +5268,15 @@ const SETTINGS_PAGES = {
       launcher.onPath ? status('on', 'On your PATH') : btn('Add to PATH', 'data-agent-link'),
       "Lets you type plenum in your own terminal. Agents don't need this.")
       + (!launcher.onPath && agentsView.linkCmd
-        ? note(`Plenum can't write to ${esc(launcher.linkPath)} itself. Paste this in Terminal, then check again:<pre>${esc(agentsView.linkCmd)}</pre><div class="row-end">${btn('Copy', 'data-link-copy')}${btn('Check again', 'data-link-recheck', true)}</div>`)
+        ? note(isWindows
+          ? `${esc(agentsView.linkCmd)}<div class="row-end">${btn('Copy', 'data-link-copy')}${btn('Check again', 'data-link-recheck', true)}</div>`
+          : `Plenum can't write to ${esc(launcher.linkPath)} itself. Paste this in Terminal, then check again:<pre>${esc(agentsView.linkCmd)}</pre><div class="row-end">${btn('Copy', 'data-link-copy')}${btn('Check again', 'data-link-recheck', true)}</div>`)
         : '');
     const clientRow = (c) => {
       const id = `data-client="${esc(c.id)}"`;
       const file = esc(c.shown || c.file);
       const row = {
-        'not-installed': ['Not installed on this Mac.', ''],
+        'not-installed': [`Not installed on ${MACHINE}.`, ''],
         missing: ["Doesn't know about Plenum yet.", status('warn', 'Missing') + btn('Show lines', `data-agent-lines ${id}`) + btn('Add', `data-agent-add ${id}`, true)],
         ok: [`<span class="mono">${file}</span>`, status('on', 'Set up') + btn('Remove', `data-agent-remove ${id}`)],
         stale: ['Points at an old Plenum.', status('warn', 'Out of date') + btn('Show lines', `data-agent-lines ${id}`) + btn('Fix', `data-agent-add ${id}`, true)],
@@ -6327,7 +6341,7 @@ async function loadAgents() {
     if (!state.agents) {
       state.agents = {
         settings: { version: 1, run: true, create: true, remove: 'allow', writeSetup: 'never' },
-        launcher: { path: '~/.plenum/bin/plenum', shown: '~/.plenum/bin/plenum', onPath: true, linkPath: '/usr/local/bin/plenum' },
+        launcher: { path: isWindows ? '~/.plenum/bin/plenum.cmd' : '~/.plenum/bin/plenum', shown: isWindows ? '~/.plenum/bin/plenum.cmd' : '~/.plenum/bin/plenum', onPath: true, linkPath: isWindows ? '~/.plenum/bin' : '/usr/local/bin/plenum' },
         clients: [],
       };
     }
@@ -7381,7 +7395,7 @@ function paletteCommands() {
     { id: 'logs', label: 'Run log', run: () => handleAction('logs', lane), when: lane && lane.runnable && (lane.prepared !== false || lane.isPrimary) },
     { id: 'test', label: 'Test lane', run: () => handleAction('test', lane), when: lane && lane.runnable && (lane.prepared !== false || lane.isPrimary) },
     { id: 'repair', label: 'Repair lane', run: () => handleAction('repair', lane), when: lane && !lane.isPrimary && lane.runnable && lane.prepared === false },
-    { id: 'reveal', label: 'Reveal in Finder', run: () => handleAction('reveal', lane), when: !!lane },
+    { id: 'reveal', label: REVEAL_LABEL, run: () => handleAction('reveal', lane), when: !!lane },
     { id: 'editor', label: `Open in ${editorName()}`, run: () => handleAction('editor', lane), when: !!lane },
     { id: 'terminal', label: 'Open in terminal', run: () => invoke('os.openTerminal', lane.path).catch(() => {}), when: !!lane },
     { id: 'warm', label: 'Tab warm time…', run: openWarmSheet },

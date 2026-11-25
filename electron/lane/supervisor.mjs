@@ -7,6 +7,7 @@ import { git } from '../git/run.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from './manifest.mjs';
 import { driftError, listPendingMigrations, usesSharedData } from './drift.mjs';
 import { manifestPath, runDir } from '../paths.mjs';
+import { findGitBash, missingGitBashError, spawnShellAsync } from './shell.mjs';
 
 const LOG_TEE = fileURLToPath(new URL('./log-tee.mjs', import.meta.url));
 
@@ -288,6 +289,17 @@ async function resolveLanes(root) {
 }
 
 function killGroup(pid, signal) {
+  if (process.platform === 'win32') {
+    try {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      }).unref();
+    } catch {
+      try { process.kill(pid, signal); } catch { /* already gone */ }
+    }
+    return;
+  }
   try {
     process.kill(-pid, signal);
   } catch {
@@ -298,12 +310,17 @@ function killGroup(pid, signal) {
 /** One-shot shell command; rejects with stderr on non-zero exit. */
 function runOnce(command, cwd, env, label) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, {
-      shell: true,
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    let child;
+    try {
+      child = spawnShellAsync(command, {
+        cwd,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
     let stderr = '';
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (d) => { stderr += d; });
@@ -349,6 +366,9 @@ export async function up(root, laneIndex, { force = false } = {}) {
 
   await runSnapshots(manifest, cwd, ctx, env);
 
+  // Windows lane recipes assume a POSIX shell — require Git Bash up front.
+  if (process.platform === 'win32' && !findGitBash()) throw missingGitBashError();
+
   // Durable timestamped log via log-tee (survives CLI `up` exit). Truncate only on new spawn.
   const command = renderTemplate(String(manifest.run), ctx);
   fs.mkdirSync(RUN_DIR, { recursive: true });
@@ -360,6 +380,7 @@ export async function up(root, laneIndex, { force = false } = {}) {
     cwd,
     env,
     stdio: 'ignore',
+    windowsHide: true,
   });
 
   await new Promise((resolve, reject) => {
@@ -485,8 +506,7 @@ export async function test(root, laneIndex, { timeoutMs = TEST_TIMEOUT_MS } = {}
     const { top, cwd, manifest, ctx, env } = await prepareLane(root, laneIndex);
     if (!manifest?.test) throw new Error('lane.yaml has no test command');
 
-    const child = spawn(renderTemplate(String(manifest.test), ctx), {
-      shell: true,
+    const child = spawnShellAsync(renderTemplate(String(manifest.test), ctx), {
       detached: true,
       cwd,
       env,

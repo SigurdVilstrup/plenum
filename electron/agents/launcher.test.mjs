@@ -9,8 +9,20 @@ import { launcherPath, launcherScript, ensureLauncher, pathStatus, linkOnPath } 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-launcher-'));
 
 test('script quotes paths with spaces and quotes', () => {
-  const s = launcherScript({ execPath: "/Applications/Plenum Beta.app/Contents/MacOS/Plenum", cliPath: "/Users/o'neil/app/bin/plenum.mjs" });
+  const s = launcherScript({ execPath: "/Applications/Plenum Beta.app/Contents/MacOS/Plenum", cliPath: "/Users/o'neil/app/bin/plenum.mjs", platform: 'darwin' });
   assert.equal(s, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '/Applications/Plenum Beta.app/Contents/MacOS/Plenum' '/Users/o'\\''neil/app/bin/plenum.mjs' "$@"\n`);
+});
+
+test('windows launcher is a .cmd that sets ELECTRON_RUN_AS_NODE', () => {
+  const s = launcherScript({
+    execPath: 'C:\\Program Files\\Plenum\\Plenum.exe',
+    cliPath: 'C:\\Program Files\\Plenum\\resources\\app.asar\\bin\\plenum.mjs',
+    platform: 'win32',
+  });
+  assert.match(s, /@echo off/);
+  assert.match(s, /set ELECTRON_RUN_AS_NODE=1/);
+  assert.match(s, /"C:\\Program Files\\Plenum\\Plenum\.exe"/);
+  assert.equal(launcherPath('/tmp/home', 'win32'), path.join('/tmp/home', 'bin', 'plenum.cmd'));
 });
 
 test('the written launcher actually runs, from a folder with a space', () => {

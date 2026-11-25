@@ -1,48 +1,48 @@
-# Feature plan: Doctor agent wiring prompt
+# Feature plan: Windows desktop support (unsigned)
 
 ## Goal
 
-`repo.doctor` / `plenum doctor` already propose a lane recipe and scour hard-coded ports. That is not enough: parallel lanes only work when the **app** honors Plenum’s injected env. This feature returns a ready-to-run **`agentPrompt`** from each scan so MCP/AI callers (and humans via Copy) know exactly how to wire the repo without breaking people who never use Plenum.
+Ship an unsigned Windows build of Plenum (NSIS installer + OTA `latest.yml`) while keeping the Mac pipeline intact. Linux stays out of scope. Windows users download `Plenum-Setup.exe`, accept SmartScreen, and use board/lanes/git with OTA updates.
 
 ## User-visible behavior
 
-- Happy path: Open Lane setup or call `repo.doctor` → result includes `agentPrompt` (markdown). Agents follow it after (or instead of only) writing `lane.yaml`. Setup wizard “Port hits & wires” shows the prompt with Copy.
-- Empty / first-run: Even with no hits, prompt still states dual-use rules and how `env.set` / `{port.*}` work.
-- Errors / conflicts: Unchanged; doctor still refuses Accept without `run`. Prompt notes when Aspire/compose was found but not auto-wired.
-- Keyboard / shortcuts: none new; Copy via button.
+- Happy path: Landing shows Mac + Windows downloads; Windows NSIS installer; framed/`titleBarOverlay` chrome; Ctrl shortcuts; Explorer wording; Windows terminal/editor openers; CLI at `%USERPROFILE%\.plenum\bin\plenum.cmd`.
+- First install: SmartScreen “Windows protected your PC” → More info → Run anyway (noted on site).
+- Errors: Missing Git Bash blocks lane start with a clear install-Git message.
+- Keyboard: Ctrl labels on Windows; handlers already accept `ctrlKey`.
 
 ## Scope
 
 | In | Out |
 | --- | --- |
-| `buildAgentPrompt` from doctor scan context | Auto-patching app source from Plenum |
-| `agentPrompt` on doctor / MCP / IPC / CLI JSON | Changing port formula or multi-process model |
-| MCP tool description steers agents to follow it | Aspire-specific adapters |
-| Setup wizard show + Copy | New settings toggles |
+| electron-builder `win` NSIS + `.ico`, host-aware pack | Linux / AppImage |
+| CI mac + windows + publish jobs | Code signing / Azure Trusted Signing |
+| Release scripts for `Plenum.exe` + `latest.yml` | Microsoft Store / MSIX |
+| Supervisor kill tree + Git Bash for lane cmds | FileMerge parity on Windows |
+| `plenum.cmd` shim, openers, chrome, updater, site | |
+
+**Lane shell default:** On Windows, `lane.yaml` `run`/`test` go through Git Bash. Missing bash → actionable error.
 
 ## Touch list
 
-- `electron/lane/agent-prompt.mjs` — builder
-- `electron/lane/doctor.mjs` — attach field
-- `electron/mcp/server.mjs` — tool description + return (already returns full doctor result)
-- `electron/main.mjs` — IPC pass-through
-- `app/main.js` — Port hits step UI
-- tests: `doctor.test.mjs`, `mcp/server.test.mjs`
-- `README.md` / `AGENTS.md` — one sentence each
+- `package.json`, `scripts/build-icons.mjs`, `.github/workflows/release.yml`
+- `.agents/skills/plenum-release/scripts/` (`_lib`, pack-launch-smoke, ota-health-check, release-check)
+- `electron/lane/supervisor.mjs`, `electron/lane/log-tee.mjs`
+- `electron/agents/launcher.mjs`, `electron/main.mjs`, `electron/prefs.mjs`, `electron/updates.mjs`
+- `app/` chrome, shortcut labels, Finder→Explorer copy
+- `site/index.html`, `README.md`, `AGENTS.md`
 
 ## Risks
 
-- Regressions: doctor return shape grows; UI/CLI must tolerate missing field during transition (always set).
-- Lane / protected: prompt must insist on env **defaults** so non-Plenum `npm run dev` still works.
-- MCP / CLI: longer JSON; agents must read `agentPrompt` — description is the steer.
+- Supervisor / Git Bash mismatch is the main footgun for lane recipes.
+- Unsigned SmartScreen will suppress conversion; document, don’t paper over.
+- Split CI publish must not drop Mac FTP artifacts.
+- OTA self-heal: `release:check` must stay green on Mac.
 
 ## Verify
 
-- [ ] Manual: Settings → Lane setup → Port hits shows prompt; Copy works
-- [ ] `npm test` / doctor + MCP tests on fixture with hard-coded localhost
-- [ ] Prompt mentions dual-use defaults and concrete hit paths
-- [ ] MCP description mentions following `agentPrompt`
-
-## Open questions
-
-- None — confirmed approach: prompt + steer, not auto-edit.
+- [ ] `npm test` on the lane
+- [ ] Windows CI artifact smoke (launch + ota-health)
+- [ ] Mac `release:check` still green
+- [ ] Manual Windows: install, lane up/down, git verbs, terminal/editor, CLI, update feed
+- [ ] Site serves `Plenum-Setup.exe` + `latest.yml`

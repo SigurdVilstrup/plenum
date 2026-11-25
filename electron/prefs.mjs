@@ -74,7 +74,7 @@ const ENUMS = {
   chroma: ['muted', 'vibrant', 'arcade', 'fairytale', 'studio', 'retro', 'bricks'],
   fontPack: ['system', 'inter-jetbrains', 'ibm-plex'],
   editor: ['cursor', 'vscode', 'zed', 'windsurf', 'custom'],
-  terminal: ['terminal', 'iterm', 'custom'],
+  terminal: ['terminal', 'iterm', 'windows-terminal', 'cmd', 'custom'],
   diffTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
   mergeTool: ['internal', 'opendiff', 'vscode', 'cursor', 'windsurf'],
   statsFame: ['mine', 'all'],

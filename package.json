@@ -2,7 +2,7 @@
   "name": "plenum",
   "version": "0.3.0",
   "private": true,
-  "description": "Mac git client for parallel work: board, lanes, git verbs, runnable lanes, CLI, and local MCP",
+  "description": "Git client for parallel work on Mac and Windows: board, lanes, git verbs, runnable lanes, CLI, and local MCP",
   "author": "Plenum",
   "main": "electron/main.mjs",
   "type": "module",
@@ -18,11 +18,15 @@
     "prestart": "npm run build",
     "build": "node scripts/stamp-build-info.mjs && vite build",
     "start": "electron .",
-    "test": "node --test --test-concurrency=1 electron/prefs.test.mjs electron/feedback.test.mjs electron/github-star.test.mjs electron/github-feedback.test.mjs electron/load-env.test.mjs electron/build-info.test.mjs electron/updates.test.mjs electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs electron/agents/*.test.mjs bin/*.test.mjs app/lib/*.test.mjs .agents/skills/plenum-release/scripts/*.test.mjs",
+    "test": "node --test --test-concurrency=1 electron/prefs.test.mjs electron/feedback.test.mjs electron/github-star.test.mjs electron/github-feedback.test.mjs electron/load-env.test.mjs electron/build-info.test.mjs electron/updates.test.mjs electron/os-open.test.mjs electron/git/*.test.mjs electron/lane/*.test.mjs electron/mcp/*.test.mjs electron/agents/*.test.mjs bin/*.test.mjs app/lib/*.test.mjs .agents/skills/plenum-release/scripts/*.test.mjs",
     "smoke:init": "node scripts/smoke-init.mjs",
     "icons": "node scripts/build-icons.mjs",
-    "pack": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
-    "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "pack": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir",
+    "pack:mac": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "pack:win": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir",
+    "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
+    "dist:mac": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "dist:win": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
     "release:check": "node .agents/skills/plenum-release/scripts/release-check.mjs",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
@@ -41,6 +45,7 @@
       "electron/**/*",
       "bin/**/*",
       "build/icon.icns",
+      "build/icon.ico",
       "build/icon.png",
       "package.json"
     ],
@@ -50,6 +55,7 @@
         "to": "build",
         "filter": [
           "icon.icns",
+          "icon.ico",
           "icon.png"
         ]
       }
@@ -76,7 +82,21 @@
     },
     "dmg": {
       "title": "Plenum"
-    }
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "dir"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Plenum-Setup-${version}.${ext}"
+    },
+    "forceCodeSigning": false
   },
   "devDependencies": {
     "electron": "^39.0.0",

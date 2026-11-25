@@ -14,13 +14,13 @@ import * as asar from '@electron/asar';
 import {
   asarPathForApp,
   die,
-  findPlenumApp,
+  findPackagedApp,
   normalizeAsarEntry,
   relativeSpecifiers,
   repoRootFrom,
 } from './_lib.mjs';
 
-const USAGE = `Usage: node pack-imports-check.mjs [--path <repo>] [--asar <app.asar>] [--app <Plenum.app>] [--skip-source] [--json]
+const USAGE = `Usage: node pack-imports-check.mjs [--path <repo>] [--asar <app.asar>] [--app <Plenum.app|Plenum.exe>] [--skip-source] [--json]
 `;
 
 function parseArgs(argv) {
@@ -144,7 +144,7 @@ function main() {
 
   let asarFile = opts.asar || null;
   if (!asarFile) {
-    const appPath = opts.app || findPlenumApp(repoRoot);
+    const appPath = opts.app || findPackagedApp(repoRoot);
     if (appPath) asarFile = asarPathForApp(appPath);
   }
   if (!asarFile || !fs.existsSync(asarFile)) {

@@ -12,11 +12,13 @@ Parallel checkouts you start, stop, and test. You, your agents, every lane on on
 <br>
 
 <a href="https://plenum.sh"><img src="https://img.shields.io/badge/Download_for_macOS-Apple_Silicon-5e6ad2?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>
+<a href="https://plenum.sh/updates/Plenum-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-x64-5e6ad2?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
 
 <br>
 
 <a href="https://github.com/SigurdVilstrup/plenum/releases/latest"><img src="https://img.shields.io/github/v/release/SigurdVilstrup/plenum?style=flat-square&color=7a84e0&label=release" alt="Latest release"></a>
 <img src="https://img.shields.io/badge/macOS-Apple_Silicon-23252a?style=flat-square&logo=apple&logoColor=white" alt="macOS on Apple Silicon">
+<img src="https://img.shields.io/badge/Windows-x64_unsigned-23252a?style=flat-square&logo=windows&logoColor=white" alt="Windows x64 unsigned">
 <img src="https://img.shields.io/badge/Electron-23252a?style=flat-square&logo=electron&logoColor=9feaf9" alt="Electron">
 <img src="https://img.shields.io/badge/MCP-built_in-23252a?style=flat-square&logo=modelcontextprotocol&logoColor=white" alt="MCP built in">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3d9a8b?style=flat-square" alt="MIT license"></a>
@@ -106,8 +108,8 @@ Every repo gets its own tab with its own lanes. **Cleanup…** (⌘K) clears fin
 
 ## Quick start
 
-1. Grab the signed build from **[plenum.sh](https://plenum.sh)**.
-2. Open any repo from the empty screen or ⌘K.
+1. Grab a build from **[plenum.sh](https://plenum.sh)** — macOS (signed) or Windows (unsigned; SmartScreen may warn). Windows needs [Git for Windows](https://git-scm.com/download/win) for lane Start/Test.
+2. Open any repo from the empty screen or the command palette (⌘P / Ctrl+P).
 3. Hit **Open as lane** on a worktree, or create a new one from the board.
 
 Updates arrive on their own from the public feed at [plenum.sh/updates](https://plenum.sh/updates/). No GitHub token needed.
@@ -197,13 +199,13 @@ PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev
 | `npm test` | Board, lane supervisor, doctor, CLI, MCP |
 | `npm run smoke:init` | Fresh multi-worktree fixture with a local bare remote |
 | `npm start` | Production build + Electron |
-| `npm run pack` | Unsigned `Plenum.app` in `release/mac*` |
+| `npm run pack` | Unsigned dir build for this OS (`Plenum.app` or `win-unpacked/Plenum.exe`) |
 | `npm run release:check` | Tests + pack + launch + OTA/updater invariants (required before tagging) |
-| `npm run dist` | Same + `.dmg` + updater `.zip` / `latest-mac.yml` |
-| `npm run icons` | Rebuild `build/icon.icns` from `branding/app-icon-1024.png` |
+| `npm run dist` | Host OS installer + updater feed (`latest-mac.yml` or `latest.yml`) |
+| `npm run icons` | Rebuild `build/icon.icns` + `build/icon.ico` from `branding/app-icon-1024.png` |
 | `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
 
-Local pack and dist builds are unsigned. GitHub Releases are Developer ID–signed and notarized. Update feed notes for maintainers: [`docs/updates-feed.md`](docs/updates-feed.md).
+Local pack and dist builds are unsigned. GitHub Releases sign and notarize **macOS**; **Windows** ships unsigned NSIS. Update feed notes for maintainers: [`docs/updates-feed.md`](docs/updates-feed.md).
 
 - Disable auto-update: `PLENUM_DISABLE_AUTO_UPDATE=1`
 - Override the feed: `PLENUM_UPDATE_FEED_URL=https://…/updates/`

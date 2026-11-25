@@ -12,7 +12,17 @@ export const PLENUM_GITHUB = {
 };
 
 /** Candidate `gh` paths. Dock-launched Electron often misses Homebrew on PATH. */
-export function ghCandidates(home = process.env.HOME || '') {
+export function ghCandidates(home = process.env.HOME || process.env.USERPROFILE || '') {
+  if (process.platform === 'win32') {
+    const pf = process.env.ProgramFiles || 'C:\\Program Files';
+    const local = process.env.LOCALAPPDATA || '';
+    return [
+      'gh.exe',
+      'gh',
+      path.join(pf, 'GitHub CLI', 'gh.exe'),
+      local ? path.join(local, 'Programs', 'GitHub CLI', 'gh.exe') : null,
+    ].filter(Boolean);
+  }
   return [
     'gh',
     '/opt/homebrew/bin/gh',

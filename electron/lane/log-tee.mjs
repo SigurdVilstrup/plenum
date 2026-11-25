@@ -5,8 +5,8 @@
  *
  * Usage: node log-tee.mjs <logPath> <shell-command>
  */
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { spawnShellAsync } from './shell.mjs';
 
 const logPath = process.argv[2];
 const command = process.argv[3];
@@ -32,7 +32,6 @@ function attach(stream) {
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl);
       buf = buf.slice(nl + 1);
-      // Preserve CR-only noise as plain text; drop lone empty trailing handled by split.
       out.write(`${stamp()} ${line}\n`);
     }
   });
@@ -44,23 +43,30 @@ function attach(stream) {
   });
 }
 
-const child = spawn(String(command), {
-  shell: true,
-  stdio: ['ignore', 'pipe', 'pipe'],
-  env: process.env,
-  cwd: process.cwd(),
-});
-
-attach(child.stdout);
-attach(child.stderr);
-
-child.on('error', (err) => {
+let child;
+try {
+  child = spawnShellAsync(String(command), {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: process.env,
+    cwd: process.cwd(),
+  });
+} catch (err) {
   try { out.write(`${stamp()} [plenum] ${err.message}\n`); } catch { /* */ }
   out.end(() => process.exit(1));
-});
+}
 
-child.on('exit', (code, signal) => {
-  const exit = () => process.exit(code == null ? (signal ? 1 : 0) : code);
-  if (!out.writable || out.writableFinished) exit();
-  else out.end(exit);
-});
+if (child) {
+  attach(child.stdout);
+  attach(child.stderr);
+
+  child.on('error', (err) => {
+    try { out.write(`${stamp()} [plenum] ${err.message}\n`); } catch { /* */ }
+    out.end(() => process.exit(1));
+  });
+
+  child.on('exit', (code, signal) => {
+    const exit = () => process.exit(code == null ? (signal ? 1 : 0) : code);
+    if (!out.writable || out.writableFinished) exit();
+    else out.end(exit);
+  });
+}

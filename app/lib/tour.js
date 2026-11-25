@@ -1,6 +1,8 @@
 // First-run / Quick start tour: dim the window, spotlight a real element, explain it.
 // Steps whose target is not on screen (no repo open, panel hidden) are skipped.
 
+const MOD = (typeof window !== 'undefined' && window.plenum && window.plenum.isMac === false) ? 'Ctrl+' : '⌘';
+
 export const TOUR_STEPS = [
   {
     title: 'Welcome to Plenum',
@@ -8,7 +10,7 @@ export const TOUR_STEPS = [
   },
   {
     sel: '.searchbtn',
-    title: 'Lost? Press ⌘P',
+    title: `Lost? Press ${MOD}P`,
     body: 'Search for a lane, branch, file, or an action like New lane, Commit or Feedback. Whenever you do not know what to do next, start here.',
   },
   {
@@ -28,7 +30,7 @@ export const TOUR_STEPS = [
   },
   {
     title: 'Make it yours',
-    body: 'Settings (⌘,) → Agents connects Cursor, Claude Code or Codex. Feedback is one ⌘P away. Replay this tour any time: ⌘P → Quick start.',
+    body: `Settings (${MOD},) → Agents connects Cursor, Claude Code or Codex. Feedback is one ${MOD}P away. Replay this tour any time: ${MOD}P → Quick start.`,
   },
 ];
 

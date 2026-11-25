@@ -10,7 +10,17 @@ export const CLIENTS = [
 ];
 
 const INSTALLED = {
-  cursor: (h, apps) => [h('.cursor'), path.join(apps, 'Cursor.app')],
+  cursor: (h, apps) => {
+    if (process.platform === 'win32') {
+      const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+      return [
+        h('.cursor'),
+        path.join(local, 'Programs', 'cursor', 'Cursor.exe'),
+        path.join(local, 'Programs', 'Cursor', 'Cursor.exe'),
+      ];
+    }
+    return [h('.cursor'), path.join(apps, 'Cursor.app')];
+  },
   'claude-code': (h) => [h('.claude'), h('.claude.json')],
   codex: (h) => [h('.codex')],
 };
