@@ -29,7 +29,7 @@ ports:
     web: 8000
 ```
 
-Protected (index 0) uses base ports (`8000`). Lane 1 gets `web` on `8100` (`8000 + 100`). Create / Open as lane copies `env.copy` and runs `setup` when present. Drift gates Start when shared migrations are pending. `plenum doctor` / MCP `repo.doctor` also scour for hard-coded localhost ports and report wiring gaps.
+Protected (index 0) uses base ports (`8000`). Lane 1 gets `web` on `8100` (`8000 + 100`). Create / Open as lane copies `env.copy` and runs `setup` when present. Drift gates Start when shared migrations are pending. `plenum doctor` / MCP `repo.doctor` scour for hard-coded localhost ports and return an `agentPrompt` so an agent can wire the app to those ports (with defaults so non-Plenum starts still work) — the recipe alone is not enough.
 
 ## Scripts
 

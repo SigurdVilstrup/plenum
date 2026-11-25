@@ -5459,6 +5459,7 @@ async function loadSetup(root) {
     proposed: null,
     hits: [],
     wiring: null,
+    agentPrompt: '',
     canAccept: false,
     draft: state.setup?.root === root ? state.setup.draft : null,
     sharedAck: false,
@@ -5476,6 +5477,7 @@ async function loadSetup(root) {
       proposed,
       hits: res.hits || [],
       wiring: res.wiring || null,
+      agentPrompt: res.agentPrompt || '',
       canAccept: !!res.canAccept,
       draft: state.setup.draft || {
         run: proposed.run || '',
@@ -5568,8 +5570,12 @@ function setupWizardHTML() {
     const wires = Object.entries(d.envSet || {}).map(([k, v]) =>
       `<div class="setup-port-row"><input class="input mono" data-wire-key value="${esc(k)}" /><input class="input mono" data-wire-val value="${esc(v)}" /></div>`).join('');
     const proposed = s.wiring?.proposedWires || {};
+    const prompt = s.agentPrompt || '';
+    const promptBody = prompt
+      ? `<pre class="setup-agent-prompt mono" data-agent-prompt tabindex="0">${esc(prompt)}</pre>`
+      : `<p class="muted">No wiring prompt from doctor yet.</p>`;
     body = `<h1>Port hits & wires</h1>
-      <p class="lede">Hard-coded localhost ports break per-lane listeners. Wire them with <span class="mono">env.set</span> and <span class="mono">{'{port.*}'}</span>, or allowlist intentional ones.</p>
+      <p class="lede">Hard-coded localhost ports break per-lane listeners. Wire them with <span class="mono">env.set</span> and <span class="mono">{'{port.*}'}</span>, or allowlist intentional ones. Writing the recipe alone does not change how the app binds ports.</p>
       <div class="col-head">Open hits</div>
       <div class="list">${hitRows}</div>
       <div class="col-head">env.set wires</div>
@@ -5577,7 +5583,15 @@ function setupWizardHTML() {
       <div class="row-end">
         ${Object.keys(proposed).length ? `<button class="btn" type="button" data-apply-wires>Apply proposed wires</button>` : ''}
         <button class="btn" type="button" data-add-wire>${iconHTML('plus', 'sm')}Add wire</button>
-      </div>`;
+      </div>
+      <details class="setup-advanced" open>
+        <summary>Wiring prompt for an agent</summary>
+        <p class="muted">From the last doctor scan. Paste into an agent to teach the app to read those env vars (with today’s ports as defaults so starts without Plenum still work).</p>
+        <div class="bo-prompt-top"><span class="bo-prompt-label">Agent prompt</span>
+          <button class="btn primary" type="button" data-copy-agent-prompt${prompt ? '' : ' disabled'}>Copy</button>
+        </div>
+        ${promptBody}
+      </details>`;
   } else if (step === 4) {
     body = `<h1>Prepare</h1>
       <p class="lede">Runs once when a lane is created or repaired. Copy local secrets from Protected; never commit them.</p>
@@ -5588,7 +5602,7 @@ function setupWizardHTML() {
   } else {
     const yaml = s.proposedYaml || draftToYaml(d);
     body = `<h1>Review & write</h1>
-      <p class="lede">Shared data is the default. Confirm you understand, then write the recipe.</p>
+      <p class="lede">Shared data is the default. Confirm you understand, then write the recipe. The recipe does not wire the app — use Port hits & wires → Copy if an agent still needs to teach the stack to read those ports.</p>
       <label class="check"><input type="checkbox" data-shared-ack${s.sharedAck ? ' checked' : ''} /> I understand lanes share one local throwaway database by default — not staging or production.</label>
       <details class="setup-advanced"${s.showYaml ? ' open' : ''}>
         <summary>Advanced YAML</summary>
@@ -5683,10 +5697,17 @@ function bindSetup(root) {
         }, s.root);
         s.hits = res.hits || [];
         s.findings = res.findings || s.findings;
+        s.agentPrompt = res.agentPrompt || s.agentPrompt;
+        s.wiring = res.wiring || s.wiring;
         toast('Allowlisted', 'ok');
         renderSettings();
       } catch { /* toasted */ }
     });
+  });
+  root.querySelector('[data-copy-agent-prompt]')?.addEventListener('click', () => {
+    const text = s.agentPrompt || root.querySelector('[data-agent-prompt]')?.textContent || '';
+    if (!text) return;
+    copyText(text, 'prompt — paste into your agent');
   });
   root.querySelector('[data-shared-ack]')?.addEventListener('change', (e) => {
     s.sharedAck = e.target.checked;

@@ -62,7 +62,7 @@ The desktop app writes `~/.plenum/bin/plenum` on launch. Any MCP client can use:
 }
 ```
 
-Tools: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. Defaults (Settings → Agents → What agents may do) allow start/stop/test/create; remove is Allow; writing `.plenum/lane.yaml` is Never. Agents never get `force`, and only write a manifest in a repo that has none.
+Tools: `repo.doctor`, `lane.create`, `lane.up`, `lane.down`, `lane.test`, `lane.status`, `lane.remove`. Defaults (Settings → Agents → What agents may do) allow start/stop/test/create; remove is Allow; writing `.plenum/lane.yaml` is Never. Agents never get `force`, and only write a manifest in a repo that has none. After `repo.doctor`, always read and follow `agentPrompt` — writing the recipe does not wire the app.
 
 ## Skills
 
