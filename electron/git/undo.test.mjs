@@ -3,18 +3,16 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import * as ops from './ops.mjs';
 import * as undo from './undo.mjs';
+import { gitIdentity, tmpDir } from './test-tmp.mjs';
 
 const sh = (args, cwd) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString();
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-undo-'));
+  const root = tmpDir('ovl-undo-');
   sh(['init', '-b', 'main', root]);
-  sh(['config', 'user.email', 't@e.com'], root);
-  sh(['config', 'user.name', 'T'], root);
-  sh(['config', 'commit.gpgsign', 'false'], root);
+  gitIdentity(root, sh);
   fs.writeFileSync(path.join(root, 'a.txt'), 'base\n');
   fs.writeFileSync(path.join(root, 'b.txt'), 'bee\n');
   sh(['add', '.'], root);

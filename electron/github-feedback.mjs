@@ -64,8 +64,9 @@ export async function createFeedbackIssueViaGh(meta, {
   pathEnv = process.env.PATH || '',
   execFileImpl = execFileAsync,
   bins = null,
+  platform = process.platform,
 } = {}) {
-  const bin = resolveGhBin({ home, existsSync, pathEnv, bins });
+  const bin = resolveGhBin({ home, existsSync, pathEnv, bins, platform });
   if (!bin) throw new Error('GitHub CLI (`gh`) is not available.');
   const title = feedbackIssueTitle(meta.comment);
   const body = buildFeedbackIssueBody(meta, { viaGh: true });

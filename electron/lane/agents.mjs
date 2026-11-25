@@ -43,7 +43,10 @@ export function agentsInLane(lanePath, agents, lanePaths = []) {
   const nested = lanePaths.map((p) => path.resolve(p)).filter((p) => p !== root && p.startsWith(root + path.sep));
   const within = (dir, base) => dir === base || dir.startsWith(base + path.sep);
   const names = agents
-    .filter(({ cwd }) => within(cwd, root) && !nested.some((n) => within(cwd, n)))
+    .filter(({ cwd }) => {
+      const dir = path.resolve(cwd);
+      return within(dir, root) && !nested.some((n) => within(dir, n));
+    })
     .map(({ name }) => name);
   return [...new Set(names)].sort();
 }

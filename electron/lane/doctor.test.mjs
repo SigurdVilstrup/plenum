@@ -243,6 +243,8 @@ test('acceptManifest rejects missing run and invalid yaml', async () => {
 });
 
 test('dumpManifest quotes env.copy paths that need it', async () => {
+  // Windows paths cannot contain `:`.
+  if (process.platform === 'win32') return;
   const root = fixtureRepo({
     scripts: { start: 'node server.js --port 3000' },
     compose: false,

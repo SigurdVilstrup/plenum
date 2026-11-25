@@ -3,24 +3,22 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import * as ops from './ops.mjs';
 import { loadBoard } from './board.mjs';
 import { git } from './run.mjs';
 import * as supervisor from '../lane/supervisor.mjs';
+import { gitIdentity, samePath, tmpDir } from './test-tmp.mjs';
 
 function sh(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
 }
 
 async function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-'));
-  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-bare-')) + '.git';
+  const root = tmpDir('ovl-');
+  const bare = `${tmpDir('ovl-bare-')}.git`;
   fs.rmSync(bare, { recursive: true, force: true });
   sh(['init', '-b', 'main', root]);
-  sh(['config', 'user.email', 't@e.com'], root);
-  sh(['config', 'user.name', 'T'], root);
-  sh(['config', 'commit.gpgsign', 'false'], root);
+  gitIdentity(root, sh);
   fs.writeFileSync(path.join(root, 'a.txt'), 'base\n');
   sh(['add', 'a.txt'], root);
   sh(['commit', '-m', 'base'], root);
@@ -36,9 +34,10 @@ test('createLane existing: attaches worktree to current branch', async () => {
   sh(['branch', 'eng/legacy'], root);
   fs.writeFileSync(path.join(root, 'legacy.txt'), 'x');
   // commit on eng/legacy via temporary checkout? branch tip is same as main until we commit on it
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-leg-'));
+  const tmp = tmpDir('ovl-leg-');
   fs.rmSync(tmp, { recursive: true, force: true });
   sh(['worktree', 'add', tmp, 'eng/legacy'], root);
+  gitIdentity(tmp, sh);
   fs.writeFileSync(path.join(tmp, 'legacy.txt'), 'x');
   sh(['add', 'legacy.txt'], tmp);
   sh(['commit', '-m', 'legacy tip'], tmp);
@@ -102,7 +101,7 @@ test('merge conflict walks primary via conflictRoot', async () => {
     caught = e;
   }
   assert.equal(caught?.code, 'CONFLICT');
-  assert.equal(fs.realpathSync(caught.conflictRoot), fs.realpathSync(root));
+  assert.ok(samePath(caught.conflictRoot, root));
   const st = await ops.conflictStatus(root, lane.index, caught.conflictRoot);
   assert.deepEqual(st.conflicts, ['a.txt']);
   assert.equal(st.operation, 'merge');
@@ -151,12 +150,13 @@ test('primary commit push pull', async () => {
   assert.equal(board.lanes[0].ahead, 0);
   // Advance remote via a worktree on the bare - avoids a second clone, which
   // can end up with unrelated histories on newer git (CI runners ship 2.56).
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-other-'));
+  const other = tmpDir('ovl-other-');
   fs.rmSync(other, { recursive: true, force: true });
   await git(['--git-dir', bare, 'worktree', 'add', other, 'main']);
   await git(['config', 'user.email', 't@e.com'], other);
   await git(['config', 'user.name', 'T'], other);
   await git(['config', 'commit.gpgsign', 'false'], other);
+  await git(['config', 'core.autocrlf', 'false'], other);
   fs.writeFileSync(path.join(other, 'remote.txt'), 'r');
   await git(['add', 'remote.txt'], other);
   await git(['commit', '-m', 'remote tip'], other);
@@ -351,11 +351,11 @@ test('createLane honors lanesFolder inside and outside the checkout', async () =
   const { root } = await fixture();
   let board = await ops.createLane(root, { name: 'in', lanesFolder: 'lanes-alt' });
   const inside = board.lanes.find((l) => l.name === 'feat/in');
-  assert.equal(inside.path, fs.realpathSync(path.join(root, 'lanes-alt', 'in')));
+  assert.ok(samePath(inside.path, path.join(root, 'lanes-alt', 'in')));
   assert.ok(fs.readFileSync(path.join(root, '.git', 'info', 'exclude'), 'utf8').split('\n').includes('lanes-alt/'));
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-lanes-'));
+  const out = tmpDir('ovl-lanes-');
   board = await ops.createLane(root, { name: 'out', lanesFolder: out });
-  assert.equal(board.lanes.find((l) => l.name === 'feat/out').path, fs.realpathSync(path.join(out, 'out')));
+  assert.ok(samePath(board.lanes.find((l) => l.name === 'feat/out').path, path.join(out, 'out')));
   await assert.rejects(ops.createLane(root, { name: 'self', lanesFolder: '.' }), /itself/);
 });
 
@@ -368,9 +368,10 @@ test('rename delete checkout rebase onto', async () => {
 
   // Second local tip for rebase onto
   sh(['branch', 'feat/base'], root);
-  const baseWt = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-base-'));
+  const baseWt = tmpDir('ovl-base-');
   fs.rmSync(baseWt, { recursive: true, force: true });
   sh(['worktree', 'add', baseWt, 'feat/base'], root);
+  gitIdentity(baseWt, sh);
   fs.writeFileSync(path.join(baseWt, 'base.txt'), 'b\n');
   sh(['add', 'base.txt'], baseWt);
   sh(['commit', '-m', 'base tip'], baseWt);
@@ -427,12 +428,10 @@ test('updateBranchFromRemote fast-forwards a free local tip', async () => {
   const { root, bare } = await fixture();
   sh(['branch', 'feat/sync'], root);
   sh(['push', '-u', 'origin', 'feat/sync'], root);
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-sync-'));
+  const other = tmpDir('ovl-sync-');
   fs.rmSync(other, { recursive: true, force: true });
   sh(['clone', bare, other]);
-  sh(['config', 'user.email', 't@e.com'], other);
-  sh(['config', 'user.name', 'T'], other);
-  sh(['config', 'commit.gpgsign', 'false'], other);
+  gitIdentity(other, sh);
   sh(['checkout', 'feat/sync'], other);
   fs.writeFileSync(path.join(other, 'sync.txt'), 'ahead');
   sh(['add', 'sync.txt'], other);
@@ -482,9 +481,10 @@ test('pushBranchToRemote force overwrites a diverged remote tip', async () => {
   sh(['push', '-u', 'origin', 'feat/force'], root);
   const localBefore = (await git(['rev-parse', 'feat/force'], root)).trim();
 
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ovl-force-'));
+  const other = tmpDir('ovl-force-');
   fs.rmSync(other, { recursive: true, force: true });
   sh(['clone', bare, other]);
+  gitIdentity(other, sh);
   sh(['checkout', '-b', 'feat/force', 'origin/feat/force'], other);
   fs.writeFileSync(path.join(other, 'force.txt'), 'remote');
   sh(['add', 'force.txt'], other);

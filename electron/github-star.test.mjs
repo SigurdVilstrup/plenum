@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 import { ghCandidates, resolveGhBin, starPlenumRepo, PLENUM_GITHUB } from './github-star.mjs';
 
 test('ghCandidates prefers PATH then Homebrew locations', () => {
-  const c = ghCandidates('/Users/me');
+  const c = ghCandidates('/Users/me', 'darwin');
   assert.equal(c[0], 'gh');
   assert.ok(c.includes('/opt/homebrew/bin/gh'));
   assert.ok(c.includes('/Users/me/.local/bin/gh'));
+});
+
+test('ghCandidates on Windows prefers gh.exe then Program Files', () => {
+  const c = ghCandidates('C:\\Users\\me', 'win32');
+  assert.equal(c[0], 'gh.exe');
+  assert.ok(c.some((p) => /GitHub CLI/i.test(p)));
 });
 
 test('resolveGhBin skips bare gh when PATH is slim and uses Homebrew', () => {
@@ -14,6 +20,7 @@ test('resolveGhBin skips bare gh when PATH is slim and uses Homebrew', () => {
   const bin = resolveGhBin({
     home: '/Users/me',
     pathEnv: '/usr/bin:/bin',
+    platform: 'darwin',
     existsSync: (p) => p === '/opt/homebrew/bin/gh',
   });
   assert.equal(bin, '/opt/homebrew/bin/gh');
@@ -23,6 +30,7 @@ test('resolveGhBin uses PATH when gh is present there', () => {
   const bin = resolveGhBin({
     home: '/Users/me',
     pathEnv: '/custom/bin:/usr/bin',
+    platform: 'darwin',
     existsSync: (p) => p === '/custom/bin/gh',
   });
   assert.equal(bin, '/custom/bin/gh');
@@ -32,6 +40,7 @@ test('resolveGhBin returns null when nothing exists', () => {
   assert.equal(resolveGhBin({
     home: '/Users/me',
     pathEnv: '/usr/bin',
+    platform: 'darwin',
     existsSync: () => false,
   }), null);
 });

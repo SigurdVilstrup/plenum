@@ -43,6 +43,7 @@ test('ghFeedbackAvailable is true via Homebrew when PATH lacks gh (#130)', async
   assert.equal(await ghFeedbackAvailable({
     home: '/Users/me',
     pathEnv: '/usr/bin:/bin',
+    platform: 'darwin',
     existsSync: (p) => p === '/opt/homebrew/bin/gh',
   }), true);
 });
@@ -92,6 +93,7 @@ test('createFeedbackIssueViaGh uses Homebrew when bare gh is missing from PATH (
   }, {
     home: '/Users/me',
     pathEnv: '/usr/bin:/bin',
+    platform: 'darwin',
     existsSync: (p) => p === '/opt/homebrew/bin/gh',
     execFileImpl: async (bin, args) => {
       calls.push({ bin, args });

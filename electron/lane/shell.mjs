@@ -74,10 +74,11 @@ export function shellSpec(command) {
   }
   const bash = findGitBash();
   if (!bash) throw missingGitBashError();
-  return { shell: false, file: bash, args: ['-lc', String(command)] };
+  // Use -c (not -lc): a login shell resets PATH and drops Node on Windows CI / GUI apps.
+  return { shell: false, file: bash, args: ['-c', String(command)] };
 }
 
-/** Async spawn of a shell command string (Unix shell:true; Windows Git Bash -lc). */
+/** Async spawn of a shell command string (Unix shell:true; Windows Git Bash -c). */
 export function spawnShellAsync(command, opts = {}) {
   const spec = shellSpec(command);
   if (spec.shell) {

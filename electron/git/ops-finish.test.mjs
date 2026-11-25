@@ -2,21 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { loadBoard } from './board.mjs';
 import { createLane, finishLane, repairLane, mergeLaneIntoMain } from './ops.mjs';
+import { gitIdentity, tmpDir } from './test-tmp.mjs';
 
 function sh(args, cwd) {
   execFileSync('git', args, { cwd, stdio: 'pipe' });
 }
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-finish-'));
+  const root = tmpDir('plenum-finish-');
   sh(['init', '-b', 'main', root]);
-  sh(['config', 'user.email', 't@e.com'], root);
-  sh(['config', 'user.name', 'T'], root);
-  sh(['config', 'commit.gpgsign', 'false'], root);
+  gitIdentity(root, sh);
   fs.writeFileSync(path.join(root, 'README'), 'x\n');
   sh(['add', 'README'], root);
   sh(['commit', '-m', 'init'], root);
@@ -76,7 +74,7 @@ test('mergeLaneIntoMain can target another open lane', async () => {
 
 test('repairLane stamps an unprepared worktree', async () => {
   const root = fixture();
-  const wt = path.join(os.tmpdir(), `plenum-repair-${Date.now()}`);
+  const wt = path.join(tmpDir('plenum-repair-'), 'wt');
   try {
     sh(['worktree', 'add', '-b', 'feat/ext', wt], root);
     let board = await loadBoard(root);

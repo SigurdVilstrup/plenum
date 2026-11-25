@@ -12,8 +12,8 @@ export const PLENUM_GITHUB = {
 };
 
 /** Candidate `gh` paths. Dock-launched Electron often misses Homebrew on PATH. */
-export function ghCandidates(home = process.env.HOME || process.env.USERPROFILE || '') {
-  if (process.platform === 'win32') {
+export function ghCandidates(home = process.env.HOME || process.env.USERPROFILE || '', platform = process.platform) {
+  if (platform === 'win32') {
     const pf = process.env.ProgramFiles || 'C:\\Program Files';
     const local = process.env.LOCALAPPDATA || '';
     return [
@@ -42,9 +42,10 @@ export function resolveGhBin({
   existsSync = fs.existsSync,
   pathEnv = process.env.PATH || '',
   bins = null,
+  platform = process.platform,
 } = {}) {
-  const list = bins || ghCandidates(home);
-  const ghName = process.platform === 'win32' ? 'gh.exe' : 'gh';
+  const list = bins || ghCandidates(home, platform);
+  const ghName = platform === 'win32' ? 'gh.exe' : 'gh';
   for (const b of list) {
     if (b === 'gh' || b === 'gh.exe') {
       for (const dir of String(pathEnv).split(path.delimiter)) {

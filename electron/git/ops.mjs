@@ -1,10 +1,10 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { spawn } from 'node:child_process';
 import { git, gitOk } from './run.mjs';
 import { loadBoard, PREPARED_STAMP } from './board.mjs';
 import { loadManifest, resolvePorts, renderTemplate } from '../lane/manifest.mjs';
 import { down, getProc } from '../lane/supervisor.mjs';
+import { spawnShellAsync } from '../lane/shell.mjs';
 import { manifestPath } from '../paths.mjs';
 
 function writePreparedStamp(lanePath) {
@@ -133,12 +133,17 @@ function resolveContained(base, rel, label) {
 
 function runSetup(command, cwd, env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, {
-      shell: true,
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    let child;
+    try {
+      child = spawnShellAsync(command, {
+        cwd,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
     let stderr = '';
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (d) => { stderr += d; });
