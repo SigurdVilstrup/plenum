@@ -1368,24 +1368,10 @@ function paintTabs() {
 }
 
 function openCtxMenu(x, y, tab, anchor) {
-  dismissCtxMenus();
-  const menu = document.createElement('div');
-  menu.className = 'ctx-menu';
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-  const rename = document.createElement('button');
-  rename.type = 'button';
-  rename.textContent = 'Rename…';
-  rename.addEventListener('click', () => {
-    menu.remove();
-    openRename(tab, anchor);
-  });
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'danger';
-  close.textContent = 'Close Tab';
-  close.addEventListener('click', async () => {
-    menu.remove();
+  const { menu, add, addSep } = ctxMenuAt(x, y);
+  add('Rename…', () => openRename(tab, anchor), { icon: 'pencil-simple' });
+  addSep();
+  add('Close Tab', async () => {
     const wasActive = tab.id === state.store.activeId;
     if (wasActive) {
       snapshotWarm(tab.id);
@@ -1420,16 +1406,8 @@ function openCtxMenu(x, y, tab, anchor) {
       paint();
     }
     if (state.settings.open) syncSettingsAfterTabSwitch();
-  });
-  menu.append(rename, close);
-  document.body.appendChild(menu);
-  const off = (ev) => {
-    if (!menu.contains(ev.target)) {
-      menu.remove();
-      document.removeEventListener('mousedown', off);
-    }
-  };
-  setTimeout(() => document.addEventListener('mousedown', off), 0);
+  }, { icon: 'x', danger: true });
+  attachCtxMenu(menu);
 }
 
 function openRename(tab, anchor) {
@@ -3276,6 +3254,10 @@ async function checkoutBranchRow(name) {
 }
 
 function attachCtxMenu(menu) {
+  while (menu.lastElementChild?.classList.contains('ctx-sep')) {
+    menu.lastElementChild.remove();
+  }
+  if (!menu.childElementCount) return;
   document.body.appendChild(menu);
   const off = (ev) => {
     if (!menu.contains(ev.target)) {
@@ -3292,50 +3274,89 @@ function ctxMenuAt(x, y) {
   menu.className = 'ctx-menu';
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
-  const add = (label, run, danger = false) => {
+  // Overload: add(label, run, danger?) or add(label, run, { icon, danger })
+  const add = (label, run, dangerOrOpts = false) => {
+    let danger = false;
+    let iconName = '';
+    if (dangerOrOpts && typeof dangerOrOpts === 'object') {
+      danger = Boolean(dangerOrOpts.danger);
+      iconName = dangerOrOpts.icon || '';
+    } else {
+      danger = Boolean(dangerOrOpts);
+    }
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = label;
     if (danger) btn.className = 'danger';
+    if (iconName) btn.appendChild(icon(iconName));
+    else {
+      const slot = document.createElement('span');
+      slot.className = 'ctx-icon-slot';
+      slot.setAttribute('aria-hidden', 'true');
+      btn.appendChild(slot);
+    }
+    const text = document.createElement('span');
+    text.className = 'ctx-label';
+    text.textContent = label;
+    btn.appendChild(text);
     btn.addEventListener('click', () => {
       menu.remove();
       run();
     });
     menu.appendChild(btn);
   };
-  return { menu, add };
+  const addSep = () => {
+    if (!menu.childElementCount) return;
+    if (menu.lastElementChild?.classList.contains('ctx-sep')) return;
+    const sep = document.createElement('div');
+    sep.className = 'ctx-sep';
+    sep.setAttribute('role', 'separator');
+    menu.appendChild(sep);
+  };
+  return { menu, add, addSep };
 }
 
 function openLaneCtxMenu(x, y, lane) {
   if (!lane) return;
-  const { menu, add } = ctxMenuAt(x, y);
+  const { menu, add, addSep } = ctxMenuAt(x, y);
+  // nav
   if (lane.index !== state.selectedLane) {
     add('Select', () => {
       state.selectedLane = lane.index;
       paint();
-    });
+    }, { icon: 'check-circle' });
   }
-  add('Reveal in Finder', () => handleAction('reveal', lane));
-  add(`Open in ${editorName()}`, () => handleAction('editor', lane));
-  add('Copy path', () => copyText(lane.path, 'path'));
-  if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'));
-  add('Pull from remote', () => handleAction('pull', lane));
+  add('Reveal in Finder', () => handleAction('reveal', lane), { icon: 'folder-simple' });
+  add(`Open in ${editorName()}`, () => handleAction('editor', lane), { icon: editorIcon() });
+  add('Copy path', () => copyText(lane.path, 'path'), { icon: 'files' });
+  if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'), { icon: 'git-branch' });
+  // sync
+  addSep();
+  add('Pull from remote', () => handleAction('pull', lane), { icon: 'cloud-arrow-down' });
   {
     const tip = laneBranchTip(lane);
     const canPush = tip?.upstream ? (tip.upstreamAhead || 0) > 0 : Boolean(lane.unpushed);
-    if (canPush) add(`Push to ${pushRemoteName(tip)}`, () => handleAction('push', lane));
+    if (canPush) add(`Push to ${pushRemoteName(tip)}`, () => handleAction('push', lane), { icon: 'arrow-up' });
   }
-  add('Force push…', () => openForcePushSheet({ kind: 'lane', lane }));
+  add('Force push…', () => openForcePushSheet({ kind: 'lane', lane }), { icon: 'warning-circle' });
+  // run
   if (lane.runnable && (lane.prepared !== false || lane.isPrimary)) {
-    if (lane.running) add('Stop', () => handleAction('down', lane));
-    else add('Start', () => handleAction('up', lane));
-    add('Run log', () => handleAction('logs', lane));
+    addSep();
+    if (lane.running) add('Stop', () => handleAction('down', lane), { icon: 'stop' });
+    else add('Start', () => handleAction('up', lane), { icon: 'play' });
+    add('Run log', () => handleAction('logs', lane), { icon: 'terminal-window' });
   }
   if (!lane.isPrimary) {
-    if (lane.prepared === false && lane.runnable) add('Repair', () => handleAction('repair', lane));
-    if (lane.ahead && !lane.dirty) add('Finish…', () => handleAction('finish', lane));
+    if (lane.prepared === false && lane.runnable) {
+      addSep();
+      add('Repair', () => handleAction('repair', lane), { icon: 'gear-six' });
+    }
+    if (lane.ahead && !lane.dirty) {
+      addSep();
+      add('Finish…', () => handleAction('finish', lane), { icon: 'git-merge' });
+    }
+    addSep();
     const removeLabel = lane.readiness === 'safe' ? 'Remove lane…' : 'Remove lane… !';
-    add(removeLabel, () => handleAction('remove', lane), true);
+    add(removeLabel, () => handleAction('remove', lane), { icon: 'x', danger: true });
   }
   attachCtxMenu(menu);
 }
@@ -3347,18 +3368,30 @@ function openBranchCtxMenu(x, y, name) {
   const lane = laneByIndex(state.selectedLane);
   const canRename = !br.remote && !br.isTeam && !br.isPrimary;
   const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
-  const { menu, add } = ctxMenuAt(x, y);
+  const { menu, add, addSep } = ctxMenuAt(x, y);
+  // nav
   add(
     br.hasLane ? 'Select worktree' : (br.remote ? 'Check out' : 'Checkout branch'),
     () => checkoutBranchRow(br.name),
+    { icon: br.hasLane ? 'tree-structure' : 'git-branch' },
   );
-  add('Overview…', () => openBranchOverview(br.name));
-  add('Copy name', () => copyText(br.name, 'branch name'));
-  const root = state.board?.root;
-  add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); });
+  add('Overview…', () => openBranchOverview(br.name), { icon: 'magnifying-glass' });
+  add('Copy name', () => copyText(br.name, 'branch name'), { icon: 'files' });
+  // sync
+  addSep();
   if (br.remote) {
-    add('Fetch', () => updateBranchRow(br.name));
+    add('Fetch', () => updateBranchRow(br.name), { icon: 'arrows-clockwise' });
   } else {
+    // #139 Push for lane-backed tips via lane.push / holder; free tips via branch.push.
+    if (branchHasPush(br)) {
+      const label = `Push to ${pushRemoteName(br)}`;
+      if (br.hasLane) {
+        const holder = laneByIndex(br.laneIndex);
+        if (holder) add(label, () => handleAction('push', holder), { icon: 'arrow-up' });
+      } else {
+        add(label, () => pushBranchRow(br.name), { icon: 'arrow-up' });
+      }
+    }
     add('Pull from remote', () => {
       if (br.hasLane) {
         const holder = laneByIndex(br.laneIndex);
@@ -3366,27 +3399,25 @@ function openBranchCtxMenu(x, y, name) {
         return;
       }
       updateBranchRow(br.name);
-    });
-    // #139 Push for lane-backed tips via lane.push / holder; free tips via branch.push.
-    if (branchHasPush(br)) {
-      const label = `Push to ${pushRemoteName(br)}`;
-      if (br.hasLane) {
-        const holder = laneByIndex(br.laneIndex);
-        if (holder) add(label, () => handleAction('push', holder));
-      } else {
-        add(label, () => pushBranchRow(br.name));
-      }
-    }
+    }, { icon: 'cloud-arrow-down' });
     if (!br.hasLane) {
-      add('Force push…', () => openForcePushSheet({ kind: 'branch', branch: br }));
+      add('Force push…', () => openForcePushSheet({ kind: 'branch', branch: br }), { icon: 'warning-circle' });
     }
   }
-  if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name));
-  if (canRename) add('Rename…', () => openRenameBranchSheet(br));
-  if (canDelete) add('Delete…', () => openDeleteBranchSheet(br), true);
+  // mutate
+  addSep();
+  if (!br.hasLane && !br.isTeam) add('Open as lane', () => openLaneFromBranch(br.name), { icon: 'play' });
+  const root = state.board?.root;
+  add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); }, { icon: 'push-pin' });
+  if (canRename) add('Rename…', () => openRenameBranchSheet(br), { icon: 'pencil-simple' });
   if (lane && !lane.isPrimary) {
     add(`Rebase ${lane.name} onto this`, () => runConflictable('lane.rebase', lane, br.name, 'rebase',
-      `Rebased ${lane.name} onto ${br.name}`));
+      `Rebased ${lane.name} onto ${br.name}`), { icon: 'arrow-counter-clockwise' });
+  }
+  // danger last
+  if (canDelete) {
+    addSep();
+    add('Delete…', () => openDeleteBranchSheet(br), { icon: 'x', danger: true });
   }
   attachCtxMenu(menu);
 }
@@ -4402,7 +4433,7 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
-      add('Copy path', () => copyText(btn.dataset.file, 'path'));
+      add('Copy path', () => copyText(btn.dataset.file, 'path'), { icon: 'files' });
       attachCtxMenu(menu);
     });
   });
@@ -4418,20 +4449,21 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
       row.setAttribute('aria-selected', 'true');
     }
     const paths = wipSelectedPaths(laneByIndex(state.changes?.laneIndex), selected.has(key) ? selected : new Set([key]));
-    const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
-    add(paths.length > 1 ? `Copy ${paths.length} paths` : 'Copy path', () => copyText(paths.join('\n'), paths.length > 1 ? `${paths.length} paths` : 'path'));
+    const { menu, add, addSep } = ctxMenuAt(e.clientX, e.clientY);
+    add(paths.length > 1 ? `Copy ${paths.length} paths` : 'Copy path', () => copyText(paths.join('\n'), paths.length > 1 ? `${paths.length} paths` : 'path'), { icon: 'files' });
+    addSep();
     const folderName = key.startsWith('d:') ? key.slice(2).split('/').pop() : '';
     const label = selected.size === 1 && folderName
       ? `Revert folder “${folderName}”…`
       : paths.length > 1 ? `Revert ${paths.length} selected files…` : 'Revert changes…';
-    add(label, () => onRevert(paths), true);
+    add(label, () => onRevert(paths), { icon: 'arrow-counter-clockwise', danger: true });
     attachCtxMenu(menu);
   }));
   if (onTreeRevert) el.changes.querySelector('.changes-tree')?.addEventListener('contextmenu', (e) => {
     if (e.target.closest('[data-select-file], [data-select-dir]')) return;
     e.preventDefault();
     const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
-    add('Revert all changes…', onTreeRevert, true);
+    add('Revert all changes…', onTreeRevert, { icon: 'arrow-counter-clockwise', danger: true });
     attachCtxMenu(menu);
   });
 }
@@ -7472,8 +7504,8 @@ el.graph.addEventListener('contextmenu', (e) => {
   const sha = row.dataset.commit;
   const subject = state.board?.commits?.find((c) => c.id === sha)?.subject;
   const { menu, add } = ctxMenuAt(e.clientX, e.clientY);
-  add('Copy SHA', () => copyText(sha, 'SHA'));
-  if (subject) add('Copy message', () => copyText(subject, 'message'));
+  add('Copy SHA', () => copyText(sha, 'SHA'), { icon: 'git-commit' });
+  if (subject) add('Copy message', () => copyText(subject, 'message'), { icon: 'files' });
   attachCtxMenu(menu);
 });
 el.graph.addEventListener('keydown', (e) => {
