@@ -1920,8 +1920,13 @@ function paintPanel() {
     });
   });
   el.panel.querySelectorAll('[data-branch-name]').forEach((btn) => {
-    // Left-click is inert — switch / check out / open as lane live on the context menu (#126).
+    // Left-click is inert (#126); double-click checks out / selects worktree (#145).
     btn.addEventListener('click', (e) => { e.stopPropagation(); });
+    btn.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      checkoutBranchRow(btn.dataset.branchName);
+    });
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -2028,7 +2033,7 @@ function branchRowHTML(br, label, board, selectedLane, refreshing = false, pinne
     br.name,
     refreshing ? 'list refreshing' : null,
     isCurrent ? 'checked out here' : where,
-    'Right-click to switch, check out, or open as lane',
+    'Double-click to checkout · Right-click for more',
     br.upstream ? `tracks ${br.upstream}` : 'no upstream',
     drift && (drift.behind || drift.ahead)
       ? `vs ${drift.ref}: ${drift.behind} behind, ${drift.ahead} ahead`
@@ -2084,6 +2089,28 @@ function laneBranchTip(l) {
   return (state.board?.branches || []).find((x) => !x.remote && (x.name === l.branch || x.short === l.branch)) || null;
 }
 
+/** Remote name for Push labels: upstream’s remote, else origin (first-push default). */
+function pushRemoteName(br) {
+  const up = br?.upstream;
+  if (up) {
+    const slash = up.indexOf('/');
+    return slash > 0 ? up.slice(0, slash) : up;
+  }
+  return 'origin';
+}
+
+/** True when this tip has commits to push (upstream ahead, lane unpushed, or first push). */
+function branchHasPush(br) {
+  if (!br || br.remote) return false;
+  if (br.upstream) return (br.upstreamAhead || 0) > 0;
+  if (br.hasLane) {
+    const holder = laneByIndex(br.laneIndex);
+    return Boolean(holder?.unpushed);
+  }
+  // No upstream yet: first push when origin/<name> is missing, or local tip is ahead of team.
+  return !br.hasRemote || (br.ahead || 0) > 0;
+}
+
 /** Local and upstream have diverged (typical after rebase) — needs an explicit force push. */
 function laneDivergedFromUpstream(l) {
   const br = laneBranchTip(l);
@@ -2121,8 +2148,14 @@ function gitActionsHTML(l) {
     const behind = tip?.upstreamBehind || 0;
     a.push(`<button class="btn danger" type="button" data-act="forcePush" title="Recommended after a rebase. Diverged from ${esc(up)} (${ahead}↑ ${behind}↓). Opens a confirm, then force-with-lease.">${iconHTML('warning-circle', 'sm')}Force push</button>`);
   } else {
-    a.push(l.unpushed
-      ? `<button class="btn" type="button" data-act="push" title="Push ${esc(l.name)} to origin">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${l.unpushed}</span></button>`
+    // Prefer upstream ahead when the tip tracks a remote; else lane.unpushed (first-push / no upstream).
+    const pushCount = tip?.upstream ? (tip.upstreamAhead || 0) : (l.unpushed || 0);
+    const remote = pushRemoteName(tip);
+    const pushTitle = tip?.upstream
+      ? `Push ${esc(l.name)} to ${esc(remote)} (${pushCount} ahead of ${esc(tip.upstream)})`
+      : `Push ${esc(l.name)} to ${esc(remote)}`;
+    a.push(pushCount
+      ? `<button class="btn" type="button" data-act="push" title="${pushTitle}">${iconHTML('arrow-up', 'sm')}Push <span class="mono">${pushCount}</span></button>`
       : `<button class="btn" type="button" data-act="push" disabled title="Nothing to push">${iconHTML('arrow-up', 'sm')}Push</button>`);
   }
   if (!l.isPrimary && l.readiness !== 'safe') {
@@ -2219,9 +2252,11 @@ function paintHeader() {
   let html = '';
   if (l.isPrimary) {
     const dirty = l.dirty > 0;
-    const br = (b.branches || []).find((x) => !x.remote && (x.name === l.branch || x.short === l.branch));
+    const br = laneBranchTip(l);
     const upBehind = br?.upstreamBehind || 0;
+    const upAhead = br?.upstreamAhead || 0;
     const pullBlocked = dirty && upBehind > 0;
+    // #138 Push-adjacent ahead/behind vs upstream remote tip, not teamRef.
     html = `<div class="head-row">
       <div class="title" title="Primary checkout · ${esc(l.displayPath || l.path)}">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
@@ -2233,7 +2268,9 @@ function paintHeader() {
         ${upBehind
           ? `<span class="fact ${pullBlocked ? 'bad' : 'warn'}" title="${pullBlocked ? 'Commit or stash before pull' : `vs ${br.upstream || 'upstream'}`}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${upBehind}↓</strong>${pullBlocked ? ' · pull blocked' : ` ${esc(br.upstream || 'upstream')}`}</span>`
           : ''}
-        ${l.ahead ? `<span class="fact bad">${iconHTML('git-commit', 'sm')}<strong>${l.ahead}</strong> ahead of ${esc(b.teamRef)}</span>` : ''}
+        ${br?.upstream && upAhead
+          ? `<span class="fact bad" title="vs ${esc(br.upstream)}">${iconHTML('arrow-up', 'sm')}<strong>${upAhead}</strong> ahead of ${esc(br.upstream)}</span>`
+          : ''}
         ${authorshipPillHTML(l.authorship, l.tool, iconHTML)}
       </div>
       <div class="actions">
@@ -3283,7 +3320,11 @@ function openLaneCtxMenu(x, y, lane) {
   add('Copy path', () => copyText(lane.path, 'path'));
   if (lane.branch) add('Copy branch name', () => copyText(lane.branch, 'branch name'));
   add('Pull from remote', () => handleAction('pull', lane));
-  if (lane.unpushed) add('Push to remote', () => handleAction('push', lane));
+  {
+    const tip = laneBranchTip(lane);
+    const canPush = tip?.upstream ? (tip.upstreamAhead || 0) > 0 : Boolean(lane.unpushed);
+    if (canPush) add(`Push to ${pushRemoteName(tip)}`, () => handleAction('push', lane));
+  }
   add('Force push…', () => openForcePushSheet({ kind: 'lane', lane }));
   if (lane.runnable && (lane.prepared !== false || lane.isPrimary)) {
     if (lane.running) add('Stop', () => handleAction('down', lane));
@@ -3308,7 +3349,7 @@ function openBranchCtxMenu(x, y, name) {
   const canDelete = !br.isTeam && !br.isPrimary && !(br.hasLane && br.laneIndex === 0);
   const { menu, add } = ctxMenuAt(x, y);
   add(
-    br.hasLane ? 'Select worktree' : (br.remote ? 'Check out' : 'Switch branch'),
+    br.hasLane ? 'Select worktree' : (br.remote ? 'Check out' : 'Checkout branch'),
     () => checkoutBranchRow(br.name),
   );
   add('Overview…', () => openBranchOverview(br.name));
@@ -3326,8 +3367,17 @@ function openBranchCtxMenu(x, y, name) {
       }
       updateBranchRow(br.name);
     });
+    // #139 Push for lane-backed tips via lane.push / holder; free tips via branch.push.
+    if (branchHasPush(br)) {
+      const label = `Push to ${pushRemoteName(br)}`;
+      if (br.hasLane) {
+        const holder = laneByIndex(br.laneIndex);
+        if (holder) add(label, () => handleAction('push', holder));
+      } else {
+        add(label, () => pushBranchRow(br.name));
+      }
+    }
     if (!br.hasLane) {
-      add('Push to remote', () => pushBranchRow(br.name));
       add('Force push…', () => openForcePushSheet({ kind: 'branch', branch: br }));
     }
   }
@@ -3488,7 +3538,7 @@ function openCreateLane() {
         ${iconHTML('shield-check')}
         <div><strong>Team step.</strong> Base is current <span class="mono">${esc(team)}</span>. When that tip moves, this lane shows as behind.</div>
       </div>
-      <p class="lede" style="margin:0">Already have a branch? Right-click it → <strong>Switch branch</strong> or <strong>Open as lane</strong>.</p>
+      <p class="lede" style="margin:0">Already have a branch? Right-click it → <strong>Checkout branch</strong> or <strong>Open as lane</strong>.</p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel</button>
         <button class="btn primary" type="submit">${iconHTML(state.prefs.openLaneInEditor === false ? 'tree-structure' : editorIcon(), 'sm')}${state.prefs.openLaneInEditor === false ? 'Create' : `Create and open in ${editorName()}`}</button>
@@ -6779,7 +6829,14 @@ function paletteCommands() {
     { id: 'commit', label: 'Commit…', run: () => openCommitSheet(lane), when: lane && lane.dirty },
     { id: 'stash', label: 'Stash uncommitted', run: () => handleAction('stash', lane), when: lane && lane.dirty },
     { id: 'stashPop', label: 'Pop stash', run: () => handleAction('stashPop', lane), when: lane && state.board?.stashCount },
-    { id: 'push', label: `Push ${lane?.name || ''} to origin`.trim(), run: () => handleAction('push', lane), when: lane && lane.unpushed && !laneDivergedFromUpstream(lane) },
+    { id: 'push', label: (() => {
+      const tip = lane ? laneBranchTip(lane) : null;
+      return `Push ${lane?.name || ''} to ${pushRemoteName(tip)}`.trim();
+    })(), run: () => handleAction('push', lane), when: (() => {
+      if (!lane || laneDivergedFromUpstream(lane)) return false;
+      const tip = laneBranchTip(lane);
+      return tip?.upstream ? (tip.upstreamAhead || 0) > 0 : Boolean(lane.unpushed);
+    })() },
     { id: 'forcePush', label: `Force push ${lane?.name || ''} (with lease)…`.trim(), run: () => handleAction('forcePush', lane), when: lane && !lane.isPrimary && laneDivergedFromUpstream(lane), match: ['force', 'lease'] },
     { id: 'pull', label: `Pull ${lane?.name || ''} (ff-only)`.trim(), run: () => handleAction('pull', lane), when: !!lane },
     { id: 'rebase', label: 'Rebase on main', run: () => handleAction('rebase', lane), when: lane && !lane.isPrimary && lane.behind },

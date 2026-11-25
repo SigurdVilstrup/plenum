@@ -4,7 +4,7 @@ Full-window page to inspect one tip against a chosen base: ahead/behind, history
 
 ## Entry
 
-- Branch context menu (sidebar Local/Remote + graph Branch/Tag pills): **Overview…** immediately after Switch / Check out / Select worktree.
+- Branch context menu (sidebar Local/Remote + graph Branch/Tag pills): **Overview…** immediately after Checkout branch / Check out / Select worktree.
 - Command palette: **Overview branch…** (current lane branch when unambiguous, else opens for a named tip).
 
 ## Surface
