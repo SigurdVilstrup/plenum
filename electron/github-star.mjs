@@ -44,7 +44,7 @@ export function ghCandidates(home = process.env.HOME || process.env.USERPROFILE 
  * dying with spawn ENOENT later.
  */
 export function resolveGhBin({
-  home = process.env.HOME || '',
+  home = process.env.HOME || process.env.USERPROFILE || '',
   existsSync = fs.existsSync,
   pathEnv = process.env.PATH || '',
   bins = null,
@@ -82,7 +82,7 @@ async function starWithGh(bin, execFileImpl) {
  * Returns `{ via: 'gh' | 'browser' }`.
  */
 export async function starPlenumRepo({
-  home = process.env.HOME || '',
+  home = process.env.HOME || process.env.USERPROFILE || '',
   existsSync = fs.existsSync,
   execFileImpl = execFileAsync,
   openExternal,

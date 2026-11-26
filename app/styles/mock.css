@@ -983,7 +983,7 @@ a.iconbtn,
   color: var(--ink-subtle);
   font-size: 12px;
   font-weight: 500;
-  cursor: default;
+  cursor: pointer;
 }
 
 .fx-folder-row:hover,

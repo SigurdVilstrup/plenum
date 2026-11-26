@@ -3057,7 +3057,7 @@ async function openFeedbackSheet(seed = {}) {
         ${creditHint}
       </div>`;
   const pathNote = viaGh
-    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>).${includeScreenshot ? ' The screenshot stays on this Mac.' : ''}</p>`
+    ? `<p class="feedback-credit-hint">Posts as you with your GitHub CLI (<code>gh</code>).${includeScreenshot ? ` The screenshot stays on ${MACHINE}.` : ''}</p>`
     : '';
   const previewBlock = includeScreenshot
     ? `<div class="feedback-preview">
@@ -3092,7 +3092,7 @@ async function openFeedbackSheet(seed = {}) {
       </div>
       ${previewBlock}
       ${pathNote}
-      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on this Mac.</span></p>
+      <p class="feedback-warn">${iconHTML('warning-circle', 'sm')}<span>Opens a public GitHub issue on <code>SigurdVilstrup/plenum</code>. Your <code>repoPath</code> stays on ${MACHINE}.</span></p>
       <div class="row-end">
         <button class="btn" type="button" data-close>Cancel <kbd>esc</kbd></button>
         <button class="btn primary" type="submit" data-feedback-send>Send feedback <kbd>${MOD}↩</kbd></button>
@@ -4562,14 +4562,22 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
     closeChanges();
     paint();
   });
-  el.changes.querySelectorAll('[data-dir]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const laneIndex = state.changes?.laneIndex;
-      if (laneIndex != null) state.wipSelectionAnchor.set(laneIndex, null);
-      const key = btn.dataset.dir;
-      if (state.collapsedDirs.has(key)) state.collapsedDirs.delete(key);
-      else state.collapsedDirs.add(key);
-      paintChanges();
+  const toggleDirtyDir = (key) => {
+    const laneIndex = state.changes?.laneIndex;
+    if (laneIndex != null) state.wipSelectionAnchor.set(laneIndex, null);
+    if (state.collapsedDirs.has(key)) state.collapsedDirs.delete(key);
+    else state.collapsedDirs.add(key);
+    paintChanges();
+  };
+  // Whole folder row expands/collapses (#151); caret alone was too small a target.
+  el.changes.querySelectorAll('.fx-folder-row').forEach((row) => {
+    const key = row.querySelector('[data-dir]')?.dataset.dir;
+    if (!key) return;
+    row.addEventListener('click', (e) => {
+      // WIP trees: ⌘/Ctrl/Shift+click still multi-selects the folder for commit.
+      if (row.dataset.selectDir && (e.metaKey || e.ctrlKey || e.shiftKey)) return;
+      e.preventDefault();
+      toggleDirtyDir(key);
     });
   });
   el.changes.querySelectorAll('[data-file]').forEach((btn) => {
@@ -4604,7 +4612,8 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
   };
   rows.forEach((row) => {
     row.addEventListener('click', (e) => {
-      if (e.target.closest('[data-dir]')) return;
+      // Folder plain-click toggles expand; modifiers (and file rows) select.
+      if (row.dataset.selectDir && !(e.metaKey || e.ctrlKey || e.shiftKey)) return;
       select(row, e);
     });
     row.addEventListener('keydown', (e) => {

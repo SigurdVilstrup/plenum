@@ -35,7 +35,7 @@ export function buildFeedbackIssueBody(meta, { viaGh = false } = {}) {
     env.windowSize ? `- Window: ${env.windowSize.width}×${env.windowSize.height}` : null,
     '',
     viaGh
-      ? '_Screenshot stayed on this Mac (created with the GitHub CLI)._'
+      ? '_Screenshot stayed on this computer (created with the GitHub CLI)._'
       : null,
     '',
     viaGh ? '_Sent from Plenum via `gh`._' : '_Sent from Plenum._',
@@ -59,7 +59,7 @@ export async function ghFeedbackAvailable(opts = {}) {
  * Returns `{ issueUrl, issueNumber }`. Does not call the Plenum relay.
  */
 export async function createFeedbackIssueViaGh(meta, {
-  home = process.env.HOME || '',
+  home = process.env.HOME || process.env.USERPROFILE || '',
   existsSync = fs.existsSync,
   pathEnv = process.env.PATH || '',
   execFileImpl = execFileAsync,

@@ -31,8 +31,34 @@ test('buildFeedbackIssueBody includes env and via-gh note', () => {
   assert.match(body, /\*\*Target:\*\* Send feedback/);
   assert.match(body, /\*\*Reported by\*\* a@b\.com/);
   assert.match(body, /App: 0\.2\.14/);
-  assert.match(body, /Screenshot stayed on this Mac/);
+  assert.match(body, /Screenshot stayed on this computer/);
   assert.match(body, /via `gh`/);
+});
+
+test('createFeedbackIssueViaGh resolves GitHub CLI under Program Files on Windows (#152)', async () => {
+  const calls = [];
+  const pf = 'C:\\Program Files\\GitHub CLI\\gh.exe';
+  const out = await createFeedbackIssueViaGh({
+    comment: 'Windows gh path',
+    appVersion: '0.4.5',
+    platform: 'win32',
+  }, {
+    home: 'C:\\Users\\me',
+    pathEnv: 'C:\\Windows\\System32',
+    platform: 'win32',
+    existsSync: (p) => p === pf,
+    execFileImpl: async (bin, args) => {
+      calls.push({ bin, args });
+      return {
+        stdout: JSON.stringify({
+          html_url: 'https://github.com/SigurdVilstrup/plenum/issues/152',
+          number: 152,
+        }),
+      };
+    },
+  });
+  assert.equal(calls[0].bin, pf);
+  assert.equal(out.issueNumber, 152);
 });
 
 test('ghFeedbackAvailable is false when no bins exist', async () => {

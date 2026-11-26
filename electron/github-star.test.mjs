@@ -47,6 +47,17 @@ test('resolveGhBin uses Windows PATH when gh.exe is present there', () => {
   assert.equal(bin, 'C:\\custom\\bin\\gh.exe');
 });
 
+test('resolveGhBin finds Program Files GitHub CLI when Windows PATH is slim (#152)', () => {
+  const pf = 'C:\\Program Files\\GitHub CLI\\gh.exe';
+  const bin = resolveGhBin({
+    home: 'C:\\Users\\me',
+    pathEnv: 'C:\\Windows\\System32',
+    platform: 'win32',
+    existsSync: (p) => p === pf,
+  });
+  assert.equal(bin, pf);
+});
+
 test('resolveGhBin returns null when nothing exists', () => {
   assert.equal(resolveGhBin({
     home: '/Users/me',
