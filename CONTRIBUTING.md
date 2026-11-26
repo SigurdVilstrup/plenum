@@ -23,7 +23,7 @@ Node 20+ recommended. Packaging (`npm run pack` / `dist`) needs macOS tools (`si
 | `npm start` | Production build + Electron |
 | `npm run pack` | Unsigned `Plenum.app` under `release/mac*` |
 | `npm run dist` | Same + `.dmg` + updater artifacts |
-| `npm run icons` | Rebuild `build/icon.icns` from `branding/app-icon-1024.png` |
+| `npm run icons` | Render `branding/app-icon.svg` → transparent master PNG + `build/icon.{png,ico,icns}` |
 | `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
 
 Bump the app version with `npm run version:patch` (or `minor` / `major`) before a release tag. GitHub Releases are Developer ID–signed and notarized; local pack stays unsigned. Update feed details: [`docs/updates-feed.md`](docs/updates-feed.md).

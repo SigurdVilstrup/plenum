@@ -202,7 +202,7 @@ PLENUM_OPEN="$PWD/tmp/smoke-repo" npm run dev
 | `npm run pack` | Unsigned dir build for this OS (`Plenum.app` or `win-unpacked/Plenum.exe`) |
 | `npm run release:check` | Tests + pack + launch + OTA/updater invariants (required before tagging) |
 | `npm run dist` | Host OS installer + updater feed (`latest-mac.yml` or `latest.yml`) |
-| `npm run icons` | Rebuild `build/icon.icns` + `build/icon.ico` from `branding/app-icon-1024.png` |
+| `npm run icons` | Render `branding/app-icon.svg` → transparent master PNG + `build/icon.{png,ico,icns}` |
 | `npm run plenum -- …` | CLI (`doctor`, `status`, `up`, `down`, `test`, `create`, `remove`, `mcp`) |
 
 Local pack and dist builds are unsigned. GitHub Releases sign and notarize **macOS**; **Windows** ships unsigned NSIS. Update feed notes for maintainers: [`docs/updates-feed.md`](docs/updates-feed.md).
