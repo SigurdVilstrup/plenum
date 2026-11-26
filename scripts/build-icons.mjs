@@ -163,24 +163,38 @@ function cornerAlphaOk(rgba, width, height) {
   return true;
 }
 
-/** rx from the tile rect in branding/app-icon.svg (scaled to size). */
-function tileCornerRadius(size) {
+/**
+ * Tile geometry on the 1024 master: Apple icon-grid inset (scale 0.875 → 64px margin)
+ * plus the continuous-corner radius from the SVG rect.
+ */
+function tileGeometry(size) {
   const svg = fs.readFileSync(svgSrc, 'utf8');
-  const m = svg.match(/<rect\b[^>]*\brx="(\d+)"/);
+  const m = svg.match(/<rect\b[^>]*\brx="([\d.]+)"/);
   const rxMaster = m ? Number(m[1]) : 228;
-  return (rxMaster / MASTER_SIZE) * size;
+  const scaleMatch = svg.match(/scale\((0\.\d+)\)/);
+  const gridScale = scaleMatch ? Number(scaleMatch[1]) : 0.875;
+  const margin = ((1 - gridScale) / 2) * size;
+  const tile = size * gridScale;
+  const rx = (rxMaster * gridScale / MASTER_SIZE) * size;
+  return { margin, tile, rx };
 }
 
-/** Clear pixels outside the rounded tile so white export corners cannot ship. */
+/** Clear pixels outside the inset rounded tile so white export corners cannot ship. */
 function punchTransparentCorners(rgba, width, height) {
-  const rx = tileCornerRadius(width);
-  const ry = tileCornerRadius(height);
+  const { margin, tile, rx } = tileGeometry(width);
+  const x0 = margin;
+  const y0 = margin;
+  const x1 = margin + tile;
+  const y1 = margin + tile;
   const inside = (x, y) => {
-    const cx = Math.min(Math.max(x + 0.5, rx), width - rx);
-    const cy = Math.min(Math.max(y + 0.5, ry), height - ry);
-    const dx = x + 0.5 - cx;
-    const dy = y + 0.5 - cy;
-    return dx * dx + dy * dy <= rx * ry;
+    const px = x + 0.5;
+    const py = y + 0.5;
+    if (px < x0 || px > x1 || py < y0 || py > y1) return false;
+    const cx = Math.min(Math.max(px, x0 + rx), x1 - rx);
+    const cy = Math.min(Math.max(py, y0 + rx), y1 - rx);
+    const dx = px - cx;
+    const dy = py - cy;
+    return dx * dx + dy * dy <= rx * rx;
   };
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
