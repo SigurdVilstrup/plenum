@@ -256,10 +256,11 @@ export async function pullLane(root, laneIndex) {
   const lane = laneOrPrimary(board, laneIndex);
   const ref = lane.isPrimary ? board.teamBranch : lane.branch;
   if (!ref) throw new Error('Can’t pull a detached HEAD.');
+  // Dirty trees auto-stash then pop so pull never dead-ends (#153), same idea as checkout (#136).
+  let stashed = false;
   if (lane.dirty > 0) {
-    throw new Error(
-      `Can’t pull: ${lane.dirty} uncommitted change${lane.dirty === 1 ? '' : 's'} would be overwritten. Commit or stash first.`,
-    );
+    await git(['stash', 'push', '-u', '-m', `plenum: pull ${ref}`], lane.path);
+    stashed = true;
   }
   try {
     // Pass origin + ref explicitly. Bare `git pull --ff-only` depends on
@@ -274,6 +275,14 @@ export async function pullLane(root, laneIndex) {
       throw new Error(`${msg}\nPrimary only fast-forwards. Fix the divergence outside Plenum.`);
     }
     throw new Error(`${msg}\nTry Rebase onto main instead.`);
+  } finally {
+    if (stashed) {
+      try {
+        await git(['stash', 'pop', 'stash@{0}'], lane.path);
+      } catch {
+        // Pull already landed. Leave the stash entry for Pop stash / conflict walk.
+      }
+    }
   }
   return loadBoard(root);
 }

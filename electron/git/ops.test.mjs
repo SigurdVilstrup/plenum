@@ -168,6 +168,32 @@ test('primary commit push pull', async () => {
   assert.equal(board.lanes[0].behind, 0);
 });
 
+test('dirty pull auto-stashes and restores (#153)', async () => {
+  const { root, bare } = await fixture();
+  const other = tmpDir('ovl-pull-dirty-');
+  fs.rmSync(other, { recursive: true, force: true });
+  await git(['--git-dir', bare, 'worktree', 'add', other, 'main']);
+  await git(['config', 'user.email', 't@e.com'], other);
+  await git(['config', 'user.name', 'T'], other);
+  await git(['config', 'commit.gpgsign', 'false'], other);
+  await git(['config', 'core.autocrlf', 'false'], other);
+  fs.writeFileSync(path.join(other, 'remote-dirty.txt'), 'r');
+  await git(['add', 'remote-dirty.txt'], other);
+  await git(['commit', '-m', 'remote tip for dirty pull'], other);
+  await git(['--git-dir', bare, 'worktree', 'remove', other, '--force']);
+  await git(['fetch'], root);
+  fs.writeFileSync(path.join(root, 'local-wip.txt'), 'wip');
+  let board = await loadBoard(root);
+  assert.ok(board.lanes[0].dirty, 'primary should be dirty before pull');
+  assert.ok(board.lanes[0].behind >= 1);
+  board = await ops.pullLane(root, 0);
+  assert.equal(board.lanes[0].behind, 0);
+  assert.ok(board.lanes[0].dirty, 'uncommitted file restored after pull');
+  assert.equal(board.stashCount || 0, 0, 'auto-stash should be popped');
+  assert.ok(fs.existsSync(path.join(root, 'local-wip.txt')));
+  assert.ok(fs.existsSync(path.join(root, 'remote-dirty.txt')));
+});
+
 test('stash and pop uncommitted', async () => {
   const { root } = await fixture();
   fs.writeFileSync(path.join(root, 'stashed.txt'), 'hold');
