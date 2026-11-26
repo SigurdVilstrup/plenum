@@ -120,6 +120,7 @@ const state = {
   filePane: null, // { sha, path, mode: 'diff'|'blame'|'history' } | null
   collapsedDirs: new Set(),
   changesPaintKey: '',
+  changesTreePaintKey: '',
   changesCache: null,
   commitDraft: '',
   selectedWipEntries: new Map(),
@@ -688,6 +689,7 @@ function resetViewChrome() {
   state.branchesOpen = chrome.branchesOpen;
   state.conflictRoot = null;
   state.changesPaintKey = '';
+  state.changesTreePaintKey = '';
   state.changesCache = null;
   state.pendingGraphScroll = null;
   el.changes.hidden = true;
@@ -712,6 +714,7 @@ function restoreViewChrome(entry) {
   state.branchesOpen = chrome.branchesOpen !== false;
   state.conflictRoot = chrome.conflictRoot || null;
   state.changesPaintKey = '';
+  state.changesTreePaintKey = '';
   state.changesCache = null;
   state.pendingGraphScroll = chrome.graphScrollTop || 0;
   if (!state.changes) {
@@ -2171,6 +2174,10 @@ function renderBranchListHTML(branches, board, selectedLane, refreshing = false,
     ...[...folders.keys()].map((key) => ({ kind: 'folder', sort: key, key, items: folders.get(key) })),
   ].sort((a, b) => (a.kind === b.kind ? a.sort.localeCompare(b.sort) : (a.kind === 'folder') === foldersFirst ? -1 : 1));
   const parts = pinned.map((br) => branchRowHTML(br, br.short || br.name.replace(/^origin\//, ''), board, selectedLane, refreshing, true));
+  // #156 hairline under pinned block so the pin zone is obvious.
+  if (pinned.length && (singles.length || folders.size)) {
+    parts.push('<div class="branch-pin-divider" role="separator" aria-label="Pinned branches"></div>');
+  }
   for (const entry of entries) {
     if (entry.kind === 'single') {
       parts.push(branchRowHTML(entry.br, entry.label, board, selectedLane, refreshing));
@@ -2362,8 +2369,8 @@ function paintHeader() {
     const br = laneBranchTip(l);
     const upBehind = br?.upstreamBehind || 0;
     const upAhead = br?.upstreamAhead || 0;
-    const pullBlocked = dirty && upBehind > 0;
     // #138 Push-adjacent ahead/behind vs upstream remote tip, not teamRef.
+    // #153 dirty pull auto-stashes — no longer block the fact row.
     html = `<div class="head-row">
       <div class="title" title="Primary checkout · ${esc(l.displayPath || l.path)}">
         ${iconHTML(l.alert ? 'warning-circle' : 'shield-check')}
@@ -2373,7 +2380,7 @@ function paintHeader() {
         ${l.onTeamBranch ? '' : `<span class="fact bad">${iconHTML('shield-check', 'sm')}<strong>not on</strong> ${esc(b.teamBranch)}</span>`}
         ${dirty ? `<span class="fact bad">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>` : ''}
         ${upBehind
-          ? `<span class="fact ${pullBlocked ? 'bad' : 'warn'}" title="${pullBlocked ? 'Commit or stash before pull' : `vs ${br.upstream || 'upstream'}`}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${upBehind}↓</strong>${pullBlocked ? ' · pull blocked' : ` ${esc(br.upstream || 'upstream')}`}</span>`
+          ? `<span class="fact warn" title="vs ${esc(br.upstream || 'upstream')}">${iconHTML('cloud-arrow-down', 'sm')}<strong>${upBehind}↓</strong> ${esc(br.upstream || 'upstream')}</span>`
           : ''}
         ${br?.upstream && upAhead
           ? `<span class="fact bad" title="vs ${esc(br.upstream)}">${iconHTML('arrow-up', 'sm')}<strong>${upAhead}</strong> ahead of ${esc(br.upstream)}</span>`
@@ -4006,6 +4013,51 @@ function changesKey(view) {
   return `c:${view.sha}:${fold}:${paneKey}`;
 }
 
+/** Tree identity without the open file — used to avoid full rebuild on file click (#154). */
+function changesTreeKey(view) {
+  if (!view) return '';
+  const fold = [...state.collapsedDirs].join(',');
+  if (view.kind === 'wip') {
+    const lane = laneByIndex(view.laneIndex);
+    const files = lane?.dirtyFiles || [];
+    const selected = [...(state.selectedWipEntries.get(view.laneIndex) || [])].sort().join(',');
+    return `wip:${view.laneIndex}:${files.map((f) => `${f.path}:${f.code}:${f.added}:${f.deleted}`).join(';')}:${fold}:${selected}`;
+  }
+  return `c:${view.sha}:${fold}`;
+}
+
+function syncOpenFileHighlight() {
+  const path = state.filePane?.path || '';
+  el.changes.querySelectorAll('.fx-file[data-file]').forEach((btn) => {
+    const on = Boolean(path) && btn.dataset.file === path;
+    btn.classList.toggle('on', on);
+    if (on) btn.setAttribute('aria-current', 'true');
+    else btn.removeAttribute('aria-current');
+  });
+}
+
+function rememberChangesTreeScroll() {
+  const tree = el.changes.querySelector('.changes-tree');
+  return tree ? tree.scrollTop : 0;
+}
+
+function restoreChangesTreeScroll(scrollTop) {
+  const tree = el.changes.querySelector('.changes-tree');
+  if (tree) tree.scrollTop = scrollTop;
+}
+
+/** Porcelain XY: index letter means staged; worktree letter or ?? means unstaged (#155). */
+function dirtyIsStaged(code) {
+  const x = String(code || '  ')[0];
+  return x !== ' ' && x !== '?';
+}
+
+function dirtyIsUnstaged(code) {
+  const c = String(code || '  ');
+  if (c === '??' || c === '!') return true;
+  return (c[1] || ' ') !== ' ';
+}
+
 function clearFileStage() {
   state.filePane = null;
   el.fileStage.hidden = true;
@@ -4025,6 +4077,7 @@ function activeFilePane() {
 function closeChanges() {
   state.changes = null;
   state.changesPaintKey = '';
+  state.changesTreePaintKey = '';
   state.changesCache = null;
   el.changes.hidden = true;
   el.changes.innerHTML = '';
@@ -4337,6 +4390,7 @@ function jumpToCommitOnGraph(sha) {
   clearFileStage();
   state.changes = { kind: 'commit', sha: hit?.id || sha };
   state.changesPaintKey = '';
+  state.changesTreePaintKey = '';
   paint();
   requestAnimationFrame(() => {
     el.graph.querySelector('.active-commit')?.scrollIntoView({ block: 'nearest' });
@@ -4347,6 +4401,7 @@ function bindFilePaneChrome() {
   el.fileStage.querySelector('[data-file-pane-back]')?.addEventListener('click', () => {
     clearFileStage();
     state.changesPaintKey = '';
+    state.changesTreePaintKey = '';
     paintChanges();
   });
   el.fileStage.querySelectorAll('[data-file-mode]').forEach((btn) => {
@@ -4663,6 +4718,25 @@ function bindChangesTree(basePath, { onFile, onRevert, onTreeRevert } = {}) {
   });
 }
 
+function renderWipSections(files, selected) {
+  const staged = files.filter((f) => dirtyIsStaged(f.code));
+  const unstaged = files.filter((f) => dirtyIsUnstaged(f.code));
+  const sections = [];
+  if (staged.length) {
+    sections.push(`<div class="fx-section" role="group" aria-label="Staged">
+      <div class="fx-section-label">Staged · ${staged.length}</div>
+      ${renderDirtyTree(nestDirty(staged), 0, '', true, selected)}
+    </div>`);
+  }
+  if (unstaged.length || !staged.length) {
+    sections.push(`<div class="fx-section" role="group" aria-label="Unstaged">
+      <div class="fx-section-label">Unstaged · ${unstaged.length}</div>
+      ${unstaged.length ? renderDirtyTree(nestDirty(unstaged), 0, '', true, selected) : '<div class="fx-empty">No unstaged files</div>'}
+    </div>`);
+  }
+  return sections.join('') || '<div class="fx-empty">No uncommitted files</div>';
+}
+
 async function paintChanges() {
   const view = state.changes;
   if (!view) {
@@ -4674,7 +4748,21 @@ async function paintChanges() {
     layout.remountChanges();
     return;
   }
+  // #154 Opening another file only changes the highlight + file pane — keep the tree mounted.
+  const treeKey = changesTreeKey(view);
+  const prevTreeKey = state.changesTreePaintKey || '';
+  if (treeKey && treeKey === prevTreeKey && !el.changes.hidden && el.changes.querySelector('.changes-tree')) {
+    state.changesPaintKey = key;
+    syncOpenFileHighlight();
+    layout.remountChanges();
+    const pane = activeFilePane();
+    if (pane) await paintFilePane(pane);
+    else clearFileStage();
+    return;
+  }
+  const savedScroll = rememberChangesTreeScroll();
   state.changesPaintKey = key;
+  state.changesTreePaintKey = treeKey;
   el.changes.hidden = false;
   el.body.classList.add('with-changes');
   if (!activeFilePane()) clearFileStage();
@@ -4688,7 +4776,6 @@ async function paintChanges() {
     const files = lane.dirtyFiles || [];
     const selected = state.selectedWipEntries.get(lane.index) || new Set();
     state.selectedWipEntries.set(lane.index, selected);
-    const tree = nestDirty(files);
     const totals = sumStats(files);
     const fileLabel = `${files.length} file${files.length === 1 ? '' : 's'}`;
     el.changes.innerHTML = `
@@ -4698,15 +4785,14 @@ async function paintChanges() {
         <button class="iconbtn" type="button" data-close-changes title="Close" aria-label="Close">${iconHTML('x')}</button>
       </div>
       <div class="changes-tree" role="tree">
-          ${files.length ? renderDirtyTree(tree, 0, '', true, selected) : '<div class="fx-empty">No uncommitted files</div>'}
+          ${files.length ? renderWipSections(files, selected) : '<div class="fx-empty">No uncommitted files</div>'}
       </div>
       <div class="changes-foot">
         ${files.length ? `
           <textarea class="commit-msg" name="message" rows="2" placeholder="Commit message" aria-label="Commit message"></textarea>
           <div class="foot-actions">
             <button class="btn" type="button" data-stash>${iconHTML('stack', 'sm')}Stash</button>
-            <button class="btn primary" type="button" data-commit>${iconHTML('git-commit', 'sm')}Commit ${selected.size ? wipSelectedPaths(lane, selected).length : 'all'}</button>
-            <span class="hint">⌘⏎</span>
+            <button class="btn primary" type="button" data-commit>${iconHTML('git-commit', 'sm')}Commit ${selected.size ? wipSelectedPaths(lane, selected).length : 'all'} <kbd>${MOD}↩</kbd></button>
           </div>` : ''}
       </div>`;
     bindChangesTree(lane.path, {
@@ -4734,6 +4820,7 @@ async function paintChanges() {
       bindCommitChord(ta, doCommit);
     }
     layout.remountChanges();
+    restoreChangesTreeScroll(savedScroll);
     const pane = activeFilePane();
     if (pane) await paintFilePane(pane);
     else clearFileStage();
@@ -4748,6 +4835,7 @@ async function paintChanges() {
       const totals = sumStats(files);
       const fileLabel = `${files.length} file${files.length === 1 ? '' : 's'}`;
       const rootPath = state.board?.root || '';
+      const scroll = rememberChangesTreeScroll();
       el.changes.innerHTML = `
         <div class="changes-head">
           <div class="title">${esc(data.subject || 'Commit')}<small>${esc(data.short)} · ${fileLabel} · ${esc(data.author || '')}${data.authoredAtUtc ? ` · ${esc(data.authoredAtUtc)}` : ''}</small></div>
@@ -4764,6 +4852,7 @@ async function paintChanges() {
         },
       });
       layout.remountChanges();
+      restoreChangesTreeScroll(scroll);
     };
     if (state.changesCache?.sha === token) {
       renderCommit(state.changesCache.data);
@@ -4788,8 +4877,10 @@ async function paintChanges() {
       state.changesCache = { sha: token, data };
       // Key may match before render finished; force tree paint after load.
       state.changesPaintKey = '';
+      state.changesTreePaintKey = '';
       renderCommit(data);
       state.changesPaintKey = changesKey(state.changes);
+      state.changesTreePaintKey = changesTreeKey(state.changes);
       const pane = activeFilePane();
       if (pane) await paintFilePane(pane);
       else clearFileStage();
@@ -4810,9 +4901,8 @@ function openCommitSheet(lane) {
       <p>${lane.dirty} uncommitted file${lane.dirty === 1 ? '' : 's'} get staged and committed${lane.isPrimary ? '' : ' in this lane'}.</p>
       <label class="field">Message<textarea name="message" rows="3" required autofocus placeholder="What changed?"></textarea></label>
       <div class="row-end">
-        <span class="hint-text">⌘⏎</span>
         <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">${iconHTML('git-commit', 'sm')}Commit</button>
+        <button class="btn primary" type="submit">${iconHTML('git-commit', 'sm')}Commit <kbd>${MOD}↩</kbd></button>
       </div>
     </form>`);
   const form = el.sheetLayer.querySelector('form');
@@ -6811,6 +6901,7 @@ function bindOverviewList(root = el.branchOverviewBody) {
         state.changes = { kind: 'commit', sha: tip };
         state.filePane = { sha: tip, path: filePath, mode: 'diff' };
         state.changesPaintKey = '';
+        state.changesTreePaintKey = '';
         toast('Opened at tip commit (file list is the full range vs compare)', '');
       }
       paint();
@@ -7519,6 +7610,7 @@ document.addEventListener('keydown', (e) => {
     else if (state.filePane) {
       clearFileStage();
       state.changesPaintKey = '';
+      state.changesTreePaintKey = '';
       paintChanges();
     }
     else if (state.changes) { closeChanges(); paint(); }

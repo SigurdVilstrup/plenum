@@ -889,6 +889,26 @@ a.iconbtn,
   padding: 6px 6px 10px;
 }
 
+/* #155 Staged / Unstaged groups inside Uncommitted */
+.changes-tree .fx-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.changes-tree .fx-section + .fx-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.changes-tree .fx-section-label {
+  padding: 2px 6px 4px;
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  line-height: 16px;
+}
+
 .changes-foot {
   display: flex;
   flex-direction: column;
