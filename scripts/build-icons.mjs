@@ -219,6 +219,127 @@ function renderMasterFromSvg() {
   }
 }
 
+/**
+ * Soft C++ lavender glyph inset — same recipe as branding/app-icon.svg's feMerge filter.
+ * CoreSVG drops feMerge, so we bake the inset into the master PNG after SVG render.
+ * Glyph unit → canvas px: scale(12) × grid 0.875 = 10.5.
+ */
+function applyGlyphInset(rgba, width, height) {
+  const unit = 12 * 0.875;
+  const shadeDx = 0.65 * unit;
+  const shadeDy = 0.85 * unit;
+  const shadeSigma = 1.05 * unit;
+  const lipDx = -0.4 * unit;
+  const lipDy = -0.5 * unit;
+  const lipSigma = 0.55 * unit;
+  const shadeRgb = [0x1e, 0x25, 0x48];
+  const shadeOpacity = 0.78;
+  const lipOpacity = 0.9;
+
+  const n = width * height;
+  const mask = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    const a = rgba[o + 3] / 255;
+    if (a < 0.2) continue;
+    const r = rgba[o];
+    const g = rgba[o + 1];
+    const b = rgba[o + 2];
+    // Bright mark pixels (not the lavender tile).
+    if (r > 200 && g > 200 && b > 200) mask[i] = a;
+  }
+
+  const blur = (src, sigma) => {
+    if (sigma < 0.01) return Float32Array.from(src);
+    const radius = Math.max(1, Math.ceil(sigma * 3));
+    const kernel = new Float32Array(radius * 2 + 1);
+    let ksum = 0;
+    for (let i = -radius; i <= radius; i++) {
+      const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+      kernel[i + radius] = v;
+      ksum += v;
+    }
+    for (let i = 0; i < kernel.length; i++) kernel[i] /= ksum;
+    const tmp = new Float32Array(n);
+    const out = new Float32Array(n);
+    // Horizontal
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let acc = 0;
+        for (let k = -radius; k <= radius; k++) {
+          const xx = Math.min(width - 1, Math.max(0, x + k));
+          acc += src[y * width + xx] * kernel[k + radius];
+        }
+        tmp[y * width + x] = acc;
+      }
+    }
+    // Vertical
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let acc = 0;
+        for (let k = -radius; k <= radius; k++) {
+          const yy = Math.min(height - 1, Math.max(0, y + k));
+          acc += tmp[yy * width + x] * kernel[k + radius];
+        }
+        out[y * width + x] = acc;
+      }
+    }
+    return out;
+  };
+
+  const shift = (src, dx, dy) => {
+    const out = new Float32Array(n);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const sx = x - dx;
+        const sy = y - dy;
+        const x0 = Math.floor(sx);
+        const y0 = Math.floor(sy);
+        const x1 = x0 + 1;
+        const y1 = y0 + 1;
+        const fx = sx - x0;
+        const fy = sy - y0;
+        const at = (xx, yy) =>
+          xx < 0 || yy < 0 || xx >= width || yy >= height ? 0 : src[yy * width + xx];
+        out[y * width + x] =
+          at(x0, y0) * (1 - fx) * (1 - fy) +
+          at(x1, y0) * fx * (1 - fy) +
+          at(x0, y1) * (1 - fx) * fy +
+          at(x1, y1) * fx * fy;
+      }
+    }
+    return out;
+  };
+
+  const shadeDiff = blur(shift(mask, shadeDx, shadeDy), shadeSigma);
+  const lipDiff = blur(shift(mask, lipDx, lipDy), lipSigma);
+
+  for (let i = 0; i < n; i++) {
+    const m = mask[i];
+    if (m <= 0) continue;
+    const o = i * 4;
+    // SourceAlpha - blurredOffset (clamped) — soft edge band only.
+    const shade = Math.max(0, Math.min(1, m - shadeDiff[i])) * shadeOpacity;
+    const lip = Math.max(0, Math.min(1, m - lipDiff[i])) * lipOpacity;
+    let r = rgba[o];
+    let g = rgba[o + 1];
+    let b = rgba[o + 2];
+    if (shade > 0) {
+      r = r * (1 - shade) + shadeRgb[0] * shade;
+      g = g * (1 - shade) + shadeRgb[1] * shade;
+      b = b * (1 - shade) + shadeRgb[2] * shade;
+    }
+    if (lip > 0) {
+      r = r * (1 - lip) + 255 * lip;
+      g = g * (1 - lip) + 255 * lip;
+      b = b * (1 - lip) + 255 * lip;
+    }
+    rgba[o] = Math.round(r);
+    rgba[o + 1] = Math.round(g);
+    rgba[o + 2] = Math.round(b);
+  }
+}
+
 if (process.platform === 'darwin') {
   if (!fs.existsSync(swiftSrc)) {
     console.error(`missing ${swiftSrc}`);
@@ -236,11 +357,13 @@ if (process.platform === 'darwin') {
     console.error(`expected ${MASTER_SIZE}×${MASTER_SIZE} master, got ${decoded.width}×${decoded.height}`);
     process.exit(1);
   }
+  // Bake C++ soft glyph inset (CoreSVG skips the SVG feMerge filter).
+  applyGlyphInset(decoded.rgba, decoded.width, decoded.height);
   if (!cornerAlphaOk(decoded.rgba, decoded.width, decoded.height)) {
     console.warn('master had opaque corners — punching transparent corner pools to match the SVG tile');
     punchTransparentCorners(decoded.rgba, decoded.width, decoded.height);
-    fs.writeFileSync(masterPng, encodeRgbaPng(decoded.width, decoded.height, decoded.rgba));
   }
+  fs.writeFileSync(masterPng, encodeRgbaPng(decoded.width, decoded.height, decoded.rgba));
   if (!cornerAlphaOk(decodeRgbaPng(fs.readFileSync(masterPng)).rgba, MASTER_SIZE, MASTER_SIZE)) {
     console.error('icon master still has opaque corners after punch; refusing to ship Dock-breaking assets');
     process.exit(1);

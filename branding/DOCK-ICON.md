@@ -9,3 +9,5 @@ Tile + shutter mark sit on a clear 1024 canvas, **inset to the macOS app-icon gr
 Finish (2026-11-09): raised mark opacity to 1, lightened the tile and gradient floor so the shutter mark holds next to Teebo / Linear / Cursor at Dock size.
 
 Rim (2026-11-26): directional top-left catch + soft bloom, clipped inside the tile so the Dock silhouette stays on the 0.875 grid (no outer glow that would read oversized next to neighbors).
+
+Glyph inset (2026-11-26): soft C++ lavender edge shade + lip on the shutter mark in the full app icon only — not on standalone glyph/mark assets. SVG keeps an `feMerge` filter for browsers; `npm run icons` bakes the same recipe into the PNG/icns master because CoreSVG drops `feMerge`.
