@@ -284,6 +284,7 @@ function paintBoardGraph() {
 
 const layout = bindLayoutResizers({
   panel: el.panel,
+  changes: el.changes,
   settingsNav: el.settingsNav,
   graph: el.graph,
   onChange: () => {
@@ -4660,7 +4661,10 @@ async function paintChanges() {
     return;
   }
   const key = changesKey(view);
-  if (key && key === state.changesPaintKey && !el.changes.hidden) return;
+  if (key && key === state.changesPaintKey && !el.changes.hidden) {
+    layout.remountChanges();
+    return;
+  }
   state.changesPaintKey = key;
   el.changes.hidden = false;
   el.body.classList.add('with-changes');
@@ -4720,6 +4724,7 @@ async function paintChanges() {
       });
       bindCommitChord(ta, doCommit);
     }
+    layout.remountChanges();
     const pane = activeFilePane();
     if (pane) await paintFilePane(pane);
     else clearFileStage();
@@ -4749,6 +4754,7 @@ async function paintChanges() {
           paintChanges();
         },
       });
+      layout.remountChanges();
     };
     if (state.changesCache?.sha === token) {
       renderCommit(state.changesCache.data);
@@ -4764,6 +4770,7 @@ async function paintChanges() {
       </div>
       <div class="changes-tree"><div class="fx-empty">Loading changes…</div></div>`;
     el.changes.querySelector('[data-close-changes]')?.addEventListener('click', () => { closeChanges(); paint(); });
+    layout.remountChanges();
     const tabId = state.store.activeId;
     try {
       const data = await invoke('commit.changes', ...pin(token));
@@ -4780,6 +4787,7 @@ async function paintChanges() {
     } catch {
       if (state.changes?.kind === 'commit' && state.changes.sha === token) {
         el.changes.querySelector('.changes-tree').innerHTML = '<div class="fx-empty">Could not load changes</div>';
+        layout.remountChanges();
       }
     }
   }

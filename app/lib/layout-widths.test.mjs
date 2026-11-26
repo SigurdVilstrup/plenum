@@ -15,6 +15,8 @@ import {
 test('clampWidth respects per-key limits', () => {
   assert.equal(clampWidth('rail', 50), 180);
   assert.equal(clampWidth('rail', 9999), 520);
+  assert.equal(clampWidth('changes', 100), 220);
+  assert.equal(clampWidth('changes', 9999), 720);
   assert.equal(clampWidth('labels', 148), 148);
   assert.equal(clampWidth('svg', 200), 200);
   assert.equal(clampWidth('svg', 10), 72);
@@ -23,9 +25,10 @@ test('clampWidth respects per-key limits', () => {
 
 test('normalizeLayout fills defaults and clamps', () => {
   assert.deepEqual(normalizeLayout(null), { ...LAYOUT_DEFAULTS });
-  assert.deepEqual(normalizeLayout({ rail: 400, labels: 10, svg: 180 }), {
+  assert.deepEqual(normalizeLayout({ rail: 400, changes: 500, labels: 10, svg: 180 }), {
     ...LAYOUT_DEFAULTS,
     rail: 400,
+    changes: 500,
     labels: 72,
     svg: 180,
   });
@@ -54,8 +57,9 @@ test('applyLayout sets CSS variables', () => {
   const style = new Map();
   const root = { style: { setProperty: (k, v) => style.set(`root:${k}`, v) } };
   const graph = { style: { setProperty: (k, v) => style.set(`graph:${k}`, v) }, querySelector: () => null };
-  applyLayout({ rail: 280, labels: 160, svg: 140, who: 24, sha: 72, when: 120 }, { root, graph });
+  applyLayout({ rail: 280, changes: 420, labels: 160, svg: 140, who: 24, sha: 72, when: 120 }, { root, graph });
   assert.equal(style.get('root:--rail-w'), '280px');
+  assert.equal(style.get('root:--changes-w'), '420px');
   assert.equal(style.get('graph:--graph-labels-w'), '160px');
   assert.equal(style.get('graph:--graph-svg-w'), '140px');
   assert.equal(style.get('graph:--graph-who-w'), '24px');

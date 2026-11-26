@@ -1470,7 +1470,7 @@ html.feedback-redact .blame-line {
 /* #7 - left rail density; #26 - changes claim a column (don’t cover Push/Pull) */
 :root {
   --rail-w: 300px;
-  --changes-w: min(380px, 40vw);
+  --changes-w: 380px;
   --run-log-h: 180px;
 }
 
@@ -1532,6 +1532,17 @@ body.is-col-resizing * {
   right: 0;
   transform: none;
 }
+/* Changes pane: left-edge handle (drag left to widen) */
+.changes > .layout-resizer {
+  left: 0;
+  right: auto;
+  width: 8px;
+}
+.changes > .layout-resizer::after {
+  left: 0;
+  right: auto;
+  transform: none;
+}
 .window.app .body {
   grid-template-columns: var(--rail-w) 1fr;
   grid-template-rows: auto minmax(0, 1fr);
@@ -1563,7 +1574,7 @@ body.is-col-resizing * {
 .window.app .body.with-changes #changes {
   grid-row: 2;
   grid-column: 3;
-  position: static;
+  position: relative;
   width: auto;
   z-index: auto;
   box-shadow: none;

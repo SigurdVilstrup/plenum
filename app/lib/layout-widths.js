@@ -4,6 +4,7 @@ export const LAYOUT_KEY = 'plenum.layoutWidths';
 
 export const LAYOUT_DEFAULTS = Object.freeze({
   rail: 300,
+  changes: 380,
   labels: 148,
   svg: 136,
   who: 22,
@@ -13,6 +14,7 @@ export const LAYOUT_DEFAULTS = Object.freeze({
 
 export const LAYOUT_LIMITS = Object.freeze({
   rail: [180, 520],
+  changes: [220, 720],
   labels: [72, 420],
   svg: [72, 320],
   who: [18, 48],
@@ -85,6 +87,7 @@ export function syncSvgCanvas(graph, widthPx) {
 export function applyLayout(widths, { root = document.documentElement, graph = null } = {}) {
   const w = normalizeLayout(widths);
   root?.style?.setProperty('--rail-w', px(w.rail));
+  root?.style?.setProperty('--changes-w', px(w.changes));
   if (graph) {
     graph.style.setProperty('--graph-labels-w', px(w.labels));
     graph.style.setProperty('--graph-svg-w', px(w.svg));
@@ -106,12 +109,13 @@ function resizerEl(key) {
 }
 
 /**
- * Mount drag handles on the lanes rail, settings nav, and graph column headers.
- * @param {{ panel?: Element|null, settingsNav?: Element|null, graph?: Element|null, onChange?: (w: object, key: string) => void }} opts
+ * Mount drag handles on the lanes rail, changes pane, settings nav, and graph columns.
+ * @param {{ panel?: Element|null, changes?: Element|null, settingsNav?: Element|null, graph?: Element|null, onChange?: (w: object, key: string) => void }} opts
  */
 export function bindLayoutResizers(opts = {}) {
   const {
     panel = null,
+    changes = null,
     settingsNav = null,
     graph = null,
     root = document.documentElement,
@@ -127,10 +131,12 @@ export function bindLayoutResizers(opts = {}) {
     onChange?.(widths, key);
   };
 
-  const startDrag = (key, event) => {
+  /** @param {string} key @param {PointerEvent} event @param {{ invert?: boolean }} [dragOpts] */
+  const startDrag = (key, event, dragOpts = {}) => {
     if (event.button != null && event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    const invert = !!dragOpts.invert;
     const startX = event.clientX;
     const startW = widths[key];
     const handle = event.currentTarget;
@@ -138,7 +144,8 @@ export function bindLayoutResizers(opts = {}) {
     document.body.classList.add('is-col-resizing');
 
     const onMove = (e) => {
-      const next = clampWidth(key, startW + (e.clientX - startX));
+      const delta = invert ? (startX - e.clientX) : (e.clientX - startX);
+      const next = clampWidth(key, startW + delta);
       if (next === widths[key]) return;
       widths = { ...widths, [key]: next };
       applyLayout(widths, { root, graph });
@@ -172,6 +179,16 @@ export function bindLayoutResizers(opts = {}) {
     host.appendChild(handle);
   };
 
+  /** Left-edge handle on the changes pane (drag left to widen). */
+  const mountChanges = (host) => {
+    if (!host || host.hidden) return;
+    host.querySelectorAll(':scope > .layout-resizer[data-resize="changes"]').forEach((n) => n.remove());
+    const handle = resizerEl('changes');
+    handle.addEventListener('pointerdown', (e) => startDrag('changes', e, { invert: true }));
+    handle.addEventListener('dblclick', (e) => onDblClick('changes', e));
+    host.appendChild(handle);
+  };
+
   const mountGraphCols = () => {
     const cols = graph?.querySelector('.graph-cols');
     if (!cols) return;
@@ -189,6 +206,7 @@ export function bindLayoutResizers(opts = {}) {
   };
 
   mountRail(panel);
+  mountChanges(changes);
   mountRail(settingsNav);
   mountGraphCols();
 
@@ -197,6 +215,9 @@ export function bindLayoutResizers(opts = {}) {
     remountRails() {
       mountRail(panel);
       mountRail(settingsNav);
+    },
+    remountChanges() {
+      mountChanges(changes);
     },
     remountGraphCols() {
       mountGraphCols();

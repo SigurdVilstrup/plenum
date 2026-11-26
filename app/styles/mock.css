@@ -842,6 +842,7 @@ a.iconbtn,
 }
 
 .changes {
+  position: relative;
   border-left: 1px solid var(--hairline);
   background: var(--surface-1);
   display: flex;
