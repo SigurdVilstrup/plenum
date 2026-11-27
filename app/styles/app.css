@@ -1889,6 +1889,19 @@ body.is-row-resizing * {
   min-height: 24px;
   padding: 4px 12px 4px 12px;
   border-radius: 0;
+  /* #160 left-click is inert; default cursor so double-click checkout reads clearly */
+  cursor: default;
+}
+.window.app .panel .branch-row[draggable="true"] {
+  cursor: grab;
+}
+.window.app .panel .branch-row[draggable="true"]:active,
+.window.app .panel .branch-row.is-dragging {
+  cursor: grabbing;
+}
+.window.app .panel .branch-row.drop-target {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface-2));
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 .window.app .panel .branch-row .name {
   font-size: 12px;

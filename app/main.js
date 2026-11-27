@@ -1978,12 +1978,78 @@ function paintPanel() {
       e.stopPropagation();
       openBranchCtxMenu(e.clientX, e.clientY, btn.dataset.branchName);
     });
+    bindBranchRebaseDrag(btn);
   });
   layout.remountRails();
   layoutPanelSections(el.panel, readSectionHeights());
   el.panel.querySelectorAll('[data-section-resize]').forEach(bindSectionResize);
   ensureSectionLayoutObserver();
   bindPanelScrollReveal(el.panel.querySelector('.panel-scroll'));
+}
+
+/** #163 in-flight drag source (getData is empty during dragover in Chromium). */
+let rebaseDragFrom = '';
+
+/** #163 drag a tip onto another branch row → Rebase onto (GitKraken-style). */
+function bindBranchRebaseDrag(btn) {
+  const name = btn.dataset.branchName;
+  if (!name) return;
+  const br = branchByName(name);
+  // Only local tips with a worktree/lane can be the rebase source.
+  const canDrag = br && !br.remote && br.hasLane && br.laneIndex !== 0;
+  if (canDrag) btn.draggable = true;
+  btn.addEventListener('dragstart', (e) => {
+    if (!canDrag) {
+      e.preventDefault();
+      return;
+    }
+    rebaseDragFrom = name;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', name);
+    btn.classList.add('is-dragging');
+  });
+  btn.addEventListener('dragend', () => {
+    rebaseDragFrom = '';
+    btn.classList.remove('is-dragging');
+    el.panel?.querySelectorAll('.branch-row.drop-target').forEach((n) => n.classList.remove('drop-target'));
+  });
+  btn.addEventListener('dragover', (e) => {
+    if (!rebaseDragFrom || rebaseDragFrom === name) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    btn.classList.add('drop-target');
+  });
+  btn.addEventListener('dragleave', () => btn.classList.remove('drop-target'));
+  btn.addEventListener('drop', (e) => {
+    e.preventDefault();
+    btn.classList.remove('drop-target');
+    const from = rebaseDragFrom || e.dataTransfer.getData('text/plain');
+    rebaseDragFrom = '';
+    if (!from || from === name) return;
+    openRebaseDropMenu(e.clientX, e.clientY, from, name);
+  });
+}
+
+function openRebaseDropMenu(x, y, fromName, ontoName) {
+  const from = branchByName(fromName);
+  const onto = branchByName(ontoName);
+  if (!from || !onto) return;
+  const lane = from.hasLane ? laneByIndex(from.laneIndex) : null;
+  if (!lane || lane.isPrimary) {
+    toast('Select a non-protected worktree tip to rebase', 'warn');
+    return;
+  }
+  const { menu, add, addSep } = ctxMenuAt(x, y);
+  add(`Rebase ${lane.name} onto ${onto.name}`, () => runConflictable(
+    'lane.rebase',
+    lane,
+    onto.name,
+    'rebase',
+    `Rebased ${lane.name} onto ${onto.name}`,
+  ), { icon: 'arrow-counter-clockwise' });
+  addSep();
+  add('Cancel', () => {}, { icon: 'x' });
+  attachCtxMenu(menu);
 }
 
 let sectionLayoutRo = null;
@@ -2403,9 +2469,12 @@ function paintHeader() {
       ? `<span class="fact warn">${iconHTML('circle-dashed', 'sm')}<strong>${l.dirty}</strong> uncommitted</span>`
       : '';
     const pill = authorshipPillHTML(l.authorship, l.tool, iconHTML);
+    // #159 worktree vs lane wording; #158 only surface safe remove in the header —
+    // unsafe stays on right-click so it does not look like an alert that needs attention.
+    const removeNoun = removeNounFor(l);
     const remove = l.readiness === 'safe'
-      ? `<button class="btn ghost-danger" type="button" data-act="remove">${iconHTML('x', 'sm')}Remove lane</button>`
-      : `<button class="btn ghost-danger" type="button" data-act="remove" title="Not safe: opens a guided remove">${iconHTML('warning-circle', 'sm')}Remove lane !</button>`;
+      ? `<button class="btn ghost-danger" type="button" data-act="remove">${iconHTML('x', 'sm')}Remove ${removeNoun}</button>`
+      : '';
     html = `<div class="head-row">
       <div class="title">
         ${iconHTML('tree-structure')}
@@ -3548,8 +3617,8 @@ function openLaneCtxMenu(x, y, lane) {
       add('Finish…', () => handleAction('finish', lane), { icon: 'git-merge' });
     }
     addSep();
-    const removeLabel = lane.readiness === 'safe' ? 'Remove lane…' : 'Remove lane… !';
-    add(removeLabel, () => handleAction('remove', lane), { icon: 'x', danger: true });
+    add('Rebase onto…', () => openRebaseOntoSheet(lane), { icon: 'arrow-counter-clockwise' });
+    add(`Remove ${removeNounFor(lane)}…`, () => handleAction('remove', lane), { icon: 'x', danger: true });
   }
   attachCtxMenu(menu);
 }
@@ -3603,9 +3672,16 @@ function openBranchCtxMenu(x, y, name) {
   const root = state.board?.root;
   add(branchPins(root).includes(br.name) ? 'Unpin' : 'Pin to top', () => { toggleBranchPin(root, br.name); paint(); }, { icon: 'push-pin' });
   if (canRename) add('Rename…', () => openRenameBranchSheet(br), { icon: 'pencil-simple' });
-  if (lane && !lane.isPrimary) {
+  // #163 rebase: selected tip onto this row, or this row’s own tip onto…
+  if (lane && !lane.isPrimary && lane.branch !== br.name) {
     add(`Rebase ${lane.name} onto this`, () => runConflictable('lane.rebase', lane, br.name, 'rebase',
       `Rebased ${lane.name} onto ${br.name}`), { icon: 'arrow-counter-clockwise' });
+  }
+  if (br.hasLane && br.laneIndex !== 0) {
+    const holder = laneByIndex(br.laneIndex);
+    if (holder && !holder.isPrimary) {
+      add(`Rebase ${holder.name} onto…`, () => openRebaseOntoSheet(holder), { icon: 'arrow-counter-clockwise' });
+    }
   }
   // danger last
   if (canDelete) {
@@ -3799,6 +3875,11 @@ function openCreateLane() {
   nameInput.focus();
 }
 
+/** #159 prepared lanes say “lane”; plain worktrees say “worktree”. */
+function removeNounFor(lane) {
+  return lane?.prepared === false ? 'worktree' : 'lane';
+}
+
 function laneRemoveRisks(lane) {
   const team = state.board?.teamBranch || 'main';
   const risks = [];
@@ -3819,6 +3900,7 @@ function laneRemoveRisks(lane) {
 
 function openRemoveSheet(lane) {
   const safe = lane.readiness === 'safe';
+  const noun = removeNounFor(lane);
   const risks = laneRemoveRisks(lane);
   const riskList = risks.map((r) => `
     <div class="list-row compact">
@@ -3827,11 +3909,11 @@ function openRemoveSheet(lane) {
     </div>`).join('');
   openSheet(`
     <form class="modal" role="dialog" aria-labelledby="remove-title">
-      <div class="eyebrow${safe ? '' : ' warn'}">${iconHTML(safe ? 'check-circle' : 'warning-circle', 'sm')}${safe ? 'Safe to remove' : 'Not safe: remove anyway'}</div>
-      <h1 id="remove-title">Remove lane ${esc(lane.name)}</h1>
+      <div class="eyebrow${safe ? '' : ' warn'}">${iconHTML(safe ? 'check-circle' : 'warning-circle', 'sm')}${safe ? 'Safe to remove' : 'Remove anyway'}</div>
+      <h1 id="remove-title">Remove ${noun} ${esc(lane.name)}</h1>
       <p>${safe
         ? `Merged into ${esc(state.board.teamBranch)} and clean. This only deletes the folder.`
-        : `Not safe yet. You can still delete the worktree folder. The branch ref stays.`}</p>
+        : `Not ready yet. You can still delete the worktree folder. The branch ref stays.`}</p>
       <div class="list">
         <div class="list-row compact">
           ${iconHTML('folder-simple')}
@@ -3867,34 +3949,26 @@ function openRemoveSheet(lane) {
     const force = !safe;
     submit.disabled = true;
     closeSheet();
-    const step = (title, path = '') => setLoading(true, title, path, { immediate: true });
-    step('Removing lane…', lane.name);
+    // #162 keep the board up — busy bar instead of a full-window loading reload.
+    if (state.selectedLane === lane.index) state.selectedLane = 0;
     const opTab = beginOp('remove', lane.name);
+    if (!opTab) return;
+    const detail = (text) => {
+      state.opsByTab.set(opTab, { act: 'remove', detail: text });
+      paintOpBusy();
+    };
     try {
       if (lane.running) {
-        step('Stopping lane…', lane.name);
-        if (opTab) {
-          state.opsByTab.set(opTab, { act: 'remove', detail: `Stopping ${lane.name}` });
-          paintOpBusy();
-        }
+        detail(`Stopping ${lane.name}`);
         await invoke('lane.down', ...pin(lane.index)).catch(() => {});
       }
-      step(force ? 'Force-removing worktree…' : 'Removing worktree…', lane.folder || lane.path);
-      if (opTab) {
-        state.opsByTab.set(opTab, {
-          act: 'remove',
-          detail: force ? `Force-removing ${lane.name}` : lane.name,
-        });
-        paintOpBusy();
-      }
+      detail(force ? `Force-removing ${lane.name}` : lane.name);
       // Uncommitted files get a private snapshot so ⌘Z can bring the lane back whole.
       const snap = lane.dirty ? await api.invoke('undo.snapshot', ...pin(lane.index)).catch(() => null) : null;
       const board = await invoke(
         'lane.remove',
         ...pin(...(force ? [lane.index, { force: true }] : [lane.index])),
       );
-      step('Refreshing board…');
-      setLoading(false);
       const undoable = Boolean(lane.head) && (!lane.dirty || Boolean(snap));
       if (undoable) {
         pushUndo(`remove lane ${lane.name}`, tabId, () => invoke('undo.restoreLane', ...pin({
@@ -3905,7 +3979,6 @@ function openRemoveSheet(lane) {
         toast(`Removed worktree for ${lane.name}`, 'ok', { undo: undoable });
       }
     } catch {
-      setLoading(false);
       paint();
     } finally {
       endOp(opTab, 'remove');
