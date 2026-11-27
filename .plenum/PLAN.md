@@ -1,48 +1,49 @@
-# Feature plan: Windows desktop support (unsigned)
+# Feature plan: landing-polish
 
 ## Goal
 
-Ship an unsigned Windows build of Plenum (NSIS installer + OTA `latest.yml`) while keeping the Mac pipeline intact. Linux stays out of scope. Windows users download `Plenum-Setup.exe`, accept SmartScreen, and use board/lanes/git with OTA updates.
+Land the stacked-hero plenum.sh layout (shot under title, one-viewport fade, Why expand) and clear the review pass: fresh board shot, four equal USPs, mobile product image, tighter copy, mark/fade/CTA/a11y polish, and a quiet docs exit.
 
 ## User-visible behavior
 
-- Happy path: Landing shows Mac + Windows downloads; Windows NSIS installer; framed/`titleBarOverlay` chrome; Ctrl shortcuts; Explorer wording; Windows terminal/editor openers; CLI at `%USERPROFILE%\.plenum\bin\plenum.cmd`.
-- First install: SmartScreen “Windows protected your PC” → More info → Run anyway (noted on site).
-- Errors: Missing Git Bash blocks lane start with a clear install-Git message.
-- Keyboard: Ctrl labels on Windows; handlers already accept `ctrlKey`.
+- Happy path (desktop ≥960): copy + CTA; board shot under it fading into canvas; no page scroll. Why Plenum expands four USP columns between CTA and shot, unlocks scroll, lifts fade.
+- Happy path (mobile): centered copy, Send download link, cropped board shot under CTA (no longer shot-less).
+- Empty / first-run: n/a (static site).
+- Errors: version feed still silent on failure; Windows SmartScreen note one quiet line under the button.
+- Keyboard: Enter downloads (desktop); Escape closes platform menu and Why; split menu arrow/Home/End; lavender focus rings on primary buttons; brand is a home link.
 
 ## Scope
 
 | In | Out |
 | --- | --- |
-| electron-builder `win` NSIS + `.ico`, host-aware pack | Linux / AppImage |
-| CI mac + windows + publish jobs | Code signing / Azure Trusted Signing |
-| Release scripts for `Plenum.exe` + `latest.yml` | Microsoft Store / MSIX |
-| Supervisor kill tree + Git Bash for lane cmds | FileMerge parity on Windows |
-| `plenum.cmd` shim, openers, chrome, updater, site | |
-
-**Lane shell default:** On Windows, `lane.yaml` `run`/`test` go through Git Bash. Missing bash → actionable error.
+| `site/index.html` layout, copy, a11y, motion | FAQ question phrasing (#8) |
+| Fresh `site/board.jpg` from current app | Chasing avoid-ai purple scanner |
+| Optional quiet Docs/README link | New marketing sections / footer redesign |
 
 ## Touch list
 
-- `package.json`, `scripts/build-icons.mjs`, `.github/workflows/release.yml`
-- `.agents/skills/plenum-release/scripts/` (`_lib`, pack-launch-smoke, ota-health-check, release-check)
-- `electron/lane/supervisor.mjs`, `electron/lane/log-tee.mjs`
-- `electron/agents/launcher.mjs`, `electron/main.mjs`, `electron/prefs.mjs`, `electron/updates.mjs`
-- `app/` chrome, shortcut labels, Finder→Explorer copy
-- `site/index.html`, `README.md`, `AGENTS.md`
+- `site/index.html` — composition, Why (4 USPs), mobile shot, mark field, fade, typing/CTA order, keyboard, focus, brand link, Windows note, docs link
+- `site/board.jpg` — recapture
+- `.plenum/PLAN.md` — this plan
 
 ## Risks
 
-- Supervisor / Git Bash mismatch is the main footgun for lane recipes.
-- Unsigned SmartScreen will suppress conversion; document, don’t paper over.
-- Split CI publish must not drop Mac FTP artifacts.
-- OTA self-heal: `release:check` must stay green on Mac.
+- Recapture needs a runnable Plenum + interesting board; fall back to best available smoke/demo repo.
+- `:has(.panel.open)` scroll lock — modern browsers only; older browsers keep scroll (acceptable).
+- DOM reorder of Why vs shot must match visual + SR.
 
 ## Verify
 
-- [ ] `npm test` on the lane
-- [ ] Windows CI artifact smoke (launch + ota-health)
-- [ ] Mac `release:check` still green
-- [ ] Manual Windows: install, lane up/down, git verbs, terminal/editor, CLI, update feed
-- [ ] Site serves `Plenum-Setup.exe` + `latest.yml`
+- [ ] Desktop closed: no scroll, soft bottom fade, CTA visible before typing finishes
+- [ ] Why open: four equal columns, scroll unlocked, fade off, Escape closes
+- [ ] Mobile width: shot visible under CTA
+- [ ] Split menu keyboard + focus rings
+- [ ] Visual pass screenshots shown to user
+- [ ] `feature-check` / avoid-ai on site (ignore known brand purple if needed)
+
+## Decisions (pinned)
+
+- Four USPs (drop “More than one repo”); keep claim-style headings, not questions.
+- Collapse gloss + sub into one supporting line where possible.
+- CTA / foot visible immediately; type only the headline.
+- Docs: GitHub README link next to GH icon (quiet).
