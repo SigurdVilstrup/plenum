@@ -66,7 +66,7 @@
     z-index: 0; pointer-events: none; opacity: 0.28;
   }
   a { color: inherit; }
-  a:focus-visible, button:focus-visible, .btn:focus-visible, .split-caret:focus-visible {
+  a:focus-visible, button:focus-visible, .btn:focus-visible, .nav-dl:focus-visible, .split-caret:focus-visible {
     outline: 2px solid var(--primary-hover); outline-offset: 3px;
   }
 
@@ -89,7 +89,14 @@
   .docs { padding: 0 10px; font-size: 13px; font-weight: 500; }
   .gh:hover, .docs:hover { color: var(--ink); background: rgba(255, 255, 255, .04); }
   .gh svg { display: block; width: 18px; height: 18px; }
-  .pill { font-size: 12px; font-weight: 500; letter-spacing: .01em; color: var(--warn); border: 1px solid rgba(229, 193, 90, .35); background: rgba(229, 193, 90, .06); border-radius: 999px; padding: 3px 10px; }
+  .nav-dl {
+    display: none; align-items: center; height: 34px; padding: 0 12px;
+    border-radius: 8px; background: var(--ink); color: #0c0d12;
+    font-size: 13px; font-weight: 600; text-decoration: none;
+    transition: background .15s;
+  }
+  .nav-dl:hover { background: #fff; }
+  .is-mac .nav-dl-mac, .is-win .nav-dl-win, .not-desktop .nav-dl-other { display: inline-flex; }
 
   main { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 20px; }
   .hero { flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; min-height: 0; padding-top: 4vh; }
@@ -178,70 +185,36 @@
   .link[aria-expanded="true"] .chev .down { visibility: hidden; }
   .link[aria-expanded="true"] .chev .up { visibility: visible; }
 
-  /* Screenshot under the title. No extra radius — board.jpg already has the window corners. */
+  /* Full board shot: break out past the copy column; no crop. */
   .shot {
-    margin: 0; width: 100%; background: transparent; border: 0;
-    position: relative; overflow: hidden; border-radius: 0;
+    margin: 28px 0 0; width: 100%; background: transparent; border: 0;
+    position: relative; overflow: visible; border-radius: 0;
     box-shadow: 0 28px 70px -28px rgba(94, 106, 210, .28), 0 16px 40px -20px rgba(0, 0, 0, .85);
   }
   .shot img {
     display: block; width: 100%; height: auto;
     border: 0; border-radius: 0;
-    -webkit-mask-image: none;
-    mask-image: none;
   }
   @media (min-width: 960px) {
-    html, body { height: 100%; }
-    body {
-      height: 100svh;
-      max-height: 100svh;
-      overflow: hidden;
-    }
-    body:has(.panel.open) {
-      height: auto;
-      max-height: none;
-      overflow: auto;
-    }
     header { padding-top: 16px; padding-bottom: 8px; flex: 0 0 auto; }
-    main {
-      flex: 1;
-      min-height: 0;
-      padding-bottom: 0;
-      overflow: hidden;
-    }
-    body:has(.panel.open) main { overflow: visible; padding-bottom: 48px; }
+    main { flex: 1; padding-bottom: 48px; overflow: visible; }
     .hero {
-      flex: 1;
-      min-height: 0;
-      gap: 0;
       display: flex;
       flex-direction: column;
+      gap: 0;
     }
     .copy { max-width: 640px; flex: 0 0 auto; }
     .panel { flex: 0 0 auto; }
+    /* Wider than the 1180 write column; centered to the viewport. */
     .shot {
-      flex: 1 1 auto;
-      min-height: 0;
-      width: 100%;
+      flex: 0 0 auto;
+      width: min(100vw - 48px, 1680px);
       max-width: none;
-      margin: 28px 0 0;
-      overflow: hidden;
+      margin: 36px 0 24px;
+      margin-left: calc(50% - min(50vw - 24px, 840px));
     }
     .shot img {
-      display: block; width: 100%; height: 100%;
-      object-fit: cover; object-position: top center;
-      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 56px), transparent 100%);
-      mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 56px), transparent 100%);
-    }
-    body:has(.panel.open) .shot {
-      flex: 0 0 auto;
-      overflow: visible;
-      margin-bottom: 8px;
-    }
-    body:has(.panel.open) .shot img {
-      height: auto;
-      -webkit-mask-image: none;
-      mask-image: none;
+      display: block; width: 100%; height: auto;
     }
   }
 
@@ -271,30 +244,12 @@
     .why h3 { font-size: 16px; }
     .why p { font-size: 14px; line-height: 1.55; }
     .shot {
-      max-width: 560px;
+      max-width: min(100%, 640px);
       margin: 28px auto 0;
-      max-height: 38vh;
-      overflow: hidden;
     }
     .shot img {
       width: 100%;
-      height: 38vh;
-      max-height: 380px;
-      object-fit: cover;
-      object-position: top left;
-      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 40px), transparent 100%);
-      mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 40px), transparent 100%);
-    }
-    /* Why open: unlock page + show the full board shot. */
-    body:has(.panel.open) .shot {
-      max-height: none;
-      overflow: visible;
-    }
-    body:has(.panel.open) .shot img {
       height: auto;
-      max-height: none;
-      -webkit-mask-image: none;
-      mask-image: none;
     }
   }
 
@@ -326,7 +281,9 @@
     <a class="gh" href="https://github.com/SigurdVilstrup/plenum" target="_blank" rel="noopener noreferrer" aria-label="Plenum on GitHub" title="GitHub">
       <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
     </a>
-    <span class="pill">Early beta</span>
+    <a class="nav-dl nav-dl-mac" href="/updates/Plenum.dmg">Download</a>
+    <a class="nav-dl nav-dl-win" href="/updates/Plenum-Setup.exe">Download</a>
+    <a class="nav-dl nav-dl-other" href="#download">Download</a>
   </div>
 </header>
 
@@ -334,8 +291,8 @@
   <div class="hero">
     <div class="copy">
       <h1 aria-label="Work in plenum.sh"><span class="prompt" aria-hidden="true">$</span><span id="tx" aria-hidden="true">Work in <span class="name"><span class="acc">plenum</span>.sh</span><span class="who" id="who"></span></span><span class="cur" id="cur" aria-hidden="true"></span></h1>
-      <p class="gloss rev"><b>in plenum</b>, <i>adv.</i> with everyone present. Parallel checkouts you start, stop, and test. You, your agents, every lane on one screen.</p>
-      <div class="actions">
+      <p class="gloss rev"><b>in plenum</b>, <i>adv.</i> with everyone present. Parallel checkouts you start, stop, and test.</p>
+      <div class="actions rev" id="download">
         <button class="btn send" id="send" type="button">Send download link</button>
         <div class="split split-mac" id="split-mac">
           <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
@@ -683,7 +640,7 @@
     }
   });
 
-  // CTA is visible immediately. Only the headline types; gloss + shot fade in after.
+  // Headline types; gloss, CTA, and shot fade in after.
   var reveals = document.querySelectorAll('.rev');
   var shotRev = document.querySelector('.shot.rev');
   var copyRevs = Array.prototype.filter.call(reveals, function (el) { return !el.classList.contains('shot'); });
