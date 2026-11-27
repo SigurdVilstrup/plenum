@@ -20,14 +20,15 @@ import {
 
 test('clampSectionHeight respects min/max', () => {
   assert.equal(clampSectionHeight(10), SECTION_HEIGHT_MIN);
-  assert.equal(clampSectionHeight(9999), SECTION_HEIGHT_MAX);
+  assert.equal(clampSectionHeight(SECTION_HEIGHT_MAX + 1), SECTION_HEIGHT_MAX);
   assert.equal(clampSectionHeight(120), 120);
+  assert.equal(clampSectionHeight(2400), 2400); // #161 tall windows: past the old 600 cap
   assert.equal(clampSectionHeight('nope'), SECTION_HEIGHT_DEFAULTS.lanes);
 });
 
 test('normalizeSectionHeights fills defaults and clamps', () => {
   assert.deepEqual(normalizeSectionHeights(null), { ...SECTION_HEIGHT_DEFAULTS });
-  assert.deepEqual(normalizeSectionHeights({ lanes: 40, local: 240, remote: 9999 }), {
+  assert.deepEqual(normalizeSectionHeights({ lanes: 40, local: 240, remote: SECTION_HEIGHT_MAX + 50 }), {
     ...SECTION_HEIGHT_DEFAULTS,
     lanes: SECTION_HEIGHT_MIN,
     local: 240,

@@ -11,7 +11,8 @@ export const SECTION_HEIGHT_DEFAULTS = Object.freeze({
 
 /** Min ≥ ~2 row heights so “Lane setup first” never clips. */
 export const SECTION_HEIGHT_MIN = 56;
-export const SECTION_HEIGHT_MAX = 600;
+/** #161 hard ceiling was 600 (~half a tall window). Prefer the open-body budget. */
+export const SECTION_HEIGHT_MAX = 10_000;
 
 export const SECTION_HEIGHT_KEYS = Object.freeze(Object.keys(SECTION_HEIGHT_DEFAULTS));
 
