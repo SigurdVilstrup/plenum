@@ -70,8 +70,17 @@
     outline: 2px solid var(--primary-hover); outline-offset: 3px;
   }
 
-  header, main { position: relative; z-index: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px; }
-  header { display: flex; justify-content: space-between; align-items: center; padding-top: 20px; padding-bottom: 12px; font-size: 13px; color: var(--ink-subtle); flex: 0 0 auto; }
+  header, main { position: relative; z-index: 1; width: 100%; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    max-width: 1180px; margin: 0 auto; padding: 20px 20px 12px;
+    font-size: 13px; color: var(--ink-subtle); flex: 0 0 auto;
+  }
+  /* Write column for copy / Why; shot is free to use more width. */
+  .write {
+    width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px;
+    box-sizing: border-box;
+  }
   .brand {
     display: inline-flex; align-items: center; gap: 10px;
     color: var(--ink); font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
@@ -99,7 +108,7 @@
   .is-mac .nav-dl-mac, .is-win .nav-dl-win, .not-desktop .nav-dl-other { display: inline-flex; }
 
   main { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 20px; }
-  .hero { flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; min-height: 0; padding-top: 4vh; }
+  .hero { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; text-align: left; gap: 0; min-height: 0; padding-top: 4vh; }
   .copy { width: 100%; max-width: 540px; }
 
   h1 { margin: 0; font-weight: 500; font-size: clamp(32px, 5.5vw, 52px); line-height: 1.08; letter-spacing: -0.035em; }
@@ -185,10 +194,10 @@
   .link[aria-expanded="true"] .chev .down { visibility: hidden; }
   .link[aria-expanded="true"] .chev .up { visibility: visible; }
 
-  /* Full board shot: break out past the copy column; no crop. */
+  /* Board shot: break out past the copy column. Desktop closed = one viewport + bottom fade. */
   .shot {
     margin: 28px 0 0; width: 100%; background: transparent; border: 0;
-    position: relative; overflow: visible; border-radius: 0;
+    position: relative; overflow: hidden; border-radius: 0;
     box-shadow: 0 28px 70px -28px rgba(94, 106, 210, .28), 0 16px 40px -20px rgba(0, 0, 0, .85);
   }
   .shot img {
@@ -196,25 +205,57 @@
     border: 0; border-radius: 0;
   }
   @media (min-width: 960px) {
-    header { padding-top: 16px; padding-bottom: 8px; flex: 0 0 auto; }
-    main { flex: 1; padding-bottom: 48px; overflow: visible; }
+    html, body { height: 100%; }
+    body {
+      height: 100svh;
+      max-height: 100svh;
+      overflow: hidden;
+    }
+    body:has(.panel.open) {
+      height: auto;
+      max-height: none;
+      overflow: auto;
+    }
+    header { padding-top: 16px; padding-bottom: 8px; }
+    main {
+      flex: 1;
+      min-height: 0;
+      padding-bottom: 0;
+      overflow: visible;
+    }
+    body:has(.panel.open) main { padding-bottom: 48px; }
     .hero {
+      flex: 1;
+      min-height: 0;
+      gap: 0;
       display: flex;
       flex-direction: column;
-      gap: 0;
+      align-items: stretch;
     }
-    .copy { max-width: 640px; flex: 0 0 auto; }
+    .write { flex: 0 0 auto; }
+    .copy { max-width: 640px; }
     .panel { flex: 0 0 auto; }
-    /* Wider than the 1180 write column; centered to the viewport. */
+    /* Full board width; container clips only the bottom into the viewport. */
     .shot {
-      flex: 0 0 auto;
-      width: min(100vw - 48px, 1680px);
+      flex: 1 1 auto;
+      min-height: 0;
+      width: min(100vw - 48px, 1280px);
       max-width: none;
-      margin: 36px 0 24px;
-      margin-left: calc(50% - min(50vw - 24px, 840px));
+      margin: 28px auto 0;
+      overflow: hidden;
+      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 72px), transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 72px), transparent 100%);
     }
     .shot img {
       display: block; width: 100%; height: auto;
+      max-width: none;
+    }
+    body:has(.panel.open) .shot {
+      flex: 0 0 auto;
+      overflow: visible;
+      margin-bottom: 24px;
+      -webkit-mask-image: none;
+      mask-image: none;
     }
   }
 
@@ -233,9 +274,10 @@
   .why h3 { margin: 0 0 6px; font-size: 14px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; }
   .why p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-subtle); }
 
-  /* Phones: centre the message; show a cropped shot with fade; Why stacks. */
+  /* Phones: centre the message; Why stacks. */
   @media (max-width: 959px) {
-    .hero { align-items: center; text-align: center; padding-top: 6vh; padding-bottom: 24px; }
+    .hero { align-items: stretch; text-align: center; padding-top: 6vh; padding-bottom: 24px; }
+    .write { display: flex; flex-direction: column; align-items: center; }
     .copy { margin: 0 auto; }
     .actions { justify-content: center; }
     .foot { justify-content: center; }
@@ -289,52 +331,54 @@
 
 <main>
   <div class="hero">
-    <div class="copy">
-      <h1 aria-label="Work in plenum.sh"><span class="prompt" aria-hidden="true">$</span><span id="tx" aria-hidden="true">Work in <span class="name"><span class="acc">plenum</span>.sh</span><span class="who" id="who"></span></span><span class="cur" id="cur" aria-hidden="true"></span></h1>
-      <p class="gloss rev"><b>in plenum</b>, <i>adv.</i> with everyone present. Parallel checkouts you start, stop, and test.</p>
-      <div class="actions rev" id="download">
-        <button class="btn send" id="send" type="button">Send download link</button>
-        <div class="split split-mac" id="split-mac">
-          <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
-          <button class="split-caret" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="dl-menu-mac" aria-label="Other platforms">
-            <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div class="split-menu" id="dl-menu-mac" role="menu">
-            <a href="/updates/Plenum.dmg" role="menuitem">macOS <small>Apple Silicon · .dmg</small></a>
-            <a href="/updates/Plenum-Setup.exe" role="menuitem">Windows <small>x64 · unsigned setup</small></a>
+    <div class="write">
+      <div class="copy">
+        <h1 aria-label="Work in plenum.sh"><span class="prompt" aria-hidden="true">$</span><span id="tx" aria-hidden="true">Work in <span class="name"><span class="acc">plenum</span>.sh</span><span class="who" id="who"></span></span><span class="cur" id="cur" aria-hidden="true"></span></h1>
+        <p class="gloss rev"><b>in plenum</b>, <i>adv.</i> with everyone present. Parallel checkouts you start, stop, and test.</p>
+        <div class="actions rev" id="download">
+          <button class="btn send" id="send" type="button">Send download link</button>
+          <div class="split split-mac" id="split-mac">
+            <a class="btn" id="dl" href="/updates/Plenum.dmg">Download for macOS <span class="arch">Apple Silicon</span> <span class="key" aria-hidden="true">⏎</span></a>
+            <button class="split-caret" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="dl-menu-mac" aria-label="Other platforms">
+              <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="split-menu" id="dl-menu-mac" role="menu">
+              <a href="/updates/Plenum.dmg" role="menuitem">macOS <small>Apple Silicon · .dmg</small></a>
+              <a href="/updates/Plenum-Setup.exe" role="menuitem">Windows <small>x64 · unsigned setup</small></a>
+            </div>
+          </div>
+          <div class="split split-win" id="split-win">
+            <a class="btn" id="dl-win" href="/updates/Plenum-Setup.exe">Download for Windows <span class="arch">x64</span> <span class="key" aria-hidden="true">⏎</span></a>
+            <button class="split-caret" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="dl-menu-win" aria-label="Other platforms">
+              <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="split-menu" id="dl-menu-win" role="menu">
+              <a href="/updates/Plenum-Setup.exe" role="menuitem">Windows <small>x64 · unsigned setup</small></a>
+              <a href="/updates/Plenum.dmg" role="menuitem">macOS <small>Apple Silicon · .dmg</small></a>
+            </div>
           </div>
         </div>
-        <div class="split split-win" id="split-win">
-          <a class="btn" id="dl-win" href="/updates/Plenum-Setup.exe">Download for Windows <span class="arch">x64</span> <span class="key" aria-hidden="true">⏎</span></a>
-          <button class="split-caret" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="dl-menu-win" aria-label="Other platforms">
-            <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div class="split-menu" id="dl-menu-win" role="menu">
-            <a href="/updates/Plenum-Setup.exe" role="menuitem">Windows <small>x64 · unsigned setup</small></a>
-            <a href="/updates/Plenum.dmg" role="menuitem">macOS <small>Apple Silicon · .dmg</small></a>
-          </div>
+        <p class="osnote osnote-win rev">Unsigned build. SmartScreen may warn (More info → Run anyway). Needs Git for Windows.</p>
+        <p class="osnote osnote-other rev">Plenum runs on Mac and Windows. Open this page on your computer to download.</p>
+        <div class="foot rev">
+          <span class="ver" id="ver" hidden></span>
+          <span class="sep ver-sep" aria-hidden="true" hidden>·</span>
+          <span>Free and open source</span>
+          <span class="why-bit">
+            <span class="sep" aria-hidden="true">·</span>
+            <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path class="down" d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path class="up" d="M2.5 7.75L6 4.25L9.5 7.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+          </span>
         </div>
       </div>
-      <p class="osnote osnote-win rev">Unsigned build. SmartScreen may warn (More info → Run anyway). Needs Git for Windows.</p>
-      <p class="osnote osnote-other rev">Plenum runs on Mac and Windows. Open this page on your computer to download.</p>
-      <div class="foot rev">
-        <span class="ver" id="ver" hidden></span>
-        <span class="sep ver-sep" aria-hidden="true" hidden>·</span>
-        <span>Free and open source</span>
-        <span class="why-bit">
-          <span class="sep" aria-hidden="true">·</span>
-          <button class="link" id="whyb" type="button" aria-expanded="false" aria-controls="why">Why Plenum? <span class="chev" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path class="down" d="M2.5 4.25L6 7.75L9.5 4.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path class="up" d="M2.5 7.75L6 4.25L9.5 7.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
-        </span>
-      </div>
+      <div class="panel" id="why"><div>
+        <ul class="why">
+        <li><h3>Lanes you can run</h3><p>Each lane is its own checkout with its own ports. Start, stop, and test from the board, next to protected main.</p></li>
+        <li><h3>A real overview</h3><p>Every lane in one view: how far behind main it is, what's uncommitted, and who wrote the last commit.</p></li>
+        <li><h3>Main stays protected</h3><p>Every lane is measured against the team's branch, so you see drift before it hurts.</p></li>
+        <li><h3>Agents get lanes</h3><p>CLI and local MCP let agents create, start, and test lanes. Commits, pushes, and merges stay with you.</p></li>
+      </ul>
+      </div></div>
     </div>
-    <div class="panel" id="why"><div>
-      <ul class="why">
-      <li><h3>Lanes you can run</h3><p>Each lane is its own checkout with its own ports. Start, stop, and test from the board, next to protected main.</p></li>
-      <li><h3>A real overview</h3><p>Every lane in one view: how far behind main it is, what's uncommitted, and who wrote the last commit.</p></li>
-      <li><h3>Main stays protected</h3><p>Every lane is measured against the team's branch, so you see drift before it hurts.</p></li>
-      <li><h3>Agents get lanes</h3><p>CLI and local MCP let agents create, start, and test lanes. Commits, pushes, and merges stay with you.</p></li>
-    </ul>
-    </div></div>
     <figure class="shot rev"><img src="/board.jpg?v=corners3" width="2400" height="1500" alt="Plenum board: protected main, lanes and worktrees, and the commit graph"></figure>
   </div>
 </main>
