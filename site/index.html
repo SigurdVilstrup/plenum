@@ -317,7 +317,7 @@
       </div>
       <p class="osnote osnote-win">Unsigned build — SmartScreen may warn (More info → Run anyway). Needs Git for Windows.</p>
       <p class="osnote osnote-other">Plenum runs on Mac and Windows — open this page on your computer to download.</p>
-      <div class="foot">
+      <div class="foot rev">
         <span class="ver" id="ver" hidden></span>
         <span class="sep ver-sep" aria-hidden="true" hidden>·</span>
         <span>Free and open source</span>
@@ -524,17 +524,27 @@
     resize();
   })();
 
-  // Version label from the update feed. Prefer the OS-matching feed; fall back to Mac.
-  var feed = document.documentElement.classList.contains('is-win') ? '/updates/latest.yml' : '/updates/latest-mac.yml';
-  fetch(feed).then(function (r) { return r.ok ? r.text() : fetch('/updates/latest-mac.yml').then(function (r2) { return r2.ok ? r2.text() : ''; }); }).then(function (y) {
-    var m = /^version:\s*['"]?([\w.\-+]+)/m.exec(y || '');
-    if (m) {
-      var ver = $('ver'), sep = document.querySelector('.ver-sep');
+  // Live version from the update feed (no-store so the label tracks the latest publish).
+  (function loadVersion() {
+    var ver = $('ver'), sep = document.querySelector('.ver-sep');
+    if (!ver) return;
+    var opts = { cache: 'no-store' };
+    var primary = document.documentElement.classList.contains('is-win') ? '/updates/latest.yml' : '/updates/latest-mac.yml';
+    function apply(y) {
+      var m = /^version:\s*['"]?([\w.\-+]+)/m.exec(y || '');
+      if (!m) return false;
       ver.textContent = 'v' + m[1];
       ver.hidden = false;
       if (sep) sep.hidden = false;
+      return true;
     }
-  }).catch(function () {});
+    fetch(primary, opts).then(function (r) {
+      if (r.ok) return r.text().then(apply);
+      return fetch('/updates/latest-mac.yml', opts).then(function (r2) {
+        return r2.ok ? r2.text().then(apply) : false;
+      });
+    }).catch(function () {});
+  })();
 
   // ?from=Anna: the headline becomes "Work in plenum.sh with Anna". Plain text only, trimmed, capped.
   var from = (new URLSearchParams(location.search).get('from') || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
@@ -640,7 +650,7 @@
     }
   });
 
-  // Headline types; gloss, CTA, and shot fade in after.
+  // Headline types; gloss, CTA, foot, and shot fade in after.
   var reveals = document.querySelectorAll('.rev');
   var shotRev = document.querySelector('.shot.rev');
   var copyRevs = Array.prototype.filter.call(reveals, function (el) { return !el.classList.contains('shot'); });
