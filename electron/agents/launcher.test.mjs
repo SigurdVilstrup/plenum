@@ -4,7 +4,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { launcherPath, launcherScript, ensureLauncher, pathStatus, linkOnPath } from './launcher.mjs';
+import {
+  launcherPath,
+  manPagePath,
+  launcherScript,
+  ensureLauncher,
+  ensureManPage,
+  pathStatus,
+  linkOnPath,
+} from './launcher.mjs';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'plenum-launcher-'));
 const unix = process.platform !== 'win32';
@@ -79,18 +87,40 @@ test('pathStatus: a symlink to something else is not on path', () => {
   assert.equal(pathStatus(home, [path.join(bin, 'plenum')], 'darwin').onPath, false);
 });
 
-test('linkOnPath links when writable, and returns the sudo command when not', () => {
+test('ensureManPage writes under share/man; skipped on Windows', () => {
+  const home = tmp();
+  assert.deepEqual(ensureManPage({ packaged: true, home, platform: 'win32' }), { path: null, written: false });
+  const r = ensureManPage({ packaged: true, home, platform: 'darwin' });
+  assert.equal(r.written, true);
+  assert.equal(r.path, manPagePath(home));
+  assert.ok(fs.readFileSync(r.path, 'utf8').includes('.TH PLENUM'));
+  assert.equal(ensureManPage({ packaged: false, home, platform: 'darwin' }).written, false);
+});
+
+test('linkOnPath links when writable, installs man page, and returns sudo when not', () => {
   if (!unix) return;
   const home = tmp();
   ensureLauncher({ packaged: true, execPath: '/x/Plenum', cliPath: '/x/plenum.mjs', home, platform: 'darwin' });
+  ensureManPage({ packaged: true, home, platform: 'darwin' });
   const link = path.join(tmp(), 'plenum');
-  assert.deepEqual(linkOnPath(home, link, 'darwin'), { ok: true });
+  const systemMan = path.join(tmp(), 'share', 'man', 'man1', 'plenum.1');
+  assert.deepEqual(linkOnPath(home, link, 'darwin', systemMan), { ok: true });
   assert.equal(fs.realpathSync(link), fs.realpathSync(launcherPath(home, 'darwin')));
+  assert.ok(fs.existsSync(systemMan));
+  assert.equal(fs.readFileSync(systemMan, 'utf8'), fs.readFileSync(manPagePath(home), 'utf8'));
 
   const bad = path.join(tmp(), 'missing-dir', 'plenum');
-  const r = linkOnPath(home, bad, 'darwin');
+  const r = linkOnPath(home, bad, 'darwin', systemMan);
   assert.equal(r.ok, false);
-  assert.equal(r.command, `sudo mkdir -p '${path.dirname(bad)}' && sudo ln -sf '${launcherPath(home, 'darwin')}' '${bad}'`);
+  assert.equal(
+    r.command,
+    [
+      `sudo mkdir -p '${path.dirname(bad)}'`,
+      `sudo ln -sf '${launcherPath(home, 'darwin')}' '${bad}'`,
+      `sudo mkdir -p '${path.dirname(systemMan)}'`,
+      `sudo cp '${manPagePath(home)}' '${systemMan}'`,
+    ].join(' && '),
+  );
 });
 
 test('linkOnPath command quotes the launcher path', () => {
@@ -102,8 +132,11 @@ test('linkOnPath command quotes the launcher path', () => {
     return;
   }
   const home = path.join(tmp(), "o'neil");
+  ensureLauncher({ packaged: true, execPath: '/x/Plenum', cliPath: '/x/plenum.mjs', home, platform: 'darwin' });
+  ensureManPage({ packaged: true, home, platform: 'darwin' });
   const r = linkOnPath(home, path.join(tmp(), 'nope', 'plenum'), 'darwin');
   assert.ok(r.command.includes(`'${home.replace(/'/g, `'\\''`)}/bin/plenum'`));
+  assert.ok(r.command.includes('plenum.1'));
 });
 
 test('windows linkOnPath asks to add ~/.plenum/bin to PATH', () => {

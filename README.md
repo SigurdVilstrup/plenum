@@ -168,7 +168,7 @@ Protected is lane 0 and keeps the base ports (`8000`). Lane 1 gets `web` on `810
 
 You decide what agents may do under **Settings → Agents** (`~/.plenum/agents.json`). By default they can start, stop, test, and create lanes; remove is allowed; writing `.plenum/lane.yaml` is off. Agents never get `force`.
 
-The same verbs from a terminal:
+The same verbs from a terminal (`plenum --help`, or `man plenum` after Add to PATH):
 
 ```bash
 plenum doctor [path]

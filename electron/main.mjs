@@ -35,7 +35,7 @@ import {
 import { readBuildInfo } from './build-info.mjs';
 import { env as brandEnv } from './paths.mjs';
 import { createUpdater } from './updates.mjs';
-import { ensureLauncher, launcherPath, pathStatus, linkOnPath } from './agents/launcher.mjs';
+import { ensureLauncher, ensureManPage, launcherPath, pathStatus, linkOnPath } from './agents/launcher.mjs';
 import { agentsHome, getAgentSettings, setAgentSettings } from './agents/settings.mjs';
 import { listClients, previewAdd, addClient, removeClient } from './agents/clients.mjs';
 import { starPlenumRepo } from './github-star.mjs';
@@ -150,6 +150,7 @@ app.whenReady().then(async () => {
   try {
     // rootDir is app.asar when packaged, the repo when not; Electron-as-node runs the CLI from either.
     ensureLauncher({ packaged: app.isPackaged, execPath: process.execPath, cliPath: path.join(rootDir, 'bin', 'plenum.mjs'), home: agentsHome() });
+    ensureManPage({ packaged: app.isPackaged, home: agentsHome() });
   } catch (err) {
     console.error('plenum launcher not written:', err);
   }

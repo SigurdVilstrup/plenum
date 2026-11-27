@@ -1,0 +1,59 @@
+.TH PLENUM 1 "November 2026" "Plenum" "User Commands"
+.SH NAME
+plenum \- git client CLI for parallel lanes
+.SH SYNOPSIS
+.B plenum
+.I command
+.RI [ options ]
+.RI [ path ]
+.SH DESCRIPTION
+Plenum's command-line interface for lane doctor, status, create/remove, start/stop/test, and the local MCP server. The desktop app writes this CLI to
+.I ~/.plenum/bin/plenum
+on launch.
+.SH COMMANDS
+.TP
+.B doctor [path]
+Scan the repo and propose a lane manifest.
+.TP
+.B status [path]
+Print the board (protected, lanes, worktrees).
+.TP
+.B up <lane> [--force]
+Start the lane run command under the supervisor.
+.TP
+.B down <lane>
+Stop the lane processes.
+.TP
+.B test <lane>
+Run the lane test command.
+.TP
+.B create <name>
+Create a feature lane (worktree + setup).
+.TP
+.B remove <lane> [--force]
+Remove a lane worktree.
+.TP
+.B mcp
+Start the local MCP server on stdio.
+.TP
+.B help
+Show usage (same as
+.B \-h
+/
+.BR \-\-help ).
+.SH OPTIONS
+.TP
+.B \-\-json
+Print JSON instead of human text.
+.TP
+.B \-\-force
+Skip the drift gate on
+.BR up ;
+allow
+.B remove
+when the lane is not safe.
+.TP
+.BR \-h ", " \-\-help
+Show usage.
+.SH SEE ALSO
+.B plenum \-\-help

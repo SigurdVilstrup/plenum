@@ -1,18 +1,25 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { agentsHome } from './settings.mjs';
 
 const LINK = '/usr/local/bin/plenum';
 const LINKS = [LINK, '/opt/homebrew/bin/plenum'];
+export const SYSTEM_MAN = '/usr/local/share/man/man1/plenum.1';
 
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 const qCmd = (s) => `"${String(s).replace(/"/g, '""')}"`;
+
+const defaultManSource = () => fileURLToPath(new URL('../../man/plenum.1', import.meta.url));
 
 export const isWindows = (platform = process.platform) => platform === 'win32';
 
 export const launcherPath = (home = agentsHome(), platform = process.platform) =>
   path.join(home, 'bin', isWindows(platform) ? 'plenum.cmd' : 'plenum');
+
+export const manPagePath = (home = agentsHome()) =>
+  path.join(home, 'share', 'man', 'man1', 'plenum.1');
 
 export const launcherScript = ({ execPath, cliPath, platform = process.platform }) => {
   if (isWindows(platform)) {
@@ -30,6 +37,40 @@ export function ensureLauncher({ packaged, execPath, cliPath, home = agentsHome(
   fs.writeFileSync(p, launcherScript({ execPath, cliPath, platform }), mode != null ? { mode } : undefined);
   if (!isWindows(platform)) fs.chmodSync(p, 0o755);
   return { path: p, written: true };
+}
+
+/** Copy bundled man page into ~/.plenum/share/man (no-op on Windows). */
+export function ensureManPage({
+  packaged,
+  home = agentsHome(),
+  platform = process.platform,
+  source = defaultManSource(),
+} = {}) {
+  if (isWindows(platform)) return { path: null, written: false };
+  const dest = manPagePath(home);
+  if (!packaged && fs.existsSync(dest)) return { path: dest, written: false };
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, fs.readFileSync(source));
+  return { path: dest, written: true };
+}
+
+function installSystemMan(home, systemMan = SYSTEM_MAN) {
+  const src = manPagePath(home);
+  if (!fs.existsSync(src)) {
+    ensureManPage({ packaged: true, home });
+  }
+  fs.mkdirSync(path.dirname(systemMan), { recursive: true });
+  fs.copyFileSync(manPagePath(home), systemMan);
+}
+
+function sudoInstallCommand(home, link, systemMan = SYSTEM_MAN) {
+  const target = launcherPath(home);
+  return [
+    `sudo mkdir -p ${q(path.dirname(link))}`,
+    `sudo ln -sf ${q(target)} ${q(link)}`,
+    `sudo mkdir -p ${q(path.dirname(systemMan))}`,
+    `sudo cp ${q(manPagePath(home))} ${q(systemMan)}`,
+  ].join(' && ');
 }
 
 function pathDirs() {
@@ -58,7 +99,12 @@ export function pathStatus(home = agentsHome(), links = LINKS, platform = proces
   return { onPath, linkPath: LINK, windows: false };
 }
 
-export function linkOnPath(home = agentsHome(), link = LINK, platform = process.platform) {
+export function linkOnPath(
+  home = agentsHome(),
+  link = LINK,
+  platform = process.platform,
+  systemMan = SYSTEM_MAN,
+) {
   const target = launcherPath(home, platform);
   if (isWindows(platform)) {
     const bin = path.dirname(target);
@@ -74,9 +120,17 @@ export function linkOnPath(home = agentsHome(), link = LINK, platform = process.
   try {
     try { if (fs.lstatSync(link).isSymbolicLink()) fs.unlinkSync(link); } catch (e) { if (e.code !== 'ENOENT') throw e; }
     fs.symlinkSync(target, link);
+  } catch {
+    return { ok: false, command: sudoInstallCommand(home, link, systemMan) };
+  }
+  try {
+    installSystemMan(home, systemMan);
     return { ok: true };
   } catch {
-    return { ok: false, command: `sudo mkdir -p ${q(path.dirname(link))} && sudo ln -sf ${q(target)} ${q(link)}` };
+    return {
+      ok: false,
+      command: `sudo mkdir -p ${q(path.dirname(systemMan))} && sudo cp ${q(manPagePath(home))} ${q(systemMan)}`,
+    };
   }
 }
 

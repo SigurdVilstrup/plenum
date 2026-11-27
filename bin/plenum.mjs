@@ -8,7 +8,7 @@ import { up, down, test as runTest, getProc } from '../electron/lane/supervisor.
 import { loadBoard } from '../electron/git/board.mjs';
 import { createLane, removeLane } from '../electron/git/ops.mjs';
 
-const USAGE = `Usage:
+export const USAGE = `Usage:
   plenum doctor [path]
   plenum status [path]
   plenum up <lane> [--force]

@@ -6,10 +6,23 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from './plenum.mjs';
+import { parseArgs, USAGE } from './plenum.mjs';
 import * as supervisor from '../electron/lane/supervisor.mjs';
 
 const CLI = fileURLToPath(new URL('./plenum.mjs', import.meta.url));
+const MAN = fileURLToPath(new URL('../man/plenum.1', import.meta.url));
+
+test('man page lists every USAGE command and flag', () => {
+  const man = fs.readFileSync(MAN, 'utf8');
+  const commands = [...USAGE.matchAll(/^\s+plenum (\S+)/gm)].map((m) => m[1]);
+  assert.ok(commands.length >= 7, `expected commands in USAGE, got ${commands.join(',')}`);
+  for (const cmd of commands) assert.ok(man.includes(cmd), `man page missing command: ${cmd}`);
+  for (const flag of ['--json', '--force', '--help', '-h']) {
+    // roff escapes dashes as \-
+    const needle = flag.replace(/-/g, '\\-');
+    assert.ok(man.includes(needle) || man.includes(flag), `man page missing flag: ${flag}`);
+  }
+});
 
 test('parseArgs extracts command, rest, --json, and --force', () => {
   assert.deepEqual(parseArgs(['node', 'plenum', 'doctor']), {
